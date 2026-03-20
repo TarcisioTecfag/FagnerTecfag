@@ -961,6 +961,22 @@ initOrchestrator({
 startFollowUpLoop();
 emitLog("Fagner online e pronto para receber atendimentos 🤖", "SUCCESS");
 
+// ─── Auto-seed: garante usuário padrão no banco ──────────────────────────────
+// Necessário no Railway pois o banco SQLite começa vazio a cada novo volume.
+try {
+  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get("suporte2@tecfag.com.br");
+  if (!existing) {
+    const { hashSync } = await import("bcryptjs");
+    const { v4 } = await import("uuid");
+    db.prepare(
+      "INSERT INTO users (id, name, email, username, password) VALUES (?, ?, ?, ?, ?)"
+    ).run(v4(), "Suporte 2", "suporte2@tecfag.com.br", "suporte2", hashSync("123", 10));
+    console.log("✅ Usuário padrão criado: suporte2@tecfag.com.br / 123");
+  }
+} catch (e) {
+  console.warn("⚠️  Auto-seed falhou:", e);
+}
+
 httpServer.listen(PORT, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
   console.log(`   Banco de dados: ${process.env.DATABASE_URL ? "PostgreSQL (Railway)" : "data/app.db (SQLite local)"}`);
