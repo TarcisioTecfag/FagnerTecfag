@@ -1,11 +1,6 @@
+# nixpacks.toml
+# Adiciona ferramentas de compilação nativas para o better-sqlite3 (node-gyp).
+# aptPkgs é adicionado ao ambiente SEM substituir o Node.js detectado automaticamente.
+
 [phases.setup]
-nixPkgs = ["python3", "gcc", "gnumake"]
-
-[phases.install]
-cmds = ["npm install"]
-
-[phases.build]
-cmds = []
-
-[start]
-cmd = "node --loader tsx/esm server/index.ts"
+aptPkgs = ["python3", "build-essential"]
