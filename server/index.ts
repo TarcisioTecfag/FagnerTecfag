@@ -940,60 +940,59 @@ httpServer.on("upgrade", (req, socket, head) => {
   }
 });
 
-emitLog("Servidor Tecfag IA iniciado", "SUCCESS");
 
-
-initOrchestrator({
-  db,
-  getApiKey: () => {
-    return (storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "";
-  },
-  getRagDocuments: () => {
-    try {
-      const docs = storage.listActiveDocumentsForRag(50);
-      return docs
-        .map((doc) => {
-          try {
-            const abs = path.join(__dirname, "..", doc.filePath.replace(/^\//, ""));
-            if (!fs.existsSync(abs)) return null;
-            const content = fs.readFileSync(abs, "utf-8").slice(0, 5000);
-            return { id: doc.id, name: doc.name, content };
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean) as { id: string; name: string; content: string }[];
-    } catch {
-      return [];
-    }
-  },
-  emitLog,
-});
-
-// Inicia loop de follow-ups
-startFollowUpLoop();
-emitLog("Fagner online e pronto para receber atendimentos 🤖", "SUCCESS");
-
-// ─── Auto-seed: garante usuário padrão no banco ──────────────────────────────
-// Necessário no Railway pois o banco SQLite começa vazio a cada novo volume.
-try {
-  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get("suporte2@tecfag.com.br");
-  if (!existing) {
-    const { hashSync } = await import("bcryptjs");
-    const { v4 } = await import("uuid");
-    db.prepare(
-      "INSERT INTO users (id, name, email, username, password) VALUES (?, ?, ?, ?, ?)"
-    ).run(v4(), "Suporte 2", "suporte2@tecfag.com.br", "suporte2", hashSync("123", 10));
-    console.log("✅ Usuário padrão criado: suporte2@tecfag.com.br / 123");
-  }
-} catch (e) {
-  console.warn("⚠️  Auto-seed falhou:", e);
-}
-
+// ─── Servidor: escuta na porta PRIMEIRO para o healthcheck do Railway passar ──
+// initOrchestrator e startFollowUpLoop são chamados DEPOIS (em background),
+// para não bloquearem o listen() e causar timeout no healthcheck.
 httpServer.listen(PORT, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
-  console.log(`   Banco de dados: ${process.env.DATABASE_URL ? "PostgreSQL (Railway)" : "data/app.db (SQLite local)"}`);
+  console.log(`   Banco: ${process.env.DATABASE_URL ? "PostgreSQL (Railway)" : "SQLite local"}`);
   console.log(`   Ambiente: ${process.env.NODE_ENV ?? "development"}`);
+
+  // Init em background — não bloqueia o healthcheck
+  setImmediate(async () => {
+    // Auto-seed: garante usuário padrão no banco
+    try {
+      const existing = db.prepare("SELECT id FROM users WHERE email = ?").get("suporte2@tecfag.com.br");
+      if (!existing) {
+        const bcrypt = await import("bcryptjs");
+        const { v4 } = await import("uuid");
+        db.prepare(
+          "INSERT INTO users (id, name, email, username, password) VALUES (?, ?, ?, ?, ?)"
+        ).run(v4(), "Suporte 2", "suporte2@tecfag.com.br", "suporte2", bcrypt.hashSync("123", 10));
+        console.log("✅ Usuário padrão criado: suporte2@tecfag.com.br / 123");
+      }
+    } catch (e) {
+      console.warn("⚠️  Auto-seed falhou:", e);
+    }
+
+    // Inicializa orquestrador e follow-up loop
+    try {
+      initOrchestrator({
+        db,
+        getApiKey: () =>
+          (storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "",
+        getRagDocuments: () => {
+          try {
+            return storage.listActiveDocumentsForRag(50)
+              .map((doc) => {
+                try {
+                  const abs = path.join(__dirname, "..", doc.filePath.replace(/^\//, ""));
+                  if (!fs.existsSync(abs)) return null;
+                  return { id: doc.id, name: doc.name, content: fs.readFileSync(abs, "utf-8").slice(0, 5000) };
+                } catch { return null; }
+              })
+              .filter(Boolean) as { id: string; name: string; content: string }[];
+          } catch { return []; }
+        },
+        emitLog,
+      });
+      startFollowUpLoop();
+      emitLog("Fagner online e pronto para receber atendimentos 🤖", "SUCCESS");
+    } catch (e) {
+      console.error("❌ Erro ao inicializar orquestrador:", e);
+    }
+  });
 
   // Serve arquivos estáticos do React (apenas quando SERVE_STATIC=true)
   // Em produção no Railway, o Vercel serve o frontend — isso fica desabilitado.
