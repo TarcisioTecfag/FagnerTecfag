@@ -1,0 +1,9 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install"
+
+[deploy]
+startCommand = "node --loader tsx/esm server/index.ts"
+healthcheckPath = "/api/bot/status"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

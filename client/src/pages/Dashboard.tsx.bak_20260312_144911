@@ -1,0 +1,354 @@
+import { useState, useEffect } from "react";
+import { Power, PowerOff, TrendingUp, Users, MessageCircle, AlertCircle, TerminalSquare, Activity, Loader2, Copy, Check, History, Clock } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useBotLogs } from "@/hooks/use-bot-logs";
+import { format } from "date-fns";
+import { ptBR } from 'date-fns/locale';
+
+export default function Dashboard() {
+  const { logs: liveLogs } = useBotLogs();
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  const { data: sessions } = useQuery<{ id: string, startTime: string, endTime: string | null, status: string }[]>({
+    queryKey: ["/api/sessions"],
+    enabled: isHistoryOpen
+  });
+
+  const { data: sessionLogs, isLoading: isLoadingSessionLogs } = useQuery<{ message: string, level: string, timestamp: string }[]>({
+    queryKey: [`/api/sessions/${selectedSessionId}/logs`],
+    enabled: !!selectedSessionId
+  });
+
+  const { data: botStatus, isLoading: isLoadingStatus } = useQuery<{ status: string }>({
+    queryKey: ["/api/bot/status"],
+    refetchInterval: 5000,
+  });
+
+  const { data: leadsByDay, isLoading: isLoadingLeadsByDay } = useQuery<{ date: string; count: number }[]>({
+    queryKey: ["/api/dashboard/leads-by-day"],
+    refetchInterval: 30000,
+  });
+
+  const { data: leadsByOperator, isLoading: isLoadingLeadsByOp } = useQuery<{ name: string; count: number }[]>({
+    queryKey: ["/api/dashboard/leads-by-operator"],
+    refetchInterval: 30000,
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async (active: boolean) => {
+      await apiRequest("POST", "/api/bot/toggle", { action: active ? "start" : "stop" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bot/status"] });
+    }
+  });
+
+  const isBotActive = botStatus?.status === 'RUNNING' || botStatus?.status === 'STARTING';
+  const isStopping = botStatus?.status === 'STOPPING';
+  const isPending = isLoadingStatus || toggleMutation.isPending || isStopping;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-950">Painel de Controle</h1>
+          <p className="text-zinc-500 mt-1">Monitore o desempenho do robô e o status do sistema.</p>
+        </div>
+
+        <Card className={`border-2 ${isBotActive ? 'border-emerald-500/50 bg-emerald-50/50' : 'border-zinc-200'}`}>
+          <CardContent className="p-4 flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-full ${isBotActive ? 'bg-emerald-100 text-emerald-600' : 'bg-zinc-100 text-zinc-500'}`}>
+                {isPending ? <Loader2 className="animate-spin" size={20} /> : (isBotActive ? <Power size={20} /> : <PowerOff size={20} />)}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-zinc-900">Status do Robô</p>
+                <p className={`text-xs font-semibold ${isBotActive ? 'text-emerald-600' : 'text-zinc-500'}`}>
+                  {botStatus?.status === 'RUNNING' ? 'EXECUTANDO' : botStatus?.status === 'STARTING' ? 'INICIANDO' : botStatus?.status === 'STOPPING' ? 'ENCERRANDO...' : botStatus?.status === 'IDLE' ? 'INATIVO' : 'OFFLINE'}
+                </p>
+              </div>
+            </div>
+            <div className="h-8 w-px bg-zinc-200"></div>
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={isBotActive}
+                disabled={isPending}
+                onCheckedChange={(checked) => toggleMutation.mutate(checked)}
+                id="bot-status"
+                className="data-[state=checked]:bg-emerald-500"
+              />
+              <Label htmlFor="bot-status" className="cursor-pointer">
+                {isBotActive ? 'Desligar' : 'Ligar'}
+              </Label>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* KPI Cards (MOCK for now, could be API'ed later) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="hover-elevate">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium text-zinc-500">Leads Gerados</CardTitle>
+            <Users className="h-4 w-4 text-zinc-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-zinc-950">0</div>
+            <p className="text-xs text-emerald-600 flex items-center mt-1 font-medium">
+              <TrendingUp className="h-3 w-3 mr-1" /> +12.5% desde a última semana
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover-elevate">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium text-zinc-500">Conversas Ativas</CardTitle>
+            <MessageCircle className="h-4 w-4 text-zinc-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-zinc-950">1</div>
+            <p className="text-xs text-zinc-500 mt-1 font-medium">
+              Instância Vigosapp
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover-elevate">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium text-zinc-500">Tempo Médio de Resposta</CardTitle>
+            <Activity className="h-4 w-4 text-zinc-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-zinc-950">1.2s</div>
+            <p className="text-xs text-emerald-600 flex items-center mt-1 font-medium">
+              <TrendingUp className="h-3 w-3 mr-1" /> -0.3s desde a última semana
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex flex-col gap-6">
+        {/* Real-time Logs from WebSocket */}
+        <Card className="flex flex-col w-full">
+          <CardHeader className="pb-3 border-b border-zinc-100">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <TerminalSquare className="h-5 w-5 text-zinc-400" /> Logs do Sistema
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-zinc-400 hover:text-zinc-100"
+                  onClick={() => {
+                    const text = liveLogs.map(l => `[${new Date(l.timestamp).toLocaleTimeString()}] ${l.message}`).join('\n');
+                    navigator.clipboard.writeText(text);
+                  }}
+                  title="Copiar Logs"
+                >
+                  <Copy size={14} />
+                </Button>
+
+                <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-zinc-400 hover:text-zinc-100"
+                      title="Sessões Passadas"
+                    >
+                      <History size={14} />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col p-0 border-zinc-200">
+                    <DialogHeader className="p-6 border-b border-zinc-100">
+                      <DialogTitle className="flex items-center gap-2">
+                        <History className="h-5 w-5 text-zinc-400" /> Histórico de Sessões
+                      </DialogTitle>
+                      <DialogDescription>
+                        Visualize os logs das sessões passadas do robô.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-1 flex overflow-hidden">
+                      {/* Session List */}
+                      <div className="w-1/3 border-r border-zinc-100 overflow-y-auto p-2 space-y-1 bg-zinc-50/50">
+                        {sessions?.map(session => (
+                          <div
+                            key={session.id}
+                            onClick={() => setSelectedSessionId(session.id)}
+                            className={`p-3 rounded-lg cursor-pointer transition-all border ${selectedSessionId === session.id
+                              ? 'bg-white border-zinc-200 shadow-sm'
+                              : 'border-transparent hover:bg-zinc-100'
+                              }`}
+                          >
+                            <div className="flex justify-between items-start mb-1">
+                              <p className="text-xs font-semibold text-zinc-900">
+                                {format(new Date(session.startTime), "dd 'de' MMM, HH:mm", { locale: ptBR })}
+                              </p>
+                              <Badge variant="outline" className={`text-[9px] px-1 h-4 ${session.status === 'RUNNING' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-zinc-500'
+                                }`}>
+                                {session.status === 'RUNNING' ? 'Ativa' : 'Finalizada'}
+                              </Badge>
+                            </div>
+                            <p className="text-[10px] text-zinc-500 flex items-center gap-1">
+                              <Clock size={10} />
+                              {session.endTime
+                                ? `Duração: ${Math.round((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000)} min`
+                                : 'Iniciada agora'}
+                            </p>
+                          </div>
+                        ))}
+                        {sessions?.length === 0 && <p className="text-center p-4 text-xs text-zinc-400 italic">Nenhuma sessão anterior.</p>}
+                      </div>
+
+                      {/* Session Logs View */}
+                      <div className="flex-1 bg-zinc-950 text-zinc-300 font-mono text-[11px] overflow-y-auto p-4 space-y-2">
+                        {!selectedSessionId ? (
+                          <div className="h-full flex items-center justify-center text-zinc-600 italic">
+                            Selecione uma sessão ao lado para ver os logs
+                          </div>
+                        ) : isLoadingSessionLogs ? (
+                          <div className="h-full flex items-center justify-center">
+                            <Loader2 className="animate-spin text-zinc-700" size={24} />
+                          </div>
+                        ) : (
+                          sessionLogs?.map((log, i) => (
+                            <div key={i} className={`flex gap-3 ${log.level === 'ERROR' ? 'text-red-400' : log.level === 'WARN' ? 'text-amber-400' : 'text-zinc-300'}`}>
+                              <span className="shrink-0 text-zinc-600 font-bold">{new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}</span>
+                              <span className="break-all">{log.message}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <Badge variant="outline" className="text-[10px] animate-pulse">AOVIVO</Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="flex-1 p-0 overflow-hidden relative bg-zinc-950 text-zinc-300 font-mono text-[11px] leading-relaxed rounded-b-xl min-h-[400px]">
+            <div className="absolute inset-0 p-4 overflow-y-auto space-y-2 flex flex-col-reverse justify-start">
+              {[...liveLogs].reverse().map((log, i) => (
+                <div key={i} className={`flex gap-3 ${log.level === 'ERROR' ? 'text-red-400' : log.level === 'WARN' ? 'text-amber-400' : 'text-zinc-300'}`}>
+                  <span className="shrink-0 text-zinc-600 font-bold">{new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}</span>
+                  <span className="break-all">{log.message}</span>
+                </div>
+              ))}
+              {liveLogs.length === 0 && (
+                <div className="text-zinc-600 italic">Aguardando logs...</div>
+              )}
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none"></div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+          {/* Chart 1: Leads por dia (dados reais) */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle>Geração de Leads</CardTitle>
+              <CardDescription>Detalhamento diário de leads capturados pelo robô (últimos 30 dias).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingLeadsByDay ? (
+                <div className="h-[200px] flex items-center justify-center">
+                  <Loader2 className="animate-spin text-zinc-400" size={24} />
+                </div>
+              ) : (
+                <div className="h-[200px] w-full flex items-end justify-between gap-1 pt-4 px-2">
+                  {(leadsByDay && leadsByDay.length > 0) ? (() => {
+                    const maxVal = Math.max(...leadsByDay.map(d => d.count), 1);
+                    return leadsByDay.map((d, i) => {
+                      const heightPct = (d.count / maxVal) * 100;
+                      const label = new Date(d.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                      return (
+                        <div
+                          key={i}
+                          className="w-full bg-zinc-100 rounded-t-sm relative group hover:bg-zinc-200 transition-colors"
+                          style={{ height: '100%' }}
+                          title={`${label}: ${d.count} leads`}
+                        >
+                          <div
+                            className="absolute bottom-0 w-full bg-zinc-900 rounded-t-sm transition-all duration-500"
+                            style={{ height: `${Math.max(heightPct, d.count > 0 ? 4 : 0)}%` }}
+                          />
+                          {/* Tooltip on hover */}
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-zinc-800 text-white text-[9px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                            {label}: {d.count}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })() : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-400 text-sm italic">
+                      Nenhum dado ainda
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Chart 2: Leads por operador (dados reais) */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle>Leads por Operador</CardTitle>
+              <CardDescription>Distribuição de leads enviados para os operadores via rodízio do CRM.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingLeadsByOp ? (
+                <div className="min-h-[120px] flex items-center justify-center">
+                  <Loader2 className="animate-spin text-zinc-400" size={24} />
+                </div>
+              ) : (leadsByOperator && leadsByOperator.length > 0) ? (
+                <div className="space-y-6 pt-2">
+                  {(() => {
+                    const maxCount = Math.max(...leadsByOperator.map(op => op.count), 1);
+                    const colors = ['bg-emerald-500', 'bg-indigo-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-violet-500'];
+                    return leadsByOperator.map((op, i) => {
+                      const initials = op.name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase();
+                      return (
+                        <div key={i} className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-8 rounded-full bg-zinc-100 flex items-center justify-center text-xs font-medium text-zinc-600">
+                                {initials}
+                              </div>
+                              <span className="text-sm font-medium text-zinc-900">{op.name}</span>
+                            </div>
+                            <span className="text-sm font-bold text-zinc-900">{op.count} <span className="text-xs font-normal text-zinc-500">leads</span></span>
+                          </div>
+                          <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${colors[i % colors.length]} rounded-full transition-all duration-500`}
+                              style={{ width: `${(op.count / maxCount) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              ) : (
+                <div className="min-h-[120px] flex items-center justify-center text-zinc-400 text-sm italic">
+                  Nenhum lead atribuído ainda. Os dados aparecerão após a sincronização com o CRM.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

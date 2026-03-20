@@ -1,0 +1,553 @@
+// server/fagner/fagnerOrchestrator.ts
+// Orquestrador central do Fagner
+// Conecta: webhook → debounce → CNPJ/mídia → Gemini → flowEngine → CRM → transferência
+
+import { v4 as uuidv4 } from "uuid";
+import {
+  getOrCreateSession,
+  ContactSession,
+  getAllSessions,
+  getActiveSessions,
+  addToHistory,
+} from "./sessionManager.js";
+import { enqueueMessage, cancelDebounce } from "./debounceEngine.js";
+import {
+  callGemini,
+  initChatSession,
+  ragSearch,
+  splitHumanized,
+  MessagePart,
+} from "./geminiService.js";
+import {
+  detectCnpj,
+  detectCpf,
+  lookupCnpj,
+  formatCnpjDataForPrompt,
+} from "./cnpjService.js";
+import { checkProtests } from "./cenprotService.js";
+import { checkCreditEligibility } from "./serasaService.js";
+import {
+  transcribeAudio,
+  analyzeImage,
+  formatAudioContext,
+  formatImageContext,
+  makeAudioRecord,
+  makeImageRecord,
+} from "./mediaService.js";
+import {
+  detectCompletion,
+  detectFlowFromText,
+  setFlow,
+  getTransferTarget,
+  buildCreditContext,
+  buildCnpjContext,
+  buildMediaContext,
+  flowRequiresCnpj,
+  flowRequiresCredit,
+  flowGeneratesCard,
+} from "./flowEngine.js";
+import {
+  sendMessage,
+  getContactInfo,
+  createOrUpdateContact,
+  forwardToFlow,
+} from "./rdConversasService.js";
+import { upsertDeal } from "./rdCrmService.js";
+import {
+  generateReportJson,
+  generateReportText,
+  saveReportToDb,
+} from "./reportService.js";
+import { checkFollowUps, reactivateSession } from "./followUpService.js";
+import {
+  isWithinSchedule,
+  getOffHoursMessage,
+  getNextOpenTime,
+  getSchedule,
+  setSchedule,
+} from "./scheduleService.js";
+import {
+  searchProduct,
+  detectMachineIntent,
+  formatVtexContextForGemini,
+} from "./vtexService.js";
+
+export { getSchedule, setSchedule };
+
+// ─── Tipos do webhook ─────────────────────────────────────────────────────────
+
+export interface WebhookPayload {
+  contactId: string;
+  message?: string;
+  mediaUrl?: string;
+  mimeType?: string;
+  phone?: string;
+  contactName?: string;
+}
+
+// ─── Dependências externas injetadas ────────────────────────────────────────
+
+interface OrchestratorDeps {
+  db: any;
+  getApiKey: () => string;
+  getRagDocuments: () => { id: string; name: string; content: string }[];
+  emitLog: (msg: string, level?: "INFO" | "WARN" | "ERROR" | "SUCCESS") => void;
+}
+
+let deps: OrchestratorDeps;
+
+export function initOrchestrator(d: OrchestratorDeps) {
+  deps = d;
+  deps.emitLog("Fagner Orchestrator inicializado 🚀", "SUCCESS");
+}
+
+// ─── Round-robin de Peças ───────────────────────────────────────────────────────
+// Alterna entre "Tecfag Peças" e "Tecfag Peças 2" a cada atendimento do fluxo PECAS.
+// O contador é persistido no banco para sobreviver a restarts do servidor.
+
+function getNextPecasDepartment(): string {
+  const PECAS_SECTORS = ["Tecfag Peças", "Tecfag Peças 2"];
+  try {
+    // Lê o índice atual
+    const raw = deps.db
+      .prepare("SELECT value FROM settings WHERE key = 'fagner_pecas_rr_index'")
+      .get() as { value?: string } | undefined;
+    const current = parseInt(raw?.value ?? "0", 10) || 0;
+    const chosen = PECAS_SECTORS[current % PECAS_SECTORS.length];
+
+    // Incrementa para o próximo
+    const next = (current + 1) % PECAS_SECTORS.length;
+    deps.db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('fagner_pecas_rr_index', ?) " +
+      "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run(String(next));
+
+    deps.emitLog(`[Round-Robin Peças] Setor escolhido: ${chosen} (próximo será: ${PECAS_SECTORS[next]})`, "INFO");
+    return chosen;
+  } catch {
+    return "Tecfag Peças"; // fallback
+  }
+}
+
+// ─── Mapeia SubFlow → departamento do RD Conversas ───────────────────────────
+// O nome precisa ser IDÊNTICO ao cadastrado no painel RD Conversas.
+// Pode ser personalizado via settings (fagner_department_map).
+
+function getDepartmentForSubFlow(subFlow?: string | null): string {
+  // Round-robin especial para PECAS: alterna entre os dois setores de peças
+  if (subFlow === "PECAS") {
+    return getNextPecasDepartment();
+  }
+
+  // Primeiro tenta buscar mapeamento personalizado salvo no banco
+  try {
+    const raw = deps.db
+      .prepare("SELECT value FROM settings WHERE key = 'fagner_department_map'")
+      .get() as { value?: string } | undefined;
+    if (raw?.value) {
+      const map = JSON.parse(raw.value) as Record<string, string>;
+      if (subFlow && map[subFlow]) return map[subFlow];
+    }
+  } catch { /* sem mapa personalizado, usa padrão */ }
+
+  // Mapeamento padrão — nomes EXATOS dos setores cadastrados no RD Conversas (Tallos) da Tecfag
+  const DEFAULT_MAP: Record<string, string> = {
+    MAQUINAS:     "Tecfag Maquinas",
+    PERSONNALITE: "Tecfag PersonnalIté",
+    "2A_BOLETO":  "FINANCEIRO",
+    "2B_NF":      "FINANCEIRO",
+    "2C_OUTROS":  "FINANCEIRO",
+    "3_AT":       "ASSISTÊNCIA TÉCNICA",
+    "4A_RASTREAR":"PÓS VENDA",
+    "4B_NF":      "PÓS VENDA",
+    "5A_CLIENTE": "RECEPÇÃO",
+    "5B_CURRICULO":"ADMINISTRADORES",
+  };
+
+  return DEFAULT_MAP[subFlow ?? ""] ?? "RECEPÇÃO";
+}
+
+
+// ─── Envio com delay humanizado ───────────────────────────────────────────────
+
+async function sendWithDelay(contactId: string, parts: MessagePart[]): Promise<void> {
+  const isSim = contactId.startsWith("sim-");
+  for (const part of parts) {
+    // Sessões de simulação: sem delay (o interceptador coleta todas as partes)
+    if (!isSim && part.delayMs > 0) {
+      await new Promise((r) => setTimeout(r, part.delayMs));
+    }
+    await sendMessage(contactId, part.text);
+  }
+}
+
+// ─── Loga custo no banco ──────────────────────────────────────────────────────
+
+function logCost(tokens: number, prompt: number, output: number, note: string) {
+  try {
+    const costEstimate = (prompt * 0.0000025) + (output * 0.00001);
+    deps.db.prepare(
+      "INSERT INTO api_costs (id, service, operation, cost, tokens, notes) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(uuidv4(), "gemini", "fagner-chat", costEstimate, tokens, note);
+  } catch { /* ignora erros de custo */ }
+}
+
+// ─── Pipeline principal de processamento por contato ─────────────────────────
+
+async function processContact(session: ContactSession, combinedMessage: string): Promise<void> {
+  if (session.isCompleted) return;
+  session.isProcessing = true;
+
+  const apiKey = deps.getApiKey();
+  const { contactId } = session;
+
+  try {
+    deps.emitLog(`[${contactId}] Processando: "${combinedMessage.slice(0, 80)}..."`, "INFO");
+
+    // ── 0. Reativa se estava pausada ────────────────────────────────────────
+    reactivateSession(session);
+
+    // ── 1. Captura nome/telefone do contato se ainda não tem ──────────────
+    if (!session.contactPhone) {
+      const info = await getContactInfo(contactId);
+      if (info?.phone) session.contactPhone = info.phone;
+      if (info?.name && !session.flowData.clientName) {
+        session.flowData.clientName = info.name;
+      }
+    }
+
+    // ── 2. Inicializa chat Gemini na 1ª mensagem ───────────────────────────
+    if (!session.chatSession) {
+      initChatSession(apiKey, session);
+    }
+
+    // ── 3. Detecção de fluxo (heurística rápida — LLM faz isso via prompt) ─
+    if (!session.currentFlow) {
+      const detected = detectFlowFromText(combinedMessage);
+      if (detected) {
+        setFlow(session, detected.flow, detected.sub);
+      }
+    }
+
+    // ── 4. Detecção de CPF/CNPJ na mensagem ───────────────────────────────
+    let cnpjContext = buildCnpjContext(session);
+    const cpf  = !session.flowData.clientCpf  ? detectCpf(combinedMessage) : null;
+    const cnpj = !session.flowData.clientCnpj ? detectCnpj(combinedMessage) : null;
+
+    if (cpf && !session.flowData.clientCpf) {
+      session.flowData.clientCpf = cpf;
+      deps.emitLog(`[${contactId}] CPF detectado: ${cpf}`, "INFO");
+    }
+
+    if (cnpj && !session.validatedCnpjs.has(cnpj)) {
+      session.flowData.clientCnpj = cnpj;
+      session.validatedCnpjs.add(cnpj);
+      deps.emitLog(`[${contactId}] CNPJ detectado: ${cnpj} — consultando Receita Federal...`, "INFO");
+
+      // Hold message enquanto consulta
+      await sendMessage(contactId, "Um segundo, deixa eu verificar aqui suas informações... 🔍");
+
+      const cnpjData = await lookupCnpj(cnpj);
+      if (cnpjData) {
+        session.cnpjApiData = cnpjData;
+        session.flowData.companyName = cnpjData.razao_social;
+        cnpjContext = buildCnpjContext(session);
+        deps.emitLog(`[${contactId}] Receita Federal: ${cnpjData.razao_social}`, "SUCCESS");
+
+        // Análise de crédito para Fluxo 1
+        if (flowRequiresCnpj(session) && flowRequiresCredit(session)) {
+          deps.emitLog(`[${contactId}] Consultando CENPROT + SERASA...`, "INFO");
+
+          const [cenprotResult, serasaResult] = await Promise.all([
+            checkProtests(cnpj),
+            checkCreditEligibility(cnpj),
+          ]);
+
+          session.flowData.hasProtests    = cenprotResult.hasProtests;
+          session.flowData.creditEligible = serasaResult.eligible;
+          session.flowData.paymentMode    = serasaResult.eligible ? "normal" : "avista";
+
+          deps.emitLog(
+            `[${contactId}] Crédito: protestos=${cenprotResult.hasProtests} elegível=${serasaResult.eligible}`,
+            serasaResult.eligible ? "SUCCESS" : "WARN"
+          );
+        }
+      } else {
+        deps.emitLog(`[${contactId}] CNPJ não encontrado na Receita Federal.`, "WARN");
+      }
+    }
+
+    // CNPJ já validado anteriormente?
+    if (
+      !cnpj && !cpf &&
+      session.flowData.clientCnpj &&
+      session.validatedCnpjs.has(session.flowData.clientCnpj) &&
+      combinedMessage.replace(/\D/g, "").length === 14
+    ) {
+      // cliente re-enviou o mesmo CNPJ → já temos, não re-consulta
+    }
+
+    // ── 5. RAG — busca semântica ─────────────────────────────────────────
+    let ragContext = "";
+    if (apiKey) {
+      const docs = deps.getRagDocuments();
+      if (docs.length > 0) {
+        ragContext = await ragSearch(combinedMessage, docs, apiKey, 3);
+      }
+    }
+
+    // ── 5.5 VTEX — busca de produto no catálogo tecfag.com.br ────────────
+    let vtexContext = "";
+    // Só busca se a sessão for do fluxo de Máquinas ou ainda sem fluxo definido
+    const isMachinesFlow = !session.currentFlow || session.currentFlow === 1 || String(session.currentSubFlow ?? "").includes("MAQUINAS");
+    if (isMachinesFlow) {
+      const machineQuery = detectMachineIntent(combinedMessage);
+      if (machineQuery) {
+        deps.emitLog(`[${contactId}] 🔍 VTEX: detectou intenção de máquina — buscando "${machineQuery}"...`, "INFO");
+        try {
+          const vtexResult = await searchProduct(machineQuery, deps.db);
+          vtexContext = formatVtexContextForGemini(vtexResult);
+
+          // Registra no log de ações do painel VTEX
+          const logType   = vtexResult.found ? "found"     : "not_found";
+          const logDesc   = vtexResult.found
+            ? `Encontrou "${vtexResult.productName}" — ${vtexResult.available ? "disponível" : "indisponível"}`
+            : `Produto não encontrado: "${(vtexResult as any).normalizedQuery}"` ;
+
+          try {
+            deps.db.prepare(
+              "INSERT OR IGNORE INTO vtex_logs (id, type, description, product, autonomous) VALUES (?, ?, ?, ?, 1)"
+            ).run(uuidv4(), "search", `Buscou "${machineQuery}"`, machineQuery);
+            deps.db.prepare(
+              "INSERT OR IGNORE INTO vtex_logs (id, type, description, product, autonomous) VALUES (?, ?, ?, ?, 1)"
+            ).run(uuidv4(), logType, logDesc, vtexResult.found ? vtexResult.productName : machineQuery);
+
+            if (vtexResult.found && vtexResult.available) {
+              deps.db.prepare(
+                "INSERT OR IGNORE INTO vtex_logs (id, type, description, product, autonomous) VALUES (?, ?, ?, ?, 1)"
+              ).run(uuidv4(), "link_sent", `Link enviado automaticamente: ${vtexResult.link}`, vtexResult.productName);
+            }
+
+            // Registra falha se não encontrou
+            if (!vtexResult.found) {
+              deps.db.prepare(
+                "INSERT OR IGNORE INTO vtex_failures (id, query, reason, resolved) VALUES (?, ?, 'Não encontrado', 0)"
+              ).run(uuidv4(), machineQuery);
+            }
+          } catch (dbErr) {
+            // Ignora erros de log — não deve travar o atendimento
+          }
+
+          deps.emitLog(
+            `[${contactId}] VTEX: ${vtexResult.found ? `✅ ${vtexResult.productName}` : "❌ não encontrado"}`,
+            vtexResult.found ? "SUCCESS" : "WARN"
+          );
+        } catch (vtexErr: any) {
+          deps.emitLog(`[${contactId}] VTEX: erro na busca (ignorando) — ${vtexErr.message}`, "WARN");
+        }
+      }
+    }
+
+    // ── 6. Construção do extra context ────────────────────────────────────
+    const extraParts: string[] = [];
+    if (cnpjContext) extraParts.push(cnpjContext);
+    const creditCtx = buildCreditContext(session);
+    if (creditCtx) extraParts.push(creditCtx);
+    const mediaCtx = buildMediaContext(session);
+    if (mediaCtx) extraParts.push(mediaCtx);
+    if (vtexContext) extraParts.push(vtexContext);
+    const extraContext = extraParts.join("\n\n") || undefined;
+
+    // ── 7. Chama Gemini ──────────────────────────────────────────────────
+    const response = await callGemini({
+      session,
+      userMessage: combinedMessage,
+      apiKey,
+      ragContext: ragContext || undefined,
+      extraContext,
+      logCost: (tokens, prompt, output) =>
+        logCost(tokens, prompt, output, `msg:${combinedMessage.slice(0, 50)}`),
+    });
+
+    deps.emitLog(`[${contactId}] Resposta Gemini: "${response.slice(0, 80)}..."`, "INFO");
+
+    // ── 8. Detecta fluxo na resposta (LLM pode ter identificado) ─────────
+    if (!session.currentFlow) {
+      const detected = detectFlowFromText(response);
+      if (detected) setFlow(session, detected.flow, detected.sub);
+    }
+
+    // ── 9. Split humanizado e envio ───────────────────────────────────────
+    const parts = splitHumanized(response);
+    await sendWithDelay(contactId, parts);
+
+    // ── 10. Detecta finalização ──────────────────────────────────────────
+    if (detectCompletion(response)) {
+      session.isCompleted = true;
+      cancelDebounce(session);
+
+      deps.emitLog(`[${contactId}] Atendimento finalizado — gerando relatório...`, "INFO");
+
+      // Relatório
+      const reportJson = await generateReportJson(session, apiKey);
+      const reportText = generateReportText(session, reportJson, session.cnpjApiData as any);
+
+      // Upsert no CRM
+      if (flowGeneratesCard(session)) {
+        await upsertDeal(session, session.cnpjApiData as any);
+      }
+
+      // ── Determina setor de destino baseado no subfluxo detectado ────────────
+      const operator = getTransferTarget(session);
+      saveReportToDb(deps.db, session, reportText, reportJson, operator.name);
+
+      // ── Atualiza contato no RD Conversas com department_name correto ─────────
+      // Isso coloca o contato na fila do setor certo dentro do RD Conversas.
+      const departmentName = getDepartmentForSubFlow(session.currentSubFlow);
+      if (session.contactPhone) {
+        await createOrUpdateContact({
+          cel_phone: session.contactPhone,
+          full_name: session.flowData.clientName ?? "Cliente",
+          integration: process.env.RD_CONVERSAS_INTEGRATION ?? "",
+          department_name: departmentName,
+          tags: [session.currentSubFlow ?? "geral", "fagner-triagem"].filter(Boolean) as string[],
+          ...(session.flowData.clientCnpj ? { cnpj: session.flowData.clientCnpj } : {}),
+          ...(session.flowData.clientCpf ? { cpf: session.flowData.clientCpf } : {}),
+        }).catch((e: any) =>
+          deps.emitLog(`[${contactId}] Aviso: falha ao atualizar contato RD — ${e.message}`, "WARN")
+        );
+      }
+
+      // ── Encaminha para fluxo de atendimento humano no RD Conversas ────────────
+      // O flowId é configurado no painel (fagner_rd_human_flow_id).
+      const humanFlowId = (() => {
+        const raw = deps.db
+          .prepare("SELECT value FROM settings WHERE key = 'fagner_rd_human_flow_id'")
+          .get() as { value?: string } | undefined;
+        try { return raw?.value ? JSON.parse(raw.value) : ""; } catch { return raw?.value ?? ""; }
+      })();
+
+      if (humanFlowId && !contactId.startsWith("sim-")) {
+        await forwardToFlow(contactId, humanFlowId).catch((e: any) =>
+          deps.emitLog(`[${contactId}] Aviso: falha ao encaminhar fluxo RD — ${e.message}`, "WARN")
+        );
+      }
+
+      deps.emitLog(`[${contactId}] ✅ Transferido para ${operator.name} | Dept: ${departmentName}. Fluxo: ${session.currentSubFlow}`, "SUCCESS");
+    }
+
+  } finally {
+    session.isProcessing = false;
+  }
+}
+
+// ─── Processamento de mídia (webhook com media) ────────────────────────────
+
+export async function processMedia(
+  session: ContactSession,
+  mediaUrl: string,
+  mimeType: string
+): Promise<void> {
+  const apiKey = deps.getApiKey();
+  const isAudio = mimeType.includes("audio");
+
+  deps.emitLog(`[${session.contactId}] Processando mídia: ${mimeType}`, "INFO");
+
+  if (isAudio) {
+    const analysis = await transcribeAudio(mediaUrl, apiKey);
+    session.mediaMemory.push(makeAudioRecord(mediaUrl, analysis));
+
+    if (analysis.detectedCnpj && !session.flowData.clientCnpj) {
+      session.flowData.clientCnpj = analysis.detectedCnpj;
+    }
+    if (analysis.detectedProduct) {
+      session.productNotes.push(analysis.detectedProduct);
+    }
+
+    // Injeta transcrição como mensagem
+    const transcriptMsg = formatAudioContext(analysis);
+    enqueueMessage(session, transcriptMsg, processContact);
+  } else {
+    const analysis = await analyzeImage(mediaUrl, apiKey);
+    session.mediaMemory.push(makeImageRecord(mediaUrl, analysis));
+
+    if (analysis.detectedCnpj && !session.flowData.clientCnpj) {
+      session.flowData.clientCnpj = analysis.detectedCnpj;
+    }
+    if (analysis.detectedProduct) {
+      session.productNotes.push(analysis.detectedProduct);
+    }
+
+    // Injeta análise da imagem como contexto
+    const imageMsg = formatImageContext(analysis);
+    enqueueMessage(session, imageMsg, processContact);
+  }
+}
+
+// ─── Entry point do webhook ────────────────────────────────────────────────
+
+export async function handleWebhook(payload: WebhookPayload): Promise<void> {
+  const { contactId, message, mediaUrl, mimeType, phone, contactName } = payload;
+
+  if (!contactId) {
+    deps.emitLog("Webhook recebido sem contactId — ignorado.", "WARN");
+    return;
+  }
+
+  const session = getOrCreateSession(contactId);
+
+  // ── Verifica horário de atendimento ─────────────────────────────────────
+  const isFirstMessage = session.messageCount === 0;
+  if (isFirstMessage && !isWithinSchedule()) {
+    const msg = getOffHoursMessage();
+    const nextOpen = getNextOpenTime();
+    deps.emitLog(`[${contactId}] Fora do horário de atendimento — respondendo automaticamente.`, "WARN");
+    await sendMessage(contactId, `${msg}\n\nRetornamos ${nextOpen}. 🕐`);
+    // Registra a mensagem mas não processa com IA
+    session.messageCount++;
+    return;
+  }
+
+  // Captura dados básicos do contato
+  if (phone && !session.contactPhone) session.contactPhone = phone;
+  if (contactName && !session.flowData.clientName) session.flowData.clientName = contactName;
+
+  // Mídia
+  if (mediaUrl && mimeType) {
+    await processMedia(session, mediaUrl, mimeType);
+    return;
+  }
+
+  // Mensagem de texto
+  if (message && message.trim()) {
+    // ── Simulação (painel "Ao Vivo"): bypassa o debounce para resposta imediata ──
+    if (contactId.startsWith("sim-")) {
+      addToHistory(session, message.trim());
+      await processContact(session, message.trim());
+      return;
+    }
+    enqueueMessage(session, message.trim(), processContact);
+  }
+}
+
+
+// ─── Follow-up loop (roda a cada 60s) ─────────────────────────────────────
+
+export function startFollowUpLoop(): void {
+  setInterval(async () => {
+    const active = getActiveSessions();
+    if (active.length > 0) {
+      await checkFollowUps(active).catch((e) =>
+        deps?.emitLog(`[FollowUp] Erro: ${e.message}`, "WARN")
+      );
+    }
+  }, 60_000);
+
+  deps?.emitLog("Follow-up loop iniciado (intervalo: 60s)", "INFO");
+}
+
+// ─── Expose sessions para dashboard ──────────────────────────────────────
+
+export function getAllSessionsForDashboard() {
+  return getAllSessions();
+}
