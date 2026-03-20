@@ -1,4 +1,15 @@
 import "dotenv/config";
+
+// ─── Global error handlers — captura crashes no startup para logs do Railway ──
+process.on("uncaughtException", (err) => {
+  console.error("💥 UNCAUGHT EXCEPTION:", err.message);
+  console.error(err.stack);
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("💥 UNHANDLED REJECTION:", reason);
+  process.exit(1);
+});
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import http from "http";
