@@ -362,7 +362,7 @@ export default function Login() {
         }
       `}</style>
 
-      <div className="login-root flex min-h-screen">
+      <div className="login-root flex h-screen overflow-hidden">
 
         {/* ═══════════════════════════════════════════════════════
             PAINEL ESQUERDO — Universo Fagner
@@ -549,7 +549,7 @@ export default function Login() {
             PAINEL DIREITO — Formulário
         ═══════════════════════════════════════════════════════ */}
         <div
-          className="flex w-full flex-col items-center justify-center px-6 py-12 lg:w-[48%]"
+          className="flex w-full flex-col items-center justify-center px-6 py-12 lg:w-[48%] overflow-y-auto"
           style={{ background: "#fff" }}
         >
           <div className="w-full" style={{ maxWidth: 400 }}>
