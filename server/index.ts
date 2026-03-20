@@ -104,6 +104,11 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// ─── Health check (público — usado pelo Railway) ──────────────────────────────
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true, ts: new Date().toISOString() });
+});
+
 // ─── Auth routes ─────────────────────────────────────────────────────────────
 
 // POST /api/login
