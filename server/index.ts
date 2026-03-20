@@ -65,16 +65,29 @@ const upload = multer({ storage: multerStorage });
 const app = express();
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-// Necessário para separação Vercel (frontend) + Railway (backend).
-// Em dev local, o proxy do Vite evita chamadas cross-origin, então não impacta.
-app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL ?? "http://localhost:5173",
-    /\.vercel\.app$/,              // qualquer preview do Vercel
-    /localhost:\d+/,               // qualquer porta local
-  ],
-  credentials: true,               // necessário para session cookie
-}));
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // Postman / mobile / same-origin
+    const allowed = [
+      process.env.FRONTEND_URL,
+      /\.vercel\.app$/,
+      /\.railway\.app$/,
+      /localhost:\d+/,
+      /127\.0\.0\.1:\d+/,
+    ].some((p) => {
+      if (!p) return false;
+      return typeof p === "string" ? origin === p : p.test(origin);
+    });
+    callback(allowed ? null : new Error(`CORS bloqueado: ${origin}`), allowed);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+};
+
+// Preflight explícito — responde OPTIONS antes de qualquer route/middleware
+app.options("*", cors(corsOptions));
+app.use(cors(corsOptions));
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
