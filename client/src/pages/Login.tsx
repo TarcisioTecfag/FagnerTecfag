@@ -202,7 +202,7 @@ export default function Login() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&display=swap');
 
-        .login-root { font-family: 'Inter', system-ui, sans-serif; zoom: 0.75; }
+        .login-root { font-family: 'Inter', system-ui, sans-serif; zoom: 0.75; height: calc(100vh / 0.75); overflow: hidden; }
 
         /* ── Keyframes ─────────────────────────── */
         @keyframes bubble-breathe {
@@ -362,7 +362,7 @@ export default function Login() {
         }
       `}</style>
 
-      <div className="login-root flex h-screen overflow-hidden">
+      <div className="login-root flex">
 
         {/* ═══════════════════════════════════════════════════════
             PAINEL ESQUERDO — Universo Fagner
