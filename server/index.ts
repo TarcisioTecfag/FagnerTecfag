@@ -997,8 +997,15 @@ httpServer.on("upgrade", (req, socket, head) => {
 
 
 // ─── Servidor: escuta na porta PRIMEIRO para o healthcheck do Railway passar ──
-// initOrchestrator e startFollowUpLoop são chamados DEPOIS (em background),
-// para não bloquearem o listen() e causar timeout no healthcheck.
+console.log(`[SERVER] PORT=${process.env.PORT} - chamando httpServer.listen...`);
+httpServer.on("error", (err: NodeJS.ErrnoException) => {
+  console.error(`[SERVER] ERRO no httpServer: ${err.code} ${err.message}`);
+  if (err.code === "EADDRINUSE") {
+    console.error(`[SERVER] A porta ${PORT} ja esta em uso!`);
+  }
+  // Encerra o processo pois sem porta o servidor nao funciona
+  process.exit(1);
+});
 httpServer.listen(PORT, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
   console.log(`   Banco: ${process.env.DATABASE_URL ? "PostgreSQL (Railway)" : "SQLite local"}`);
