@@ -78,43 +78,51 @@ const upload = multer({ storage: multerStorage });
 // ─── App ──────────────────────────────────────────────────────────────────────
 const app = express();
 
-// ─── CORS ─────────────────────────────────────────────────────────────────────
-const corsOptions: cors.CorsOptions = {
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Postman / mobile / same-origin
-    const allowed = [
-      process.env.FRONTEND_URL,
-      /\.vercel\.app$/,
-      /\.railway\.app$/,
-      /localhost:\d+/,
-      /127\.0\.0\.1:\d+/,
-    ].some((p) => {
-      if (!p) return false;
-      return typeof p === "string" ? origin === p : p.test(origin);
-    });
-    if (!allowed) {
-      console.warn(`[CORS] Origem bloqueada: ${origin}`);
-    }
-    callback(allowed ? null : new Error(`CORS bloqueado: ${origin}`), allowed);
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  // Garante que CDNs/proxies não cacheem respostas CORS de origens diferentes
-  exposedHeaders: ["Set-Cookie"],
-};
+// ─── CORS manual ─────────────────────────────────────────────────────────────
+// NÃO usamos o pacote 'cors' pois ele tem incompatibilidades com Express v5.
+// Implementação manual garante que os headers SEMPRE sejam adicionados,
+// inclusive em respostas de erro (4xx/5xx) e preflights OPTIONS.
+function getAllowedOrigin(origin: string | undefined): string | null {
+  if (!origin) return null; // same-origin, Postman, etc.
+  const allowed = [
+    process.env.FRONTEND_URL,        // ex: https://fagner-tecfag.vercel.app
+    /\.vercel\.app$/,
+    /\.railway\.app$/,
+    /^https?:\/\/localhost(:\d+)?$/,
+    /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+  ].some((p) => {
+    if (!p) return false;
+    return typeof p === "string" ? origin === p : p.test(origin);
+  });
+  return allowed ? origin : null;
+}
 
-// Preflight explícito — responde OPTIONS antes de qualquer route/middleware
-// Usa RegExp ao invés de string para bypassar path-to-regexp v8 do Express v5
-// (strings com wildcard '*' e '/{*path}' têm sintaxe restrita no Express v5)
-app.options(/.*/, cors(corsOptions));
-app.use(cors(corsOptions));
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin as string | undefined;
+  const allowedOrigin = getAllowedOrigin(origin);
 
-// Varia o cache por Origin para evitar que proxies sirvam resposta CORS errada
-app.use((_req, res, next) => {
+  // Sempre adiciona Vary para CDNs não cachearem resposta errada
   res.setHeader("Vary", "Origin");
+
+  if (allowedOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    res.setHeader("Access-Control-Max-Age", "86400"); // cache preflight por 24h
+  } else if (origin) {
+    console.warn(`[CORS] Origem não permitida: ${origin}`);
+  }
+
+  // Responde imediatamente ao preflight OPTIONS
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
   next();
 });
+
+
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
