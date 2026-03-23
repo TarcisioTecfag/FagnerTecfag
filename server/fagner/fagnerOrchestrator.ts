@@ -86,11 +86,12 @@ export interface WebhookPayload {
 }
 
 // ─── Dependências externas injetadas ────────────────────────────────────────
+// Agora usa storage (PostgreSQL) em vez de db (SQLite)
 
 interface OrchestratorDeps {
-  db: any;
-  getApiKey: () => string;
-  getRagDocuments: () => { id: string; name: string; content: string }[];
+  storage: any;
+  getApiKey: () => string | Promise<string>;
+  getRagDocuments: () => { id: string; name: string; content: string }[] | Promise<{ id: string; name: string; content: string }[]>;
   emitLog: (msg: string, level?: "INFO" | "WARN" | "ERROR" | "SUCCESS") => void;
 }
 
@@ -105,22 +106,16 @@ export function initOrchestrator(d: OrchestratorDeps) {
 // Alterna entre "Tecfag Peças" e "Tecfag Peças 2" a cada atendimento do fluxo PECAS.
 // O contador é persistido no banco para sobreviver a restarts do servidor.
 
-function getNextPecasDepartment(): string {
+async function getNextPecasDepartment(): Promise<string> {
   const PECAS_SECTORS = ["Tecfag Peças", "Tecfag Peças 2"];
   try {
-    // Lê o índice atual
-    const raw = deps.db
-      .prepare("SELECT value FROM settings WHERE key = 'fagner_pecas_rr_index'")
-      .get() as { value?: string } | undefined;
-    const current = parseInt(raw?.value ?? "0", 10) || 0;
+    const raw = await deps.storage.getSetting("fagner_pecas_rr_index");
+    const current = parseInt(raw ?? "0", 10) || 0;
     const chosen = PECAS_SECTORS[current % PECAS_SECTORS.length];
 
     // Incrementa para o próximo
     const next = (current + 1) % PECAS_SECTORS.length;
-    deps.db.prepare(
-      "INSERT INTO settings (key, value) VALUES ('fagner_pecas_rr_index', ?) " +
-      "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-    ).run(String(next));
+    await deps.storage.setSetting("fagner_pecas_rr_index", String(next));
 
     deps.emitLog(`[Round-Robin Peças] Setor escolhido: ${chosen} (próximo será: ${PECAS_SECTORS[next]})`, "INFO");
     return chosen;
@@ -133,7 +128,7 @@ function getNextPecasDepartment(): string {
 // O nome precisa ser IDÊNTICO ao cadastrado no painel RD Conversas.
 // Pode ser personalizado via settings (fagner_department_map).
 
-function getDepartmentForSubFlow(subFlow?: string | null): string {
+async function getDepartmentForSubFlow(subFlow?: string | null): Promise<string> {
   // Round-robin especial para PECAS: alterna entre os dois setores de peças
   if (subFlow === "PECAS") {
     return getNextPecasDepartment();
@@ -141,11 +136,9 @@ function getDepartmentForSubFlow(subFlow?: string | null): string {
 
   // Primeiro tenta buscar mapeamento personalizado salvo no banco
   try {
-    const raw = deps.db
-      .prepare("SELECT value FROM settings WHERE key = 'fagner_department_map'")
-      .get() as { value?: string } | undefined;
-    if (raw?.value) {
-      const map = JSON.parse(raw.value) as Record<string, string>;
+    const raw = await deps.storage.getSettingParsed("fagner_department_map");
+    if (raw && typeof raw === "object") {
+      const map = raw as Record<string, string>;
       if (subFlow && map[subFlow]) return map[subFlow];
     }
   } catch { /* sem mapa personalizado, usa padrão */ }
@@ -183,12 +176,16 @@ async function sendWithDelay(contactId: string, parts: MessagePart[]): Promise<v
 
 // ─── Loga custo no banco ──────────────────────────────────────────────────────
 
-function logCost(tokens: number, prompt: number, output: number, note: string) {
+async function logCost(tokens: number, prompt: number, output: number, note: string) {
   try {
     const costEstimate = (prompt * 0.0000025) + (output * 0.00001);
-    deps.db.prepare(
-      "INSERT INTO api_costs (id, service, operation, cost, tokens, notes) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(uuidv4(), "gemini", "fagner-chat", costEstimate, tokens, note);
+    await deps.storage.createCost({
+      service: "gemini",
+      operation: "fagner-chat",
+      cost: costEstimate,
+      tokens,
+      notes: note,
+    });
   } catch { /* ignora erros de custo */ }
 }
 
@@ -198,7 +195,7 @@ async function processContact(session: ContactSession, combinedMessage: string):
   if (session.isCompleted) return;
   session.isProcessing = true;
 
-  const apiKey = deps.getApiKey();
+  const apiKey = await deps.getApiKey();
   const { contactId } = session;
 
   try {
@@ -290,7 +287,7 @@ async function processContact(session: ContactSession, combinedMessage: string):
     // ── 5. RAG — busca semântica ─────────────────────────────────────────
     let ragContext = "";
     if (apiKey) {
-      const docs = deps.getRagDocuments();
+      const docs = await deps.getRagDocuments();
       if (docs.length > 0) {
         ragContext = await ragSearch(combinedMessage, docs, apiKey, 3);
       }
@@ -305,7 +302,7 @@ async function processContact(session: ContactSession, combinedMessage: string):
       if (machineQuery) {
         deps.emitLog(`[${contactId}] 🔍 VTEX: detectou intenção de máquina — buscando "${machineQuery}"...`, "INFO");
         try {
-          const vtexResult = await searchProduct(machineQuery, deps.db);
+          const vtexResult = await searchProduct(machineQuery);
           vtexContext = formatVtexContextForGemini(vtexResult);
 
           // Registra no log de ações do painel VTEX
@@ -315,24 +312,16 @@ async function processContact(session: ContactSession, combinedMessage: string):
             : `Produto não encontrado: "${(vtexResult as any).normalizedQuery}"` ;
 
           try {
-            deps.db.prepare(
-              "INSERT OR IGNORE INTO vtex_logs (id, type, description, product, autonomous) VALUES (?, ?, ?, ?, 1)"
-            ).run(uuidv4(), "search", `Buscou "${machineQuery}"`, machineQuery);
-            deps.db.prepare(
-              "INSERT OR IGNORE INTO vtex_logs (id, type, description, product, autonomous) VALUES (?, ?, ?, ?, 1)"
-            ).run(uuidv4(), logType, logDesc, vtexResult.found ? vtexResult.productName : machineQuery);
+            await deps.storage.createVtexLog({ type: "search", description: `Buscou "${machineQuery}"`, product: machineQuery });
+            await deps.storage.createVtexLog({ type: logType, description: logDesc, product: vtexResult.found ? vtexResult.productName : machineQuery });
 
             if (vtexResult.found && vtexResult.available) {
-              deps.db.prepare(
-                "INSERT OR IGNORE INTO vtex_logs (id, type, description, product, autonomous) VALUES (?, ?, ?, ?, 1)"
-              ).run(uuidv4(), "link_sent", `Link enviado automaticamente: ${vtexResult.link}`, vtexResult.productName);
+              await deps.storage.createVtexLog({ type: "link_sent", description: `Link enviado automaticamente: ${vtexResult.link}`, product: vtexResult.productName });
             }
 
             // Registra falha se não encontrou
             if (!vtexResult.found) {
-              deps.db.prepare(
-                "INSERT OR IGNORE INTO vtex_failures (id, query, reason, resolved) VALUES (?, ?, 'Não encontrado', 0)"
-              ).run(uuidv4(), machineQuery);
+              await deps.storage.createVtexFailure({ query: machineQuery, reason: "Não encontrado" });
             }
           } catch (dbErr) {
             // Ignora erros de log — não deve travar o atendimento
@@ -409,11 +398,11 @@ async function processContact(session: ContactSession, combinedMessage: string):
 
       // ── Determina setor de destino baseado no subfluxo detectado ────────────
       const operator = getTransferTarget(session);
-      saveReportToDb(deps.db, session, reportText, reportJson, operator.name);
+      await saveReportToDb(deps.storage, session, reportText, reportJson, operator.name);
 
       // ── Atualiza contato no RD Conversas com department_name correto ─────────
       // Isso coloca o contato na fila do setor certo dentro do RD Conversas.
-      const departmentName = getDepartmentForSubFlow(session.currentSubFlow);
+      const departmentName = await getDepartmentForSubFlow(session.currentSubFlow);
       if (session.contactPhone) {
         await createOrUpdateContact({
           cel_phone: session.contactPhone,
@@ -430,12 +419,7 @@ async function processContact(session: ContactSession, combinedMessage: string):
 
       // ── Encaminha para fluxo de atendimento humano no RD Conversas ────────────
       // O flowId é configurado no painel (fagner_rd_human_flow_id).
-      const humanFlowId = (() => {
-        const raw = deps.db
-          .prepare("SELECT value FROM settings WHERE key = 'fagner_rd_human_flow_id'")
-          .get() as { value?: string } | undefined;
-        try { return raw?.value ? JSON.parse(raw.value) : ""; } catch { return raw?.value ?? ""; }
-      })();
+      const humanFlowId = await deps.storage.getSettingParsed("fagner_rd_human_flow_id") ?? "";
 
       if (humanFlowId && !contactId.startsWith("sim-")) {
         await forwardToFlow(contactId, humanFlowId).catch((e: any) =>
@@ -458,7 +442,7 @@ export async function processMedia(
   mediaUrl: string,
   mimeType: string
 ): Promise<void> {
-  const apiKey = deps.getApiKey();
+  const apiKey = await deps.getApiKey();
   const isAudio = mimeType.includes("audio");
 
   deps.emitLog(`[${session.contactId}] Processando mídia: ${mimeType}`, "INFO");

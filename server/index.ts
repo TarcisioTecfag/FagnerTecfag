@@ -34,7 +34,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { storage } from "./storage.js";
-import db from "./db.js";
+import { pool, bootstrapSchema } from "./db.js";
 
 import {
   initOrchestrator,
@@ -151,73 +151,21 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// ─── SQLite Session Store ──────────────────────────────────────────────────────
-// Substitui o MemoryStore padrão (volátil) por um store SQLite persistente.
-// Isso garante que as sessões sobrevivam a restarts do container no Railway.
-import { Store } from "express-session";
-
-class SqliteSessionStore extends Store {
-  private db: typeof import("better-sqlite3").prototype;
-
-  constructor(sqliteDb: any) {
-    super();
-    this.db = sqliteDb;
-    // Cria tabela de sessões se não existir
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS http_sessions (
-        sid TEXT PRIMARY KEY,
-        sess TEXT NOT NULL,
-        expired INTEGER NOT NULL
-      )
-    `);
-    // Limpa sessões expiradas a cada 15 min
-    setInterval(() => {
-      try {
-        this.db.prepare("DELETE FROM http_sessions WHERE expired < ?").run(Date.now());
-      } catch {}
-    }, 15 * 60 * 1000).unref();
-  }
-
-  get(sid: string, cb: (err?: any, session?: session.SessionData | null) => void) {
-    try {
-      const row = this.db.prepare("SELECT sess FROM http_sessions WHERE sid = ? AND expired > ?").get(sid, Date.now()) as { sess: string } | undefined;
-      cb(null, row ? JSON.parse(row.sess) : null);
-    } catch (e) { cb(e); }
-  }
-
-  set(sid: string, sessionData: session.SessionData, cb?: (err?: any) => void) {
-    try {
-      const maxAge = sessionData.cookie?.maxAge ?? 7 * 24 * 60 * 60 * 1000;
-      const expired = Date.now() + maxAge;
-      this.db.prepare(
-        "INSERT OR REPLACE INTO http_sessions (sid, sess, expired) VALUES (?, ?, ?)"
-      ).run(sid, JSON.stringify(sessionData), expired);
-      cb?.();
-    } catch (e) { cb?.(e); }
-  }
-
-  destroy(sid: string, cb?: (err?: any) => void) {
-    try {
-      this.db.prepare("DELETE FROM http_sessions WHERE sid = ?").run(sid);
-      cb?.();
-    } catch (e) { cb?.(e); }
-  }
-
-  touch(sid: string, sessionData: session.SessionData, cb?: (err?: any) => void) {
-    try {
-      const maxAge = sessionData.cookie?.maxAge ?? 7 * 24 * 60 * 60 * 1000;
-      const expired = Date.now() + maxAge;
-      this.db.prepare("UPDATE http_sessions SET expired = ? WHERE sid = ?").run(expired, sid);
-      cb?.();
-    } catch (e) { cb?.(e); }
-  }
-}
+// ─── PostgreSQL Session Store ─────────────────────────────────────────────────
+// Usa connect-pg-simple para persistir sessões HTTP no PostgreSQL.
+// Sessões sobrevivem a restarts do container no Railway.
+import connectPgSimple from "connect-pg-simple";
+const PgStore = connectPgSimple(session);
 
 // Session
 const isProduction = process.env.NODE_ENV === "production";
 app.use(
   session({
-    store: new SqliteSessionStore(db),
+    store: new PgStore({
+      pool: pool,
+      tableName: "http_sessions",
+      createTableIfMissing: false, // já criamos no bootstrapSchema
+    }),
     secret: process.env.SESSION_SECRET ?? "tecfag-secret-2024",
     resave: false,
     saveUninitialized: false,
@@ -257,7 +205,7 @@ app.get("/api/ping", (_req, res) => {
 // ─── Auth routes ─────────────────────────────────────────────────────────────
 
 // POST /api/login
-app.post("/api/login", (req, res) => {
+app.post("/api/login", async (req, res) => {
   const t0 = Date.now();
   console.log(`[LOGIN] ► Request de ${req.ip} | origin: ${req.headers.origin} | email: ${req.body?.email}`);
 
@@ -267,7 +215,7 @@ app.post("/api/login", (req, res) => {
     return res.status(400).json({ message: "Email e senha são obrigatórios" });
   }
 
-  const user = storage.getUserByEmail(email);
+  const user = await storage.getUserByEmail(email);
   if (!user) {
     console.log(`[LOGIN] ✗ 401 — email não encontrado: ${email} (${Date.now() - t0}ms)`);
     return res.status(401).json({ message: "E-mail ou senha incorretos" });
@@ -298,11 +246,11 @@ app.post("/api/logout", (req, res) => {
 });
 
 // GET /api/me
-app.get("/api/me", (req, res) => {
+app.get("/api/me", async (req, res) => {
   const userId = (req.session as any).userId;
   if (!userId) return res.status(401).json({ message: "Não autenticado" });
 
-  const user = storage.getUserSafeById(userId);
+  const user = await storage.getUserSafeById(userId);
   if (!user) {
     req.session.destroy(() => {});
     return res.status(401).json({ message: "Sessão inválida" });
@@ -313,43 +261,43 @@ app.get("/api/me", (req, res) => {
 // ─── User routes ─────────────────────────────────────────────────────────────
 
 // GET /api/users
-app.get("/api/users", requireAuth, (_req, res) => {
-  res.json(storage.listUsers());
+app.get("/api/users", requireAuth, async (_req, res) => {
+  res.json(await storage.listUsers());
 });
 
 // POST /api/users
-app.post("/api/users", requireAuth, (req, res) => {
+app.post("/api/users", requireAuth, async (req, res) => {
   const { name, email, username, password } = req.body;
   if (!name || !email || !username || !password) {
     return res.status(400).json({ message: "Todos os campos são obrigatórios" });
   }
 
-  if (storage.userExistsByEmailOrUsername(email, username)) {
+  if (await storage.userExistsByEmailOrUsername(email, username)) {
     return res.status(409).json({ message: "E-mail ou nome de usuário já cadastrado" });
   }
 
   const hashed = bcrypt.hashSync(password, 10);
-  const user = storage.createUser({ name, email, username, password: hashed });
+  const user = await storage.createUser({ name, email, username, password: hashed });
   return res.status(201).json(user);
 });
 
 // PATCH /api/users/:id
-app.patch("/api/users/:id", requireAuth, (req, res) => {
+app.patch("/api/users/:id", requireAuth, async (req, res) => {
   const id = p(req.params.id);
   const { name, email, username, password } = req.body;
 
-  const existing = storage.getUserById(id);
+  const existing = await storage.getUserById(id);
   if (!existing) return res.status(404).json({ message: "Usuário não encontrado" });
 
   const newPassword = password ? bcrypt.hashSync(password, 10) : undefined;
-  const updated = storage.updateUser(id, { name, email, username, password: newPassword });
+  const updated = await storage.updateUser(id, { name, email, username, password: newPassword });
   return res.json(updated);
 });
 
 
 // DELETE /api/users/:id
-app.delete("/api/users/:id", requireAuth, (req, res) => {
-  const deleted = storage.deleteUser(p(req.params.id));
+app.delete("/api/users/:id", requireAuth, async (req, res) => {
+  const deleted = await storage.deleteUser(p(req.params.id));
   if (!deleted) return res.status(404).json({ message: "Usuário não encontrado" });
   return res.json({ ok: true });
 });
@@ -358,14 +306,14 @@ app.delete("/api/users/:id", requireAuth, (req, res) => {
 
 // GET /api/settings/prompt-history — histórico de alterações do prompt
 // IMPORTANTE: deve ficar ANTES de /api/settings/:key para não ser capturado como :key
-app.get("/api/settings/prompt-history", requireAuth, (_req, res) => {
-  return res.json(storage.listPromptHistory());
+app.get("/api/settings/prompt-history", requireAuth, async (_req, res) => {
+  return res.json(await storage.listPromptHistory());
 });
 
 // GET /api/settings/:key
-app.get("/api/settings/:key", requireAuth, (req, res) => {
+app.get("/api/settings/:key", requireAuth, async (req, res) => {
   const key = String(p(req.params.key));
-  let value = storage.getSettingParsed(key);
+  let value = await storage.getSettingParsed(key);
   // Fallback: se system_prompt nunca foi salvo, retorna o prompt padrão
   if (value === null && key === "system_prompt") {
     value = buildSystemPrompt("normal") as any;
@@ -374,51 +322,51 @@ app.get("/api/settings/:key", requireAuth, (req, res) => {
 });
 
 // POST /api/settings
-app.post("/api/settings", requireAuth, (req, res) => {
+app.post("/api/settings", requireAuth, async (req, res) => {
   const { key, value } = req.body;
   if (!key) return res.status(400).json({ message: "Chave obrigatória" });
   
   // Se atualizando system_prompt, salva versão anterior no histórico
   if (key === "system_prompt") {
-    const previous = storage.getSetting("system_prompt");
+    const previous = await storage.getSetting("system_prompt");
     if (previous !== null && previous !== value) {
       const userId = (req.session as any)?.userId;
-      const user = userId ? storage.getUserSafeById(userId) : null;
-      storage.addPromptHistory(previous, user?.name ?? "Sistema");
+      const user = userId ? await storage.getUserSafeById(userId) : null;
+      await storage.addPromptHistory(previous, user?.name ?? "Sistema");
     }
   }
   
-  storage.setSetting(key, value ?? "");
+  await storage.setSetting(key, value ?? "");
   return res.json({ ok: true });
 });
 
 // ─── Sessions routes ──────────────────────────────────────────────────────────
 
 // GET /api/sessions
-app.get("/api/sessions", requireAuth, (req, res) => {
+app.get("/api/sessions", requireAuth, async (req, res) => {
   const archived = req.query.archived === "true" ? "true" : "false";
-  return res.json(storage.listSessions(archived));
+  return res.json(await storage.listSessions(archived));
 });
 
 // GET /api/sessions/:id/messages
-app.get("/api/sessions/:id/messages", requireAuth, (req, res) => {
-  return res.json(storage.listMessagesBySession(p(req.params.id)));
+app.get("/api/sessions/:id/messages", requireAuth, async (req, res) => {
+  return res.json(await storage.listMessagesBySession(p(req.params.id)));
 });
 
 // GET /api/sessions/:id/logs
-app.get("/api/sessions/:id/logs", requireAuth, (req, res) => {
-  return res.json(storage.listLogsBySession(p(req.params.id)));
+app.get("/api/sessions/:id/logs", requireAuth, async (req, res) => {
+  return res.json(await storage.listLogsBySession(p(req.params.id)));
 });
 
 // POST /api/sessions/:id/archive
-app.post("/api/sessions/:id/archive", requireAuth, (req, res) => {
-  storage.archiveSession(p(req.params.id));
+app.post("/api/sessions/:id/archive", requireAuth, async (req, res) => {
+  await storage.archiveSession(p(req.params.id));
   return res.json({ ok: true });
 });
 
 // DELETE /api/sessions/delete-all
-app.delete("/api/sessions/delete-all", requireAuth, (_req, res) => {
-  storage.deleteArchivedSessions();
+app.delete("/api/sessions/delete-all", requireAuth, async (_req, res) => {
+  await storage.deleteArchivedSessions();
   return res.json({ ok: true });
 });
 
@@ -501,7 +449,7 @@ app.post("/api/bot/simulate", requireAuth, async (req: Request, res: Response) =
     simPendingMessages.set(simContactId, []);
 
     // Mensagem de erro melhorada: distingue entre key ausente e outros problemas
-    const apiKey = (storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "";
+    const apiKey = (await storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "";
     const fallbackMsg = !apiKey
       ? "⏳ O Fagner não respondeu porque a GEMINI_API_KEY não está configurada. Acesse Configurações → Integrações → API Keys."
       : "⏳ O Fagner não gerou resposta desta vez. Tente enviar a mensagem novamente.";
@@ -525,7 +473,7 @@ app.post("/api/bot/simulate", requireAuth, async (req: Request, res: Response) =
     // ── Persistir sessão e mensagens no banco para o Monitor em Tempo Real ──
     try {
       const simDbSessionId = `sim-session-${userId}`;
-      storage.upsertSession({
+      await storage.upsertSession({
         id: simDbSessionId,
         startTime: simSession?.createdAt?.toISOString() ?? new Date().toISOString(),
         status: simSession?.isCompleted ? "COMPLETED" : "ACTIVE",
@@ -535,11 +483,11 @@ app.post("/api/bot/simulate", requireAuth, async (req: Request, res: Response) =
       });
 
       // Salva mensagem do usuário
-      storage.createMessage({ sessionId: simDbSessionId, sender: "user", content: textMsg });
+      await storage.createMessage({ sessionId: simDbSessionId, sender: "user", content: textMsg });
 
       // Salva respostas do bot
       for (const reply of finalReplies) {
-        storage.createMessage({ sessionId: simDbSessionId, sender: "bot", content: reply });
+        await storage.createMessage({ sessionId: simDbSessionId, sender: "bot", content: reply });
       }
 
       // Broadcast via WebSocket para o LiveMonitor
@@ -585,43 +533,43 @@ app.delete("/api/bot/simulate/session", requireAuth, (req: Request, res: Respons
 });
 
 // GET /api/bot/simulate/messages — retorna mensagens persistidas da sessão de simulação
-app.get("/api/bot/simulate/messages", requireAuth, (req: Request, res: Response) => {
+app.get("/api/bot/simulate/messages", requireAuth, async (req: Request, res: Response) => {
   const userId = (req.session as any)?.userId ?? "anon";
   const simDbSessionId = `sim-session-${userId}`;
-  const messages = storage.listMessagesBySession(simDbSessionId);
+  const messages = await storage.listMessagesBySession(simDbSessionId);
   return res.json(messages);
 });
 
 // ─── Dashboard routes ─────────────────────────────────────────────────────────
 
 // GET /api/dashboard/stats
-app.get("/api/dashboard/stats", requireAuth, (_req, res) => {
-  return res.json(storage.getDashboardStats());
+app.get("/api/dashboard/stats", requireAuth, async (_req, res) => {
+  return res.json(await storage.getDashboardStats());
 });
 
 // GET /api/dashboard/leads-by-day
-app.get("/api/dashboard/leads-by-day", requireAuth, (_req, res) => {
-  return res.json(storage.getLeadsByDay());
+app.get("/api/dashboard/leads-by-day", requireAuth, async (_req, res) => {
+  return res.json(await storage.getLeadsByDay());
 });
 
 // GET /api/dashboard/leads-by-operator
-app.get("/api/dashboard/leads-by-operator", requireAuth, (_req, res) => {
-  return res.json(storage.getLeadsByOperator());
+app.get("/api/dashboard/leads-by-operator", requireAuth, async (_req, res) => {
+  return res.json(await storage.getLeadsByOperator());
 });
 
 // ─── Documents routes ─────────────────────────────────────────────────────────
 
 // GET /api/documents
-app.get("/api/documents", requireAuth, (_req, res) => {
-  return res.json(storage.listDocuments());
+app.get("/api/documents", requireAuth, async (_req, res) => {
+  return res.json(await storage.listDocuments());
 });
 
 // POST /api/documents (multipart)
-app.post("/api/documents", requireAuth, upload.single("file"), (req, res) => {
+app.post("/api/documents", requireAuth, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: "Arquivo obrigatório" });
 
   const { name, type, folderId } = req.body;
-  const doc = storage.createDocument({
+  const doc = await storage.createDocument({
     name: name || req.file.originalname,
     type: type || "knowledge",
     mimeType: req.file.mimetype,
@@ -633,23 +581,23 @@ app.post("/api/documents", requireAuth, upload.single("file"), (req, res) => {
 });
 
 // GET /api/documents/:id
-app.get("/api/documents/:id", requireAuth, (req, res) => {
-  const doc = storage.getDocumentById(p(req.params.id));
+app.get("/api/documents/:id", requireAuth, async (req, res) => {
+  const doc = await storage.getDocumentById(p(req.params.id));
   if (!doc) return res.status(404).json({ message: "Documento não encontrado" });
   return res.json(doc);
 });
 
 // PATCH /api/documents/:id
-app.patch("/api/documents/:id", requireAuth, (req, res) => {
+app.patch("/api/documents/:id", requireAuth, async (req, res) => {
   const { name, paused, folderId } = req.body;
-  const doc = storage.updateDocument(p(req.params.id), { name, paused, folderId });
+  const doc = await storage.updateDocument(p(req.params.id), { name, paused, folderId });
   if (!doc) return res.status(404).json({ message: "Documento não encontrado" });
   return res.json(doc);
 });
 
 // DELETE /api/documents/:id
-app.delete("/api/documents/:id", requireAuth, (req, res) => {
-  const doc = storage.getDocumentById(p(req.params.id));
+app.delete("/api/documents/:id", requireAuth, async (req, res) => {
+  const doc = await storage.getDocumentById(p(req.params.id));
   if (!doc) return res.status(404).json({ message: "Documento não encontrado" });
 
   try {
@@ -657,18 +605,18 @@ app.delete("/api/documents/:id", requireAuth, (req, res) => {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   } catch {}
 
-  storage.deleteDocument(p(req.params.id));
+  await storage.deleteDocument(p(req.params.id));
   return res.json({ ok: true });
 });
 
 // POST /api/documents/bulk
-app.post("/api/documents/bulk", requireAuth, (req, res) => {
+app.post("/api/documents/bulk", requireAuth, async (req, res) => {
   const { ids, action, value } = req.body;
   if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: "ids inválidos" });
 
   if (action === "delete") {
     for (const id of ids) {
-      const doc = storage.getDocumentById(id);
+      const doc = await storage.getDocumentById(id);
       if (doc) {
         try {
           const filePath = path.join(__dirname, "..", doc.filePath.replace(/^\//, ""));
@@ -676,11 +624,11 @@ app.post("/api/documents/bulk", requireAuth, (req, res) => {
         } catch {}
       }
     }
-    storage.bulkDeleteDocuments(ids);
+    await storage.bulkDeleteDocuments(ids);
   } else if (action === "move") {
-    storage.bulkMoveDocuments(ids, value ?? null);
+    await storage.bulkMoveDocuments(ids, value ?? null);
   } else if (action === "toggle-paused") {
-    storage.bulkTogglePausedDocuments(ids);
+    await storage.bulkTogglePausedDocuments(ids);
   }
 
   return res.json({ ok: true });
@@ -689,27 +637,27 @@ app.post("/api/documents/bulk", requireAuth, (req, res) => {
 // ─── Folders routes ───────────────────────────────────────────────────────────
 
 // GET /api/folders
-app.get("/api/folders", requireAuth, (_req, res) => {
-  return res.json(storage.listFolders());
+app.get("/api/folders", requireAuth, async (_req, res) => {
+  return res.json(await storage.listFolders());
 });
 
 // POST /api/folders
-app.post("/api/folders", requireAuth, (req, res) => {
+app.post("/api/folders", requireAuth, async (req, res) => {
   const { name, parentId } = req.body;
   if (!name) return res.status(400).json({ message: "Nome obrigatório" });
-  return res.status(201).json(storage.createFolder({ name, parentId }));
+  return res.status(201).json(await storage.createFolder({ name, parentId }));
 });
 
 // PATCH /api/folders/:id
-app.patch("/api/folders/:id", requireAuth, (req, res) => {
-  const folder = storage.getFolderById(p(req.params.id));
+app.patch("/api/folders/:id", requireAuth, async (req, res) => {
+  const folder = await storage.getFolderById(p(req.params.id));
   if (!folder) return res.status(404).json({ message: "Pasta não encontrada" });
-  return res.json(storage.updateFolder(p(req.params.id), req.body.name ?? folder.name));
+  return res.json(await storage.updateFolder(p(req.params.id), req.body.name ?? folder.name));
 });
 
 // DELETE /api/folders/:id
-app.delete("/api/folders/:id", requireAuth, (req, res) => {
-  storage.deleteFolder(p(req.params.id));
+app.delete("/api/folders/:id", requireAuth, async (req, res) => {
+  await storage.deleteFolder(p(req.params.id));
   return res.json({ ok: true });
 });
 
@@ -750,12 +698,11 @@ app.post("/api/rd/webhook", async (req: Request, res: Response) => {
       // Formato: números separados por vírgula, somente dígitos. Ex: "5514998364338"
       // Para liberar para todos: deixar vazia ou não configurar.
       const whitelistEnv = (process.env.RD_TEST_WHITELIST ?? "").split(",").map((n) => n.trim()).filter(Boolean);
-      const whitelistDb = (() => {
+      const whitelistDb = await (async () => {
         try {
-          const raw = db.prepare("SELECT value FROM settings WHERE key = 'fagner_whitelist'").get() as { value?: string } | undefined;
-          if (!raw?.value) return [];
-          const parsed = JSON.parse(raw.value);
-          return Array.isArray(parsed) ? parsed.map(String) : String(parsed).split(",").map((n: string) => n.trim()).filter(Boolean);
+          const raw = await storage.getSettingParsed<string[] | string>("fagner_whitelist");
+          if (!raw) return [];
+          return Array.isArray(raw) ? raw.map(String) : String(raw).split(",").map((n: string) => n.trim()).filter(Boolean);
         } catch { return []; }
       })();
       const whitelist = Array.from(new Set([...whitelistEnv, ...whitelistDb]));
@@ -823,7 +770,7 @@ app.get("/api/fagner/schedule", requireAuth, (_req, res) => {
 });
 
 // POST /api/fagner/schedule
-app.post("/api/fagner/schedule", requireAuth, (req: Request, res: Response) => {
+app.post("/api/fagner/schedule", requireAuth, async (req: Request, res: Response) => {
   const body = req.body as any;
   const config = {
     enabled:         typeof body.enabled === "boolean" ? body.enabled : true,
@@ -834,7 +781,7 @@ app.post("/api/fagner/schedule", requireAuth, (req: Request, res: Response) => {
     offHoursMessage: body.offHoursMessage ?? "",
   };
   setSchedule(config);
-  storage.setSetting("fagner_schedule", config);
+  await storage.setSetting("fagner_schedule", config);
   emitLog(`[Horário] Config: ${config.startHour}h–${config.endHour}h dias ${config.weekdays.join(",")} ativo=${config.enabled}`, "INFO");
   return res.json({ ok: true, schedule: config });
 });
@@ -842,8 +789,8 @@ app.post("/api/fagner/schedule", requireAuth, (req: Request, res: Response) => {
 // ─── Fagner — Operadores por Fluxo ──────────────────────────────────────────────
 
 // GET /api/fagner/operators
-app.get("/api/fagner/operators", requireAuth, (_req, res) => {
-  const raw = storage.getSettingParsed("fagner_operators");
+app.get("/api/fagner/operators", requireAuth, async (_req, res) => {
+  const raw = await storage.getSettingParsed("fagner_operators");
   if (!raw) {
     return res.json({
       PECAS:         [{ name: "Comercial Peças",       id: "op-pecas" }],
@@ -862,13 +809,13 @@ app.get("/api/fagner/operators", requireAuth, (_req, res) => {
 });
 
 // POST /api/fagner/operators
-app.post("/api/fagner/operators", requireAuth, (req: Request, res: Response) => {
+app.post("/api/fagner/operators", requireAuth, async (req: Request, res: Response) => {
   const ops = req.body as Record<string, { name: string; id: string }[]>;
   if (!ops || typeof ops !== "object") {
     return res.status(400).json({ message: "Payload inválido" });
   }
   try {
-    storage.setSetting("fagner_operators", ops);
+    await storage.setSetting("fagner_operators", ops);
     emitLog("[Operadores] Configuração atualizada.", "INFO");
     return res.json({ ok: true });
   } catch (e: any) {
@@ -879,11 +826,11 @@ app.post("/api/fagner/operators", requireAuth, (req: Request, res: Response) => 
 // ─── RD Conversas — Endpoints auxiliares ──────────────────────────────────────
 
 // GET /api/rd-conversas/status — verifica se o token está configurado
-app.get("/api/rd-conversas/status", requireAuth, (_req, res) => {
-  const token = process.env.RD_CONVERSAS_TOKEN ?? storage.getSettingParsed<string>("rd_conversas_token") ?? "";
-  const integration = process.env.RD_CONVERSAS_INTEGRATION ?? storage.getSettingParsed<string>("rd_conversas_integration") ?? "";
-  const whitelist = storage.getSettingParsed<string[]>("fagner_whitelist") ?? [];
-  const humanFlowId = storage.getSettingParsed<string>("fagner_rd_human_flow_id") ?? "";
+app.get("/api/rd-conversas/status", requireAuth, async (_req, res) => {
+  const token = process.env.RD_CONVERSAS_TOKEN ?? await storage.getSettingParsed<string>("rd_conversas_token") ?? "";
+  const integration = process.env.RD_CONVERSAS_INTEGRATION ?? await storage.getSettingParsed<string>("rd_conversas_integration") ?? "";
+  const whitelist = await storage.getSettingParsed<string[]>("fagner_whitelist") ?? [];
+  const humanFlowId = await storage.getSettingParsed<string>("fagner_rd_human_flow_id") ?? "";
   return res.json({
     configured: !!token,
     hasIntegration: !!integration,
@@ -895,25 +842,24 @@ app.get("/api/rd-conversas/status", requireAuth, (_req, res) => {
 });
 
 // POST /api/rd-conversas/settings — salva token, integration, whitelist e flowId
-app.post("/api/rd-conversas/settings", requireAuth, (req: Request, res: Response) => {
+app.post("/api/rd-conversas/settings", requireAuth, async (req: Request, res: Response) => {
   const { token, integration, whitelist, humanFlowId, departmentMap } = req.body;
   if (token !== undefined) {
-    storage.setSetting("rd_conversas_token", token);
-    // Também seta no process.env para uso imediato sem restart
+    await storage.setSetting("rd_conversas_token", token);
     process.env.RD_CONVERSAS_TOKEN = token;
   }
   if (integration !== undefined) {
-    storage.setSetting("rd_conversas_integration", integration);
+    await storage.setSetting("rd_conversas_integration", integration);
     process.env.RD_CONVERSAS_INTEGRATION = integration;
   }
   if (whitelist !== undefined) {
-    storage.setSetting("fagner_whitelist", Array.isArray(whitelist) ? whitelist : String(whitelist).split(",").map((n: string) => n.trim()).filter(Boolean));
+    await storage.setSetting("fagner_whitelist", Array.isArray(whitelist) ? whitelist : String(whitelist).split(",").map((n: string) => n.trim()).filter(Boolean));
   }
   if (humanFlowId !== undefined) {
-    storage.setSetting("fagner_rd_human_flow_id", humanFlowId);
+    await storage.setSetting("fagner_rd_human_flow_id", humanFlowId);
   }
   if (departmentMap !== undefined) {
-    storage.setSetting("fagner_department_map", departmentMap);
+    await storage.setSetting("fagner_department_map", departmentMap);
   }
   emitLog("[RD Conversas] Configurações atualizadas.", "INFO");
   return res.json({ ok: true });
@@ -954,11 +900,11 @@ app.get("/api/rd-conversas/templates", requireAuth, async (_req, res) => {
 // ─── Round-Robin Peças — endpoints de controle ────────────────────────────────
 
 // GET /api/rd-conversas/pecas-rr
-app.get("/api/rd-conversas/pecas-rr", requireAuth, (_req, res) => {
+app.get("/api/rd-conversas/pecas-rr", requireAuth, async (_req, res) => {
   const SECTORS = ["Tecfag Peças", "Tecfag Peças 2"];
   try {
-    const raw = db.prepare("SELECT value FROM settings WHERE key = 'fagner_pecas_rr_index'").get() as { value?: string } | undefined;
-    const idx = parseInt(raw?.value ?? "0", 10) || 0;
+    const raw = await storage.getSetting("fagner_pecas_rr_index");
+    const idx = parseInt(raw ?? "0", 10) || 0;
     return res.json({
       currentIndex: idx,
       nextSector: SECTORS[idx % SECTORS.length],
@@ -970,14 +916,12 @@ app.get("/api/rd-conversas/pecas-rr", requireAuth, (_req, res) => {
 });
 
 // POST /api/rd-conversas/pecas-rr/reset — força próximo setor
-app.post("/api/rd-conversas/pecas-rr/reset", requireAuth, (req: Request, res: Response) => {
+app.post("/api/rd-conversas/pecas-rr/reset", requireAuth, async (req: Request, res: Response) => {
   const SECTORS = ["Tecfag Peças", "Tecfag Peças 2"];
   const { index } = req.body as { index?: number };
   const newIndex = typeof index === "number" ? (index % SECTORS.length) : 0;
   try {
-    db.prepare(
-      "INSERT INTO settings (key, value) VALUES ('fagner_pecas_rr_index', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-    ).run(String(newIndex));
+    await storage.setSetting("fagner_pecas_rr_index", String(newIndex));
     emitLog(`[Round-Robin Peças] Contador ajustado para ${newIndex} → próximo: ${SECTORS[newIndex]}`, "INFO");
     return res.json({ ok: true, nextSector: SECTORS[newIndex] });
   } catch (e: any) {
@@ -988,13 +932,13 @@ app.post("/api/rd-conversas/pecas-rr/reset", requireAuth, (req: Request, res: Re
 // ─── RD CRM stub routes ───────────────────────────────────────────────────────
 
 
-app.get("/api/rd-crm/roundrobin", requireAuth, (_req, res) => {
-  const val = storage.getSettingParsed("rd_roundrobin");
+app.get("/api/rd-crm/roundrobin", requireAuth, async (_req, res) => {
+  const val = await storage.getSettingParsed("rd_roundrobin");
   return res.json(val || { mode: "fixed", fixedOwnerId: "", users: [], currentIndex: 0 });
 });
 
-app.post("/api/rd-crm/roundrobin", requireAuth, (req, res) => {
-  storage.setSetting("rd_roundrobin", req.body);
+app.post("/api/rd-crm/roundrobin", requireAuth, async (req, res) => {
+  await storage.setSetting("rd_roundrobin", req.body);
   return res.json({ ok: true });
 });
 
@@ -1016,33 +960,33 @@ app.get("/api/rd-crm/users", requireAuth, (_req, res) => res.json([]));
 // ─── API Costs routes ─────────────────────────────────────────────────────────
 
 // GET /api/costs
-app.get("/api/costs", requireAuth, (req, res) => {
+app.get("/api/costs", requireAuth, async (req, res) => {
   const { service, period } = req.query as { service?: string; period?: string };
-  return res.json(storage.listCosts({
+  return res.json(await storage.listCosts({
     service,
     period: period as "day" | "week" | "month" | "all" | undefined,
   }));
 });
 
 // GET /api/costs/summary
-app.get("/api/costs/summary", requireAuth, (_req, res) => {
-  return res.json(storage.getCostsSummary());
+app.get("/api/costs/summary", requireAuth, async (_req, res) => {
+  return res.json(await storage.getCostsSummary());
 });
 
 // POST /api/costs
-app.post("/api/costs", requireAuth, (req, res) => {
+app.post("/api/costs", requireAuth, async (req, res) => {
   const { service, operation, cost, tokens, notes } = req.body;
   if (!service || !operation || cost === undefined) {
     return res.status(400).json({ message: "Serviço, operação e custo são obrigatórios" });
   }
 
-  const row = storage.createCost({ service, operation, cost: Number(cost), tokens, notes });
+  const row = await storage.createCost({ service, operation, cost: Number(cost), tokens, notes });
   return res.status(201).json(row);
 });
 
 // DELETE /api/costs/:id
-app.delete("/api/costs/:id", requireAuth, (req, res) => {
-  const deleted = storage.deleteCost(p(req.params.id));
+app.delete("/api/costs/:id", requireAuth, async (req, res) => {
+  const deleted = await storage.deleteCost(p(req.params.id));
   if (!deleted) return res.status(404).json({ message: "Registro não encontrado" });
   return res.json({ ok: true });
 });
@@ -1055,65 +999,65 @@ app.get("/api/bot/logs", requireAuth, (_req, res) => {
 // ─── VTEX Integration routes ──────────────────────────────────────────────────
 
 // GET /api/vtex/settings
-app.get("/api/vtex/settings", requireAuth, (_req, res) => {
-  return res.json(storage.getVtexSettings());
+app.get("/api/vtex/settings", requireAuth, async (_req, res) => {
+  return res.json(await storage.getVtexSettings());
 });
 
 // POST /api/vtex/settings
-app.post("/api/vtex/settings", requireAuth, (req, res) => {
-  storage.setVtexSettings(req.body);
+app.post("/api/vtex/settings", requireAuth, async (req, res) => {
+  await storage.setVtexSettings(req.body);
   emitLog("[VTEX] Configurações de gatilho atualizadas.", "INFO");
   return res.json({ ok: true });
 });
 
 // GET /api/vtex/logs
-app.get("/api/vtex/logs", requireAuth, (req, res) => {
+app.get("/api/vtex/logs", requireAuth, async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
-  return res.json(storage.listVtexLogs(limit));
+  return res.json(await storage.listVtexLogs(limit));
 });
 
 // POST /api/vtex/logs
-app.post("/api/vtex/logs", requireAuth, (req, res) => {
+app.post("/api/vtex/logs", requireAuth, async (req, res) => {
   const { type, description, product, autonomous } = req.body;
   if (!type || !description) return res.status(400).json({ message: "type e description obrigatórios" });
-  const result = storage.createVtexLog({ type, description, product, autonomous });
+  const result = await storage.createVtexLog({ type, description, product, autonomous });
   return res.status(201).json(result);
 });
 
 // GET /api/vtex/stats
-app.get("/api/vtex/stats", requireAuth, (_req, res) => {
-  return res.json(storage.getVtexStats());
+app.get("/api/vtex/stats", requireAuth, async (_req, res) => {
+  return res.json(await storage.getVtexStats());
 });
 
 // GET /api/vtex/failures
-app.get("/api/vtex/failures", requireAuth, (_req, res) => {
-  return res.json(storage.listVtexFailures());
+app.get("/api/vtex/failures", requireAuth, async (_req, res) => {
+  return res.json(await storage.listVtexFailures());
 });
 
 // POST /api/vtex/failures/:id/resolve
-app.post("/api/vtex/failures/:id/resolve", requireAuth, (req, res) => {
-  const resolved = storage.resolveVtexFailure(p(req.params.id));
+app.post("/api/vtex/failures/:id/resolve", requireAuth, async (req, res) => {
+  const resolved = await storage.resolveVtexFailure(p(req.params.id));
   if (!resolved) return res.status(404).json({ message: "Falha não encontrada" });
   return res.json({ ok: true });
 });
 
 // GET /api/vtex/synonyms
-app.get("/api/vtex/synonyms", requireAuth, (_req, res) => {
-  return res.json(storage.listVtexSynonyms());
+app.get("/api/vtex/synonyms", requireAuth, async (_req, res) => {
+  return res.json(await storage.listVtexSynonyms());
 });
 
 // POST /api/vtex/synonyms
-app.post("/api/vtex/synonyms", requireAuth, (req, res) => {
+app.post("/api/vtex/synonyms", requireAuth, async (req, res) => {
   const { term, canonical } = req.body;
   if (!term || !canonical) return res.status(400).json({ message: "term e canonical obrigatórios" });
-  const synonym = storage.createVtexSynonym({ term, canonical });
+  const synonym = await storage.createVtexSynonym({ term, canonical });
   emitLog(`[VTEX] Sinônimo criado: "${term}" → "${canonical}"`, "INFO");
   return res.status(201).json(synonym);
 });
 
 // DELETE /api/vtex/synonyms/:id
-app.delete("/api/vtex/synonyms/:id", requireAuth, (req, res) => {
-  const deleted = storage.deleteVtexSynonym(p(req.params.id));
+app.delete("/api/vtex/synonyms/:id", requireAuth, async (req, res) => {
+  const deleted = await storage.deleteVtexSynonym(p(req.params.id));
   if (!deleted) return res.status(404).json({ message: "Sinônimo não encontrado" });
   return res.json({ ok: true });
 });
@@ -1164,7 +1108,7 @@ httpServer.on("error", (err: NodeJS.ErrnoException) => {
 });
 httpServer.listen(PORT, HOST, () => {
   console.log(`✅ Servidor rodando em http://${HOST}:${PORT}`);
-  console.log(`   Banco: ${process.env.DATABASE_URL ? "PostgreSQL (Railway)" : "SQLite local"}`);
+  console.log(`   Banco: PostgreSQL`);
   console.log(`   Ambiente: ${process.env.NODE_ENV ?? "development"}`);
   console.log(`   FRONTEND_URL: ${process.env.FRONTEND_URL ?? "(não definido — usando regex *.vercel.app)"}`);
   console.log(`   Cookie sameSite: ${isProduction ? "none (cross-domain)" : "lax (local dev)"}`);
@@ -1172,15 +1116,20 @@ httpServer.listen(PORT, HOST, () => {
 
   // Init em background — não bloqueia o healthcheck
   setImmediate(async () => {
+    // Bootstrap schema PostgreSQL (idempotente)
+    await bootstrapSchema();
+
     // Auto-seed: garante usuário padrão no banco
     try {
-      const existing = db.prepare("SELECT id FROM users WHERE email = ?").get("suporte2@tecfag.com.br");
+      const existing = await storage.getUserByEmail("suporte2@tecfag.com.br");
       if (!existing) {
-        const bcrypt = await import("bcryptjs");
-        const { v4 } = await import("uuid");
-        db.prepare(
-          "INSERT INTO users (id, name, email, username, password) VALUES (?, ?, ?, ?, ?)"
-        ).run(v4(), "Suporte 2", "suporte2@tecfag.com.br", "suporte2", bcrypt.hashSync("123", 10));
+        const bcryptMod = await import("bcryptjs");
+        await storage.createUser({
+          name: "Suporte 2",
+          email: "suporte2@tecfag.com.br",
+          username: "suporte2",
+          password: bcryptMod.hashSync("123", 10),
+        });
         console.log("✅ Usuário padrão criado: suporte2@tecfag.com.br / 123");
       }
     } catch (e) {
@@ -1191,12 +1140,13 @@ httpServer.listen(PORT, HOST, () => {
     console.log("[INIT] Iniciando orchestrator...");
     try {
       initOrchestrator({
-        db,
-        getApiKey: () =>
-          (storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "",
-        getRagDocuments: () => {
+        storage,
+        getApiKey: async () =>
+          (await storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "",
+        getRagDocuments: async () => {
           try {
-            return storage.listActiveDocumentsForRag(50)
+            const docs = await storage.listActiveDocumentsForRag(50);
+            return docs
               .map((doc) => {
                 try {
                   const abs = path.join(__dirname, "..", doc.filePath.replace(/^\//, ""));

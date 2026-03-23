@@ -5,15 +5,30 @@
  * ║  CAMADA DE ACESSO AO BANCO DE DADOS — Repository Pattern            ║
  * ║                                                                      ║
  * ║  Toda operação de banco DEVE passar por este arquivo.               ║
- * ║  Nunca use db.prepare() diretamente em server/index.ts.             ║
+ * ║  Nunca use queries SQL diretamente em server/index.ts.              ║
  * ║                                                                      ║
- * ║  Para migrar para PostgreSQL no futuro, reescreva apenas este       ║
- * ║  arquivo e server/db.ts — index.ts e os serviços não mudam.        ║
+ * ║  100% PostgreSQL via Drizzle ORM — todas funções são async.         ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 
-import db from "./db.js";
+import { eq, and, sql, desc, asc, gte, lte } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
+import db from "./db.js";
+import {
+  users,
+  settings,
+  sessions,
+  messages,
+  logs,
+  folders,
+  documents,
+  apiCosts,
+  vtexSettings,
+  vtexLogs,
+  vtexFailures,
+  vtexSynonyms,
+} from "../shared/schema.js";
+import { pool } from "./db.js";
 
 // ─── Types (espelham shared/schema.ts) ────────────────────────────────────────
 
@@ -117,69 +132,96 @@ export interface VtexSynonym {
   createdAt: string;
 }
 
+// ─── Helper: raw query via pool (para queries dinâmicas complexas) ────────────
+
+async function rawQuery<T = any>(text: string, params: any[] = []): Promise<T[]> {
+  const result = await pool.query(text, params);
+  return result.rows as T[];
+}
+
+async function rawQueryOne<T = any>(text: string, params: any[] = []): Promise<T | null> {
+  const rows = await rawQuery<T>(text, params);
+  return rows[0] ?? null;
+}
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 export const storage = {
 
   // Users
-  getUserByEmail(email: string): User | null {
-    return (db.prepare("SELECT * FROM users WHERE email = ?").get(email) as User) ?? null;
+  async getUserByEmail(email: string): Promise<User | null> {
+    const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return (rows[0] as User) ?? null;
   },
 
-  getUserById(id: string): User | null {
-    return (db.prepare("SELECT * FROM users WHERE id = ?").get(id) as User) ?? null;
+  async getUserById(id: string): Promise<User | null> {
+    const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return (rows[0] as User) ?? null;
   },
 
-  getUserSafeById(id: string): Omit<User, "password"> | null {
-    return (db.prepare("SELECT id, name, email, username FROM users WHERE id = ?").get(id) as Omit<User, "password">) ?? null;
+  async getUserSafeById(id: string): Promise<Omit<User, "password"> | null> {
+    const rows = await db.select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      username: users.username,
+    }).from(users).where(eq(users.id, id)).limit(1);
+    return rows[0] ?? null;
   },
 
-  listUsers(): Omit<User, "password">[] {
-    return db.prepare("SELECT id, name, email, username FROM users").all() as Omit<User, "password">[];
+  async listUsers(): Promise<Omit<User, "password">[]> {
+    return await db.select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      username: users.username,
+    }).from(users);
   },
 
-  createUser(data: { name: string; email: string; username: string; password: string }): Omit<User, "password"> {
+  async createUser(data: { name: string; email: string; username: string; password: string }): Promise<Omit<User, "password">> {
     const id = uuidv4();
-    db.prepare(
-      "INSERT INTO users (id, name, email, username, password) VALUES (?, ?, ?, ?, ?)"
-    ).run(id, data.name, data.email, data.username, data.password);
-    return db.prepare("SELECT id, name, email, username FROM users WHERE id = ?").get(id) as Omit<User, "password">;
+    await db.insert(users).values({ id, ...data });
+    const result = await storage.getUserSafeById(id);
+    return result!;
   },
 
-  updateUser(id: string, data: Partial<Pick<User, "name" | "email" | "username" | "password">>): Omit<User, "password"> | null {
-    const user = storage.getUserById(id);
+  async updateUser(id: string, data: Partial<Pick<User, "name" | "email" | "username" | "password">>): Promise<Omit<User, "password"> | null> {
+    const user = await storage.getUserById(id);
     if (!user) return null;
-    db.prepare(
-      "UPDATE users SET name = ?, email = ?, username = ?, password = ? WHERE id = ?"
-    ).run(
-      data.name ?? user.name,
-      data.email ?? user.email,
-      data.username ?? user.username,
-      data.password ?? user.password,
-      id
-    );
+    await db.update(users).set({
+      name: data.name ?? user.name,
+      email: data.email ?? user.email,
+      username: data.username ?? user.username,
+      password: data.password ?? user.password,
+    }).where(eq(users.id, id));
     return storage.getUserSafeById(id);
   },
 
-  deleteUser(id: string): boolean {
-    const result = db.prepare("DELETE FROM users WHERE id = ?").run(id);
-    return result.changes > 0;
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id));
+    return (result as any).rowCount > 0;
   },
 
-  userExistsByEmailOrUsername(email: string, username: string): boolean {
-    const row = db.prepare("SELECT id FROM users WHERE email = ? OR username = ?").get(email, username);
+  async userExistsByEmailOrUsername(email: string, username: string): Promise<boolean> {
+    const row = await rawQueryOne(
+      "SELECT id FROM users WHERE email = $1 OR username = $2",
+      [email, username]
+    );
     return !!row;
   },
 
   // ─── Settings ───────────────────────────────────────────────────────────────
 
-  getSetting(key: string): string | null {
-    const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
-    return row?.value ?? null;
+  async getSetting(key: string): Promise<string | null> {
+    const rows = await db.select({ value: settings.value })
+      .from(settings)
+      .where(eq(settings.key, key))
+      .limit(1);
+    return rows[0]?.value ?? null;
   },
 
-  getSettingParsed<T = any>(key: string): T | null {
-    const raw = storage.getSetting(key);
+  async getSettingParsed<T = any>(key: string): Promise<T | null> {
+    const raw = await storage.getSetting(key);
     if (raw === null) return null;
     try {
       return JSON.parse(raw) as T;
@@ -188,296 +230,344 @@ export const storage = {
     }
   },
 
-  setSetting(key: string, value: any): void {
+  async setSetting(key: string, value: any): Promise<void> {
     const strValue = typeof value === "string" ? value : JSON.stringify(value);
-    const existing = db.prepare("SELECT id FROM settings WHERE key = ?").get(key);
+    const existing = await rawQueryOne("SELECT id FROM settings WHERE key = $1", [key]);
     if (existing) {
-      db.prepare("UPDATE settings SET value = ? WHERE key = ?").run(strValue, key);
+      await db.update(settings).set({ value: strValue }).where(eq(settings.key, key));
     } else {
-      db.prepare("INSERT INTO settings (id, key, value) VALUES (?, ?, ?)").run(uuidv4(), key, strValue);
+      await db.insert(settings).values({ id: uuidv4(), key, value: strValue });
     }
   },
 
   // ─── Sessions ────────────────────────────────────────────────────────────────
 
-  listSessions(archived: "true" | "false"): Session[] {
-    return db.prepare(
-      "SELECT * FROM sessions WHERE archived = ? ORDER BY startTime DESC"
-    ).all(archived) as Session[];
+  async listSessions(archived: "true" | "false"): Promise<Session[]> {
+    return await db.select().from(sessions)
+      .where(eq(sessions.archived, archived))
+      .orderBy(desc(sessions.startTime)) as Session[];
   },
 
-  getSessionById(id: string): Session | null {
-    return (db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as Session) ?? null;
+  async getSessionById(id: string): Promise<Session | null> {
+    const rows = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
+    return (rows[0] as Session) ?? null;
   },
 
-  archiveSession(id: string): void {
-    db.prepare("UPDATE sessions SET archived = 'true', status = 'COMPLETED' WHERE id = ?").run(id);
+  async archiveSession(id: string): Promise<void> {
+    await db.update(sessions).set({ archived: "true", status: "COMPLETED" }).where(eq(sessions.id, id));
   },
 
-  deleteArchivedSessions(): void {
-    db.prepare("DELETE FROM messages WHERE sessionId IN (SELECT id FROM sessions WHERE archived = 'true')").run();
-    db.prepare("DELETE FROM sessions WHERE archived = 'true'").run();
+  async deleteArchivedSessions(): Promise<void> {
+    // Delete messages first, then sessions
+    await rawQuery(
+      "DELETE FROM messages WHERE \"sessionId\" IN (SELECT id FROM sessions WHERE archived = 'true')"
+    );
+    await db.delete(sessions).where(eq(sessions.archived, "true"));
   },
 
   // ─── Messages ────────────────────────────────────────────────────────────────
 
-  listMessagesBySession(sessionId: string): Message[] {
-    return db.prepare(
-      "SELECT * FROM messages WHERE sessionId = ? ORDER BY timestamp ASC"
-    ).all(sessionId) as Message[];
+  async listMessagesBySession(sessionId: string): Promise<Message[]> {
+    return await db.select().from(messages)
+      .where(eq(messages.sessionId, sessionId))
+      .orderBy(asc(messages.timestamp)) as Message[];
   },
 
   // ─── Logs ────────────────────────────────────────────────────────────────────
 
-  listLogsBySession(sessionId: string): Log[] {
-    return db.prepare(
-      "SELECT * FROM logs WHERE sessionId = ? ORDER BY timestamp ASC"
-    ).all(sessionId) as Log[];
+  async listLogsBySession(sessionId: string): Promise<Log[]> {
+    const rows = await db.select().from(logs)
+      .where(eq(logs.sessionId, sessionId))
+      .orderBy(asc(logs.timestamp));
+    return rows as Log[];
   },
 
   // ─── Dashboard ───────────────────────────────────────────────────────────────
 
-  getDashboardStats(): { total: number; active: number; archived: number; leads: number } {
-    const total    = (db.prepare("SELECT COUNT(*) as c FROM sessions").get() as any).c;
-    const active   = (db.prepare("SELECT COUNT(*) as c FROM sessions WHERE status='RUNNING'").get() as any).c;
-    const archived = (db.prepare("SELECT COUNT(*) as c FROM sessions WHERE archived='true'").get() as any).c;
+  async getDashboardStats(): Promise<{ total: number; active: number; archived: number; leads: number }> {
+    const totalR = await rawQueryOne<{ c: string }>("SELECT COUNT(*) as c FROM sessions");
+    const activeR = await rawQueryOne<{ c: string }>("SELECT COUNT(*) as c FROM sessions WHERE status='RUNNING'");
+    const archivedR = await rawQueryOne<{ c: string }>("SELECT COUNT(*) as c FROM sessions WHERE archived='true'");
+    const total = parseInt(totalR?.c ?? "0", 10);
+    const active = parseInt(activeR?.c ?? "0", 10);
+    const archived = parseInt(archivedR?.c ?? "0", 10);
     return { total, active, archived, leads: total };
   },
 
-  getLeadsByDay(): { day: string; count: number }[] {
-    return db.prepare(`
-      SELECT date(startTime) as day, COUNT(*) as count
-      FROM sessions
-      GROUP BY date(startTime)
-      ORDER BY day DESC
-      LIMIT 30
-    `).all() as { day: string; count: number }[];
+  async getLeadsByDay(): Promise<{ day: string; count: number }[]> {
+    return await rawQuery<{ day: string; count: number }>(
+      `SELECT DATE("startTime") as day, COUNT(*) as count
+       FROM sessions
+       GROUP BY DATE("startTime")
+       ORDER BY day DESC
+       LIMIT 30`
+    );
   },
 
-  getLeadsByOperator(): { name: string; count: number }[] {
-    return db.prepare(`
-      SELECT assignedOperatorName as name, COUNT(*) as count
-      FROM sessions
-      WHERE assignedOperatorName IS NOT NULL
-      GROUP BY assignedOperatorName
-      ORDER BY count DESC
-    `).all() as { name: string; count: number }[];
+  async getLeadsByOperator(): Promise<{ name: string; count: number }[]> {
+    return await rawQuery<{ name: string; count: number }>(
+      `SELECT "assignedOperatorName" as name, COUNT(*) as count
+       FROM sessions
+       WHERE "assignedOperatorName" IS NOT NULL
+       GROUP BY "assignedOperatorName"
+       ORDER BY count DESC`
+    );
   },
 
   // ─── Documents ───────────────────────────────────────────────────────────────
 
-  listDocuments(): Document[] {
-    return db.prepare("SELECT * FROM documents ORDER BY createdAt DESC").all() as Document[];
+  async listDocuments(): Promise<Document[]> {
+    return await db.select().from(documents).orderBy(desc(documents.createdAt)) as Document[];
   },
 
-  getDocumentById(id: string): Document | null {
-    return (db.prepare("SELECT * FROM documents WHERE id = ?").get(id) as Document) ?? null;
+  async getDocumentById(id: string): Promise<Document | null> {
+    const rows = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
+    return (rows[0] as Document) ?? null;
   },
 
-  createDocument(data: {
+  async createDocument(data: {
     name: string;
     type: string;
     mimeType: string;
     filePath: string;
     folderId?: string | null;
-  }): Document {
+  }): Promise<Document> {
     const id = uuidv4();
-    db.prepare(
-      "INSERT INTO documents (id, name, type, mimeType, filePath, folderId) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(id, data.name, data.type, data.mimeType, data.filePath, data.folderId ?? null);
-    return storage.getDocumentById(id)!;
+    await db.insert(documents).values({
+      id,
+      name: data.name,
+      type: data.type,
+      mimeType: data.mimeType,
+      filePath: data.filePath,
+      folderId: data.folderId ?? null,
+    });
+    return (await storage.getDocumentById(id))!;
   },
 
-  updateDocument(id: string, data: Partial<Pick<Document, "name" | "paused" | "folderId">>): Document | null {
-    const doc = storage.getDocumentById(id);
+  async updateDocument(id: string, data: Partial<Pick<Document, "name" | "paused" | "folderId">>): Promise<Document | null> {
+    const doc = await storage.getDocumentById(id);
     if (!doc) return null;
-    db.prepare("UPDATE documents SET name = ?, paused = ?, folderId = ? WHERE id = ?").run(
-      data.name ?? doc.name,
-      data.paused ?? doc.paused,
-      data.folderId !== undefined ? data.folderId : doc.folderId,
-      id
-    );
+    await db.update(documents).set({
+      name: data.name ?? doc.name,
+      paused: data.paused ?? doc.paused,
+      folderId: data.folderId !== undefined ? data.folderId : doc.folderId,
+    }).where(eq(documents.id, id));
     return storage.getDocumentById(id);
   },
 
-  deleteDocument(id: string): boolean {
-    const result = db.prepare("DELETE FROM documents WHERE id = ?").run(id);
-    return result.changes > 0;
+  async deleteDocument(id: string): Promise<boolean> {
+    const result = await db.delete(documents).where(eq(documents.id, id));
+    return (result as any).rowCount > 0;
   },
 
-  bulkDeleteDocuments(ids: string[]): void {
-    const stmt = db.prepare("DELETE FROM documents WHERE id = ?");
-    for (const id of ids) stmt.run(id);
-  },
-
-  bulkMoveDocuments(ids: string[], folderId: string | null): void {
-    const stmt = db.prepare("UPDATE documents SET folderId = ? WHERE id = ?");
-    for (const id of ids) stmt.run(folderId, id);
-  },
-
-  bulkTogglePausedDocuments(ids: string[]): void {
-    const getStmt = db.prepare("SELECT paused FROM documents WHERE id = ?");
-    const setStmt = db.prepare("UPDATE documents SET paused = ? WHERE id = ?");
+  async bulkDeleteDocuments(ids: string[]): Promise<void> {
     for (const id of ids) {
-      const doc = getStmt.get(id) as { paused: string } | undefined;
-      if (doc) setStmt.run(doc.paused === "true" ? "false" : "true", id);
+      await db.delete(documents).where(eq(documents.id, id));
     }
   },
 
-  listActiveDocumentsForRag(limit = 50): { id: string; name: string; filePath: string }[] {
-    return db.prepare(
-      "SELECT id, name, filePath FROM documents WHERE paused != 'true' ORDER BY createdAt DESC LIMIT ?"
-    ).all(limit) as { id: string; name: string; filePath: string }[];
+  async bulkMoveDocuments(ids: string[], folderId: string | null): Promise<void> {
+    for (const id of ids) {
+      await db.update(documents).set({ folderId }).where(eq(documents.id, id));
+    }
+  },
+
+  async bulkTogglePausedDocuments(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      const doc = await storage.getDocumentById(id);
+      if (doc) {
+        await db.update(documents).set({
+          paused: doc.paused === "true" ? "false" : "true",
+        }).where(eq(documents.id, id));
+      }
+    }
+  },
+
+  async listActiveDocumentsForRag(limit = 50): Promise<{ id: string; name: string; filePath: string }[]> {
+    return await rawQuery<{ id: string; name: string; filePath: string }>(
+      `SELECT id, name, "filePath" FROM documents WHERE paused != 'true' ORDER BY "createdAt" DESC LIMIT $1`,
+      [limit]
+    );
   },
 
   // ─── Folders ─────────────────────────────────────────────────────────────────
 
-  listFolders(): Folder[] {
-    return db.prepare("SELECT * FROM folders ORDER BY name ASC").all() as Folder[];
+  async listFolders(): Promise<Folder[]> {
+    return await db.select().from(folders).orderBy(asc(folders.name)) as Folder[];
   },
 
-  getFolderById(id: string): Folder | null {
-    return (db.prepare("SELECT * FROM folders WHERE id = ?").get(id) as Folder) ?? null;
+  async getFolderById(id: string): Promise<Folder | null> {
+    const rows = await db.select().from(folders).where(eq(folders.id, id)).limit(1);
+    return (rows[0] as Folder) ?? null;
   },
 
-  createFolder(data: { name: string; parentId?: string | null }): Folder {
+  async createFolder(data: { name: string; parentId?: string | null }): Promise<Folder> {
     const id = uuidv4();
-    db.prepare("INSERT INTO folders (id, name, parentId) VALUES (?, ?, ?)").run(id, data.name, data.parentId ?? null);
-    return storage.getFolderById(id)!;
+    await db.insert(folders).values({ id, name: data.name, parentId: data.parentId ?? null });
+    return (await storage.getFolderById(id))!;
   },
 
-  updateFolder(id: string, name: string): Folder | null {
-    db.prepare("UPDATE folders SET name = ? WHERE id = ?").run(name, id);
+  async updateFolder(id: string, name: string): Promise<Folder | null> {
+    await db.update(folders).set({ name }).where(eq(folders.id, id));
     return storage.getFolderById(id);
   },
 
-  deleteFolder(id: string): void {
-    db.prepare("UPDATE documents SET folderId = NULL WHERE folderId = ?").run(id);
-    db.prepare("DELETE FROM folders WHERE id = ?").run(id);
+  async deleteFolder(id: string): Promise<void> {
+    await db.update(documents).set({ folderId: null }).where(eq(documents.folderId, id));
+    await db.delete(folders).where(eq(folders.id, id));
   },
 
   // ─── API Costs ───────────────────────────────────────────────────────────────
 
-  listCosts(filters: { service?: string; period?: "day" | "week" | "month" | "all" }): ApiCost[] {
-    let query = "SELECT * FROM api_costs WHERE 1=1";
+  async listCosts(filters: { service?: string; period?: "day" | "week" | "month" | "all" }): Promise<ApiCost[]> {
+    let query = `SELECT * FROM api_costs WHERE 1=1`;
     const params: any[] = [];
+    let paramIdx = 1;
 
     if (filters.service && filters.service !== "all") {
-      query += " AND service = ?";
+      query += ` AND service = $${paramIdx++}`;
       params.push(filters.service);
     }
 
     if (filters.period === "day") {
-      query += " AND date(createdAt) = date('now')";
+      query += ` AND DATE("createdAt") = CURRENT_DATE`;
     } else if (filters.period === "week") {
-      query += " AND createdAt >= datetime('now', '-7 days')";
+      query += ` AND "createdAt" >= (now() - interval '7 days')::text`;
     } else if (filters.period === "month") {
-      query += " AND createdAt >= datetime('now', '-30 days')";
+      query += ` AND "createdAt" >= (now() - interval '30 days')::text`;
     }
 
-    query += " ORDER BY createdAt DESC";
-    return db.prepare(query).all(...params) as ApiCost[];
+    query += ` ORDER BY "createdAt" DESC`;
+    return await rawQuery<ApiCost>(query, params);
   },
 
-  getCostsSummary(): {
+  async getCostsSummary(): Promise<{
     byService: { service: string; total: number; count: number; totalTokens: number }[];
     overall: { total: number; count: number };
-  } {
-    const byService = db.prepare(`
-      SELECT service, SUM(cost) as total, COUNT(*) as count, SUM(tokens) as totalTokens
-      FROM api_costs
-      GROUP BY service
-      ORDER BY total DESC
-    `).all() as { service: string; total: number; count: number; totalTokens: number }[];
+  }> {
+    const byService = await rawQuery<{ service: string; total: number; count: number; totalTokens: number }>(
+      `SELECT service, SUM(cost) as total, COUNT(*) as count, COALESCE(SUM(tokens), 0) as "totalTokens"
+       FROM api_costs
+       GROUP BY service
+       ORDER BY total DESC`
+    );
 
-    const overall = db.prepare(
-      "SELECT SUM(cost) as total, COUNT(*) as count FROM api_costs"
-    ).get() as { total: number; count: number };
+    const overall = await rawQueryOne<{ total: number; count: number }>(
+      "SELECT COALESCE(SUM(cost), 0) as total, COUNT(*) as count FROM api_costs"
+    );
 
-    return { byService, overall };
+    return { byService, overall: overall ?? { total: 0, count: 0 } };
   },
 
-  createCost(data: {
+  async createCost(data: {
     service: string;
     operation: string;
     cost: number;
     tokens?: number | null;
     notes?: string | null;
-  }): ApiCost {
+  }): Promise<ApiCost> {
     const id = uuidv4();
-    db.prepare(
-      "INSERT INTO api_costs (id, service, operation, cost, tokens, notes) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(id, data.service, data.operation, data.cost, data.tokens ?? null, data.notes ?? null);
-    return db.prepare("SELECT * FROM api_costs WHERE id = ?").get(id) as ApiCost;
+    await db.insert(apiCosts).values({
+      id,
+      service: data.service,
+      operation: data.operation,
+      cost: data.cost,
+      tokens: data.tokens ?? null,
+      notes: data.notes ?? null,
+    });
+    const rows = await db.select().from(apiCosts).where(eq(apiCosts.id, id)).limit(1);
+    return rows[0] as ApiCost;
   },
 
-  deleteCost(id: string): boolean {
-    const result = db.prepare("DELETE FROM api_costs WHERE id = ?").run(id);
-    return result.changes > 0;
+  async deleteCost(id: string): Promise<boolean> {
+    const result = await db.delete(apiCosts).where(eq(apiCosts.id, id));
+    return (result as any).rowCount > 0;
   },
 
   // ─── VTEX Settings ───────────────────────────────────────────────────────────
 
-  getVtexSettings(): any | null {
-    const row = db.prepare("SELECT value FROM vtex_settings WHERE key = 'main'").get() as { value: string } | undefined;
+  async getVtexSettings(): Promise<any | null> {
+    const row = await rawQueryOne<{ value: string }>(
+      "SELECT value FROM vtex_settings WHERE key = 'main'"
+    );
     if (!row) return null;
     try { return JSON.parse(row.value); } catch { return null; }
   },
 
-  setVtexSettings(data: any): void {
-    db.prepare("INSERT OR REPLACE INTO vtex_settings (key, value) VALUES ('main', ?)").run(JSON.stringify(data));
+  async setVtexSettings(data: any): Promise<void> {
+    const val = JSON.stringify(data);
+    await rawQuery(
+      `INSERT INTO vtex_settings (key, value) VALUES ('main', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [val]
+    );
   },
 
   // ─── VTEX Logs ───────────────────────────────────────────────────────────────
 
-  listVtexLogs(limit = 50): VtexLog[] {
-    return db.prepare("SELECT * FROM vtex_logs ORDER BY timestamp DESC LIMIT ?").all(limit) as VtexLog[];
+  async listVtexLogs(limit = 50): Promise<VtexLog[]> {
+    return await rawQuery<VtexLog>(
+      `SELECT * FROM vtex_logs ORDER BY timestamp DESC LIMIT $1`,
+      [limit]
+    );
   },
 
-  createVtexLog(data: { type: string; description: string; product?: string | null; autonomous?: boolean }): { id: string } {
+  async createVtexLog(data: { type: string; description: string; product?: string | null; autonomous?: boolean }): Promise<{ id: string }> {
     const id = uuidv4();
-    db.prepare(
-      "INSERT INTO vtex_logs (id, type, description, product, autonomous) VALUES (?, ?, ?, ?, ?)"
-    ).run(id, data.type, data.description, data.product ?? null, data.autonomous !== false ? 1 : 0);
+    await db.insert(vtexLogs).values({
+      id,
+      type: data.type,
+      description: data.description,
+      product: data.product ?? null,
+      autonomous: data.autonomous !== false ? 1 : 0,
+    });
     return { id };
   },
 
   // ─── VTEX Stats ──────────────────────────────────────────────────────────────
 
-  getVtexStats(): {
+  async getVtexStats(): Promise<{
     searchesToday: number;
     hitRate: number;
     linksSent: number;
     failures: number;
     conversions: number;
     searchesByHour: { hour: number; count: number }[];
-  } {
+  }> {
     const today = new Date().toISOString().slice(0, 10);
 
-    const searchesToday = (db.prepare(
-      "SELECT COUNT(*) as c FROM vtex_logs WHERE type = 'search' AND date(timestamp) = ?"
-    ).get(today) as any).c;
+    const searchesTodayR = await rawQueryOne<{ c: string }>(
+      "SELECT COUNT(*) as c FROM vtex_logs WHERE type = 'search' AND DATE(timestamp) = $1",
+      [today]
+    );
+    const searchesToday = parseInt(searchesTodayR?.c ?? "0", 10);
 
-    const foundsToday = (db.prepare(
-      "SELECT COUNT(*) as c FROM vtex_logs WHERE type = 'found' AND date(timestamp) = ?"
-    ).get(today) as any).c;
+    const foundsTodayR = await rawQueryOne<{ c: string }>(
+      "SELECT COUNT(*) as c FROM vtex_logs WHERE type = 'found' AND DATE(timestamp) = $1",
+      [today]
+    );
+    const foundsToday = parseInt(foundsTodayR?.c ?? "0", 10);
 
-    const linksSent = (db.prepare(
-      "SELECT COUNT(*) as c FROM vtex_logs WHERE type = 'link_sent' AND date(timestamp) = ?"
-    ).get(today) as any).c;
+    const linksSentR = await rawQueryOne<{ c: string }>(
+      "SELECT COUNT(*) as c FROM vtex_logs WHERE type = 'link_sent' AND DATE(timestamp) = $1",
+      [today]
+    );
+    const linksSent = parseInt(linksSentR?.c ?? "0", 10);
 
-    const failures = (db.prepare(
+    const failuresR = await rawQueryOne<{ c: string }>(
       "SELECT COUNT(*) as c FROM vtex_failures WHERE resolved = 0"
-    ).get() as any).c;
+    );
+    const failures = parseInt(failuresR?.c ?? "0", 10);
 
     const hitRate = searchesToday > 0 ? Math.round((foundsToday / searchesToday) * 100) : 0;
 
-    const byHour = db.prepare(`
-      SELECT CAST(strftime('%H', timestamp) AS INTEGER) as hour, COUNT(*) as count
-      FROM vtex_logs
-      WHERE type = 'search' AND date(timestamp) = ?
-      GROUP BY hour
-    `).all(today) as { hour: number; count: number }[];
+    const byHour = await rawQuery<{ hour: number; count: number }>(
+      `SELECT EXTRACT(HOUR FROM timestamp::timestamp)::integer as hour, COUNT(*)::integer as count
+       FROM vtex_logs
+       WHERE type = 'search' AND DATE(timestamp) = $1
+       GROUP BY hour`,
+      [today]
+    );
 
     const searchesByHour = Array.from({ length: 24 }, (_, h) => {
       const found = byHour.find((r) => r.hour === h);
@@ -489,76 +579,101 @@ export const storage = {
 
   // ─── VTEX Failures ───────────────────────────────────────────────────────────
 
-  listVtexFailures(): VtexFailure[] {
-    return db.prepare(
-      "SELECT * FROM vtex_failures WHERE resolved = 0 ORDER BY createdAt DESC"
-    ).all() as VtexFailure[];
+  async listVtexFailures(): Promise<VtexFailure[]> {
+    return await db.select().from(vtexFailures)
+      .where(eq(vtexFailures.resolved, 0))
+      .orderBy(desc(vtexFailures.createdAt)) as VtexFailure[];
   },
 
-  resolveVtexFailure(id: string): boolean {
-    const result = db.prepare("UPDATE vtex_failures SET resolved = 1 WHERE id = ?").run(id);
-    return result.changes > 0;
+  async resolveVtexFailure(id: string): Promise<boolean> {
+    const result = await db.update(vtexFailures).set({ resolved: 1 }).where(eq(vtexFailures.id, id));
+    return (result as any).rowCount > 0;
   },
 
   // ─── VTEX Synonyms ───────────────────────────────────────────────────────────
 
-  listVtexSynonyms(): VtexSynonym[] {
-    return db.prepare("SELECT * FROM vtex_synonyms ORDER BY createdAt DESC").all() as VtexSynonym[];
+  async listVtexSynonyms(): Promise<VtexSynonym[]> {
+    return await db.select().from(vtexSynonyms).orderBy(desc(vtexSynonyms.createdAt)) as VtexSynonym[];
   },
 
-  createVtexSynonym(data: { term: string; canonical: string }): VtexSynonym {
+  async createVtexSynonym(data: { term: string; canonical: string }): Promise<VtexSynonym> {
     const id = uuidv4();
-    db.prepare("INSERT INTO vtex_synonyms (id, term, canonical) VALUES (?, ?, ?)").run(id, data.term, data.canonical);
-    return db.prepare("SELECT * FROM vtex_synonyms WHERE id = ?").get(id) as VtexSynonym;
+    await db.insert(vtexSynonyms).values({ id, term: data.term, canonical: data.canonical });
+    const rows = await db.select().from(vtexSynonyms).where(eq(vtexSynonyms.id, id)).limit(1);
+    return rows[0] as VtexSynonym;
   },
 
-  deleteVtexSynonym(id: string): boolean {
-    const result = db.prepare("DELETE FROM vtex_synonyms WHERE id = ?").run(id);
-    return result.changes > 0;
+  async deleteVtexSynonym(id: string): Promise<boolean> {
+    const result = await db.delete(vtexSynonyms).where(eq(vtexSynonyms.id, id));
+    return (result as any).rowCount > 0;
   },
 
   // ─── Prompt History ─────────────────────────────────────────────────────────
 
-  addPromptHistory(value: string, changedBy: string): void {
-    db.prepare(
-      "INSERT INTO prompt_history (id, timestamp, value, changedBy) VALUES (?, datetime('now'), ?, ?)"
-    ).run(uuidv4(), value, changedBy);
+  async addPromptHistory(value: string, changedBy: string): Promise<void> {
+    await rawQuery(
+      `INSERT INTO prompt_history (id, timestamp, value, "changedBy") VALUES ($1, now()::text, $2, $3)`,
+      [uuidv4(), value, changedBy]
+    );
   },
 
-  listPromptHistory(limit = 20): { id: string; timestamp: string; value: string; changedBy: string }[] {
-    return db.prepare(
-      "SELECT id, timestamp, value, changedBy FROM prompt_history ORDER BY timestamp DESC LIMIT ?"
-    ).all(limit) as { id: string; timestamp: string; value: string; changedBy: string }[];
+  async listPromptHistory(limit = 20): Promise<{ id: string; timestamp: string; value: string; changedBy: string }[]> {
+    return await rawQuery<{ id: string; timestamp: string; value: string; changedBy: string }>(
+      `SELECT id, timestamp, value, "changedBy" FROM prompt_history ORDER BY timestamp DESC LIMIT $1`,
+      [limit]
+    );
   },
 
   // ─── Session / Message creation (para simulação no monitor) ──────────────────
 
-  upsertSession(data: {
+  async upsertSession(data: {
     id: string;
     startTime: string;
     status: string;
     clientName?: string | null;
     clientPhone?: string | null;
     contactId?: string | null;
-  }): void {
-    const existing = db.prepare("SELECT id FROM sessions WHERE id = ?").get(data.id);
+  }): Promise<void> {
+    const existing = await rawQueryOne("SELECT id FROM sessions WHERE id = $1", [data.id]);
     if (existing) {
-      db.prepare(
-        "UPDATE sessions SET status = ?, clientName = ?, clientPhone = ?, contactId = ? WHERE id = ?"
-      ).run(data.status, data.clientName ?? null, data.clientPhone ?? null, data.contactId ?? null, data.id);
+      await rawQuery(
+        `UPDATE sessions SET status = $1, "clientName" = $2, "clientPhone" = $3, "contactId" = $4 WHERE id = $5`,
+        [data.status, data.clientName ?? null, data.clientPhone ?? null, data.contactId ?? null, data.id]
+      );
     } else {
-      db.prepare(
-        "INSERT INTO sessions (id, startTime, status, clientName, clientPhone, contactId) VALUES (?, ?, ?, ?, ?, ?)"
-      ).run(data.id, data.startTime, data.status, data.clientName ?? null, data.clientPhone ?? null, data.contactId ?? null);
+      await rawQuery(
+        `INSERT INTO sessions (id, "startTime", status, "clientName", "clientPhone", "contactId") VALUES ($1, $2, $3, $4, $5, $6)`,
+        [data.id, data.startTime, data.status, data.clientName ?? null, data.clientPhone ?? null, data.contactId ?? null]
+      );
     }
   },
 
-  createMessage(data: { sessionId: string; sender: string; content: string }): string {
+  async createMessage(data: { sessionId: string; sender: string; content: string }): Promise<string> {
     const id = uuidv4();
-    db.prepare(
-      "INSERT INTO messages (id, sessionId, timestamp, sender, content) VALUES (?, ?, datetime('now'), ?, ?)"
-    ).run(id, data.sessionId, data.sender, data.content);
+    await rawQuery(
+      `INSERT INTO messages (id, "sessionId", timestamp, sender, content) VALUES ($1, $2, now()::text, $3, $4)`,
+      [id, data.sessionId, data.sender, data.content]
+    );
     return id;
+  },
+
+  // ─── Log creation (para reportService) ──────────────────────────────────────
+
+  async createLog(data: { sessionId: string; level: string; message: string }): Promise<void> {
+    await rawQuery(
+      `INSERT INTO logs (id, "sessionId", level, message, timestamp) VALUES ($1, $2, $3, $4, now()::text)`,
+      [uuidv4(), data.sessionId, data.level, data.message]
+    );
+  },
+
+  // ─── VTEX Failures creation (para fagnerOrchestrator) ───────────────────────
+
+  async createVtexFailure(data: { query: string; reason: string }): Promise<void> {
+    await rawQuery(
+      `INSERT INTO vtex_failures (id, query, reason, resolved) VALUES ($1, $2, $3, 0)
+       ON CONFLICT DO NOTHING`,
+      [uuidv4(), data.query, data.reason]
+    );
   },
 
 };

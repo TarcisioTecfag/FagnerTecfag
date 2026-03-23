@@ -126,58 +126,32 @@ export function generateReportText(
 
 // ─── Salva relatório no banco de dados ───────────────────────────────────────
 
-export function saveReportToDb(
-  db: any,
+export async function saveReportToDb(
+  storage: any,
   session: ContactSession,
   reportText: string,
   reportJson: Record<string, any>,
   assignedOperator: string
-): void {
+): Promise<void> {
   const sessionId = session.sessionDbId;
 
-  // Tenta criar/atualizar sessão no banco
+  // Tenta criar/atualizar sessão no banco via storage (PostgreSQL)
   try {
-    const existing = db.prepare("SELECT id FROM sessions WHERE id = ?").get(sessionId);
-    const now = new Date().toISOString();
-
-    if (!existing) {
-      db.prepare(`
-        INSERT INTO sessions (
-          id, contactId, status, startTime, archived,
-          assignedOperatorName, report, contactName, contactPhone
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        sessionId,
-        session.contactId,
-        "COMPLETED",
-        session.createdAt.toISOString(),
-        "false",
-        assignedOperator,
-        reportText,
-        reportJson.nome_completo ?? session.flowData.clientName ?? null,
-        session.contactPhone ?? session.flowData.clientPhone ?? null
-      );
-    } else {
-      db.prepare(`
-        UPDATE sessions SET
-          status = 'COMPLETED',
-          assignedOperatorName = ?,
-          report = ?
-        WHERE id = ?
-      `).run(assignedOperator, reportText, sessionId);
-    }
+    await storage.upsertSession({
+      id: sessionId,
+      startTime: session.createdAt.toISOString(),
+      status: "COMPLETED",
+      clientName: reportJson.nome_completo ?? session.flowData.clientName ?? null,
+      clientPhone: session.contactPhone ?? session.flowData.clientPhone ?? null,
+      contactId: session.contactId,
+    });
 
     // Log
-    db.prepare(`
-      INSERT INTO logs (id, sessionId, level, message, timestamp)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(
-      uuidv4(),
+    await storage.createLog({
       sessionId,
-      "INFO",
-      `Triagem finalizada. Operador: ${assignedOperator}. Fluxo: ${session.currentSubFlow}`,
-      now
-    );
+      level: "INFO",
+      message: `Triagem finalizada. Operador: ${assignedOperator}. Fluxo: ${session.currentSubFlow}`,
+    });
   } catch (err) {
     console.error("[Report] Erro ao salvar no banco:", err);
   }

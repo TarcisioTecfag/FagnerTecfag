@@ -1,8 +1,10 @@
 // server/fagner/vtexService.ts
 // Integração com a API de catálogo pública da VTEX (tecfag.com.br)
-// - Normaliza a busca aplicando sinônimos do banco
+// - Normaliza a busca aplicando sinônimos do banco (PostgreSQL via storage)
 // - Chama /api/catalog_system/pub/products/search
 // - Retorna produto formatado ou { found: false }
+
+import { storage } from "../storage.js";
 
 const VTEX_BASE = "https://www.tecfag.com.br";
 
@@ -49,11 +51,9 @@ function fuzzyScore(a: string, b: string): number {
 
 // ─── Aplica sinônimos do banco ────────────────────────────────────────────────
 
-function applySynonyms(query: string, db: any): string {
+async function applySynonyms(query: string): Promise<string> {
   try {
-    const synonyms = db.prepare(
-      "SELECT term, canonical FROM vtex_synonyms"
-    ).all() as { term: string; canonical: string }[];
+    const synonyms = await storage.listVtexSynonyms();
 
     let best = { score: 0, canonical: query };
     const q = query.toLowerCase();
@@ -85,10 +85,9 @@ function formatPrice(price: number | null): string {
 // ─── Busca principal na VTEX ──────────────────────────────────────────────────
 
 export async function searchProduct(
-  rawQuery: string,
-  db: any
+  rawQuery: string
 ): Promise<VtexResult> {
-  const normalizedQuery = applySynonyms(rawQuery.trim(), db);
+  const normalizedQuery = await applySynonyms(rawQuery.trim());
   const encodedQuery = encodeURIComponent(normalizedQuery);
 
   const url = `${VTEX_BASE}/api/catalog_system/pub/products/search?fq=ft:${encodedQuery}&_from=0&_to=5`;
