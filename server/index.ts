@@ -1,18 +1,27 @@
 import "dotenv/config";
 
-// ─── Global error handlers — captura crashes no startup para logs do Railway ──
-// IMPORTANTE: Não usar process.exit(1) aqui — mata o servidor por qualquer
-// promise rejection não capturada no runtime (ex: fetch falhou, API externa off).
-// Apenas loga o erro e deixa o servidor continuar.
+// ─── Global error/signal handlers ────────────────────────────────────────────
+// Captura erros e sinais para logs no Railway — sem process.exit desnecessario
 process.on("uncaughtException", (err) => {
-  console.error("💥 UNCAUGHT EXCEPTION:", err.message);
-  console.error(err.stack);
-  // NÃO chama process.exit(1) para não derrubar o servidor em produção
+  console.error("CRASH uncaughtException:", err.message, err.stack);
 });
 process.on("unhandledRejection", (reason) => {
-  console.error("💥 UNHANDLED REJECTION:", reason);
-  // NÃO chama process.exit(1) — mantem o servidor vivo
+  console.error("CRASH unhandledRejection:", reason);
 });
+process.on("SIGTERM", () => {
+  console.log("[SIGNAL] SIGTERM recebido — Railway esta encerrando o processo");
+  process.exit(0);
+});
+process.on("SIGINT", () => {
+  console.log("[SIGNAL] SIGINT recebido");
+  process.exit(0);
+});
+// Log de memoria a cada 30s para detectar OOM
+setInterval(() => {
+  const m = process.memoryUsage();
+  console.log(`[MEM] rss:${Math.round(m.rss/1024/1024)}MB heap:${Math.round(m.heapUsed/1024/1024)}/${Math.round(m.heapTotal/1024/1024)}MB`);
+}, 30_000).unref(); // .unref() para nao manter o processo vivo por causa do interval
+
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import http from "http";
@@ -77,6 +86,12 @@ const upload = multer({ storage: multerStorage });
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 const app = express();
+
+// ─── Trust Proxy ──────────────────────────────────────────────────────────────
+// OBRIGATÓRIO no Railway (e qualquer PaaS com proxy reverso).
+// Sem isso, req.secure === false mesmo com HTTPS, e o cookie "secure: true"
+// nunca é enviado pelo browser → login falha silenciosamente em produção.
+app.set("trust proxy", 1);
 
 // ─── CORS manual ─────────────────────────────────────────────────────────────
 // NÃO usamos o pacote 'cors' pois ele tem incompatibilidades com Express v5.
@@ -1010,6 +1025,7 @@ httpServer.listen(PORT, () => {
     }
 
     // Inicializa orquestrador e follow-up loop
+    console.log("[INIT] Iniciando orchestrator...");
     try {
       initOrchestrator({
         db,
@@ -1030,8 +1046,11 @@ httpServer.listen(PORT, () => {
         },
         emitLog,
       });
+      console.log("[INIT] Orchestrator OK");
       startFollowUpLoop();
+      console.log("[INIT] FollowUpLoop OK");
       emitLog("Fagner online e pronto para receber atendimentos 🤖", "SUCCESS");
+      console.log("[INIT] ✅ Servidor completamente inicializado e aguardando requests");
     } catch (e) {
       console.error("❌ Erro ao inicializar orquestrador:", e);
     }
