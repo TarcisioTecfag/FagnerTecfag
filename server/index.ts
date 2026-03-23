@@ -89,21 +89,33 @@ const corsOptions: cors.CorsOptions = {
       if (!p) return false;
       return typeof p === "string" ? origin === p : p.test(origin);
     });
+    if (!allowed) {
+      console.warn(`[CORS] Origem bloqueada: ${origin}`);
+    }
     callback(allowed ? null : new Error(`CORS bloqueado: ${origin}`), allowed);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  // Garante que CDNs/proxies não cacheem respostas CORS de origens diferentes
+  exposedHeaders: ["Set-Cookie"],
 };
 
 // Preflight explícito — responde OPTIONS antes de qualquer route/middleware
 app.options("*", cors(corsOptions));
 app.use(cors(corsOptions));
 
+// Varia o cache por Origin para evitar que proxies sirvam resposta CORS errada
+app.use((_req, res, next) => {
+  res.setHeader("Vary", "Origin");
+  next();
+});
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // Session
+const isProduction = process.env.NODE_ENV === "production";
 app.use(
   session({
     secret: process.env.SESSION_SECRET ?? "tecfag-secret-2024",
@@ -111,7 +123,11 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      // Em produção (cross-domain Vercel→Railway): secure=true + sameSite="none" são OBRIGATÓRIOS
+      // para que o browser envie o cookie cross-origin com credentials.
+      // sem sameSite="none" o browser bloqueia o cookie silenciosamente.
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
   })
@@ -959,6 +975,9 @@ httpServer.listen(PORT, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
   console.log(`   Banco: ${process.env.DATABASE_URL ? "PostgreSQL (Railway)" : "SQLite local"}`);
   console.log(`   Ambiente: ${process.env.NODE_ENV ?? "development"}`);
+  console.log(`   FRONTEND_URL: ${process.env.FRONTEND_URL ?? "(não definido — usando regex *.vercel.app)"}`);
+  console.log(`   Cookie sameSite: ${isProduction ? "none (cross-domain)" : "lax (local dev)"}`);
+  console.log(`   Cookie secure: ${isProduction}`);
 
   // Init em background — não bloqueia o healthcheck
   setImmediate(async () => {
