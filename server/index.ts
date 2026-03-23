@@ -102,7 +102,8 @@ const corsOptions: cors.CorsOptions = {
 };
 
 // Preflight explícito — responde OPTIONS antes de qualquer route/middleware
-app.options("*", cors(corsOptions));
+// NOTA: Express v5 usa path-to-regexp v8 que NÃO aceita "*" — usar "/{*path}"
+app.options("/{*path}", cors(corsOptions));
 app.use(cors(corsOptions));
 
 // Varia o cache por Origin para evitar que proxies sirvam resposta CORS errada
