@@ -609,12 +609,11 @@ function LiveChat() {
         style={{ background: "#fff" }}
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm shrink-0"
-            style={{ background: "linear-gradient(135deg,#ef4444,#991b1b)" }}
-          >
-            FA
-          </div>
+          <img
+            src="/fagnerfil.jfif"
+            alt="Fagner"
+            className="h-9 w-9 rounded-full object-cover shadow-sm shrink-0"
+          />
           <div className="min-w-0">
             <p className="text-sm font-bold text-zinc-800 leading-none">Fagner <span className="text-[10px] font-normal text-zinc-400 ml-1">· pipeline real</span></p>
             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -676,12 +675,20 @@ function LiveChat() {
             >
               {/* Bot avatar */}
               {msg.role !== "user" && (
-                <div
-                  className="h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 mb-0.5"
-                  style={{ background: msg.role === "error" ? "#ef4444" : "linear-gradient(135deg,#ef4444,#991b1b)" }}
-                >
-                  {msg.role === "error" ? "!" : "FA"}
-                </div>
+                msg.role === "error" ? (
+                  <div
+                    className="h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 mb-0.5"
+                    style={{ background: "#ef4444" }}
+                  >
+                    !
+                  </div>
+                ) : (
+                  <img
+                    src="/fagnerfil.jfif"
+                    alt="Fagner"
+                    className="h-7 w-7 rounded-full object-cover shrink-0 mb-0.5"
+                  />
+                )
               )}
 
               {/* Bubble */}
@@ -728,12 +735,11 @@ function LiveChat() {
           {/* Typing indicator */}
           {isTyping && (
             <div className="flex gap-2.5 items-end">
-              <div
-                className="h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                style={{ background: "linear-gradient(135deg,#ef4444,#991b1b)" }}
-              >
-                FA
-              </div>
+              <img
+                src="/fagnerfil.jfif"
+                alt="Fagner"
+                className="h-7 w-7 rounded-full object-cover shrink-0"
+              />
               <div className="px-4 py-3 rounded-2xl rounded-bl-sm bg-white border border-zinc-100 shadow-sm flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-zinc-300 animate-bounce" style={{ animationDelay: "0ms" }} />
                 <span className="h-2 w-2 rounded-full bg-zinc-300 animate-bounce" style={{ animationDelay: "150ms" }} />
@@ -1099,14 +1105,12 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── TAB 3: AO VIVO ────────────────────────────────────────────── */}
-        {activeTab === "live" && (
-          <div key="live" className="h-full animate-tab-enter">
-            <div className="h-full bg-white border border-red-100 shadow-sm rounded-xl overflow-hidden">
-              <LiveChat />
-            </div>
+        {/* ── TAB 3: AO VIVO ── (sempre montado para preservar estado do chat) */}
+        <div key="live" className="h-full" style={{ display: activeTab === "live" ? "block" : "none" }}>
+          <div className="h-full bg-white border border-red-100 shadow-sm rounded-xl overflow-hidden">
+            <LiveChat />
           </div>
-        )}
+        </div>
         {/* ── TAB 4: MONITOR DE FLUXOS ───────────────────────────────────── */}
         {activeTab === "flows" && (
           <div key="flows" className="h-full p-4 animate-tab-enter overflow-hidden">

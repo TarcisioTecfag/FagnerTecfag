@@ -359,15 +359,25 @@ async function processContact(session: ContactSession, combinedMessage: string):
     const extraContext = extraParts.join("\n\n") || undefined;
 
     // ── 7. Chama Gemini ──────────────────────────────────────────────────
-    const response = await callGemini({
-      session,
-      userMessage: combinedMessage,
-      apiKey,
-      ragContext: ragContext || undefined,
-      extraContext,
-      logCost: (tokens, prompt, output) =>
-        logCost(tokens, prompt, output, `msg:${combinedMessage.slice(0, 50)}`),
-    });
+    let response: string;
+    try {
+      response = await callGemini({
+        session,
+        userMessage: combinedMessage,
+        apiKey,
+        ragContext: ragContext || undefined,
+        extraContext,
+        logCost: (tokens, prompt, output) =>
+          logCost(tokens, prompt, output, `msg:${combinedMessage.slice(0, 50)}`),
+      });
+    } catch (geminiErr: any) {
+      deps.emitLog(`[${contactId}] Erro do Gemini: ${geminiErr.message}`, "ERROR");
+      // Reseta chatSession para permitir retry na próxima mensagem
+      session.chatSession = null;
+      const fallbackMsg = "Desculpe, tive um probleminha técnico aqui 😅 Pode repetir sua mensagem, por favor?";
+      await sendWithDelay(contactId, [{ text: fallbackMsg, delayMs: 0 }]);
+      return;
+    }
 
     deps.emitLog(`[${contactId}] Resposta Gemini: "${response.slice(0, 80)}..."`, "INFO");
 

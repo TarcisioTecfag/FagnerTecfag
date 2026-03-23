@@ -152,6 +152,13 @@ try {
       canonical TEXT NOT NULL,
       createdAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS prompt_history (
+      id        TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+      value     TEXT NOT NULL,
+      changedBy TEXT NOT NULL DEFAULT 'Sistema'
+    );
   `);
   console.log("[DB] ✅ Schema criado/verificado com sucesso");
 } catch (e) {

@@ -517,6 +517,50 @@ export const storage = {
     return result.changes > 0;
   },
 
+  // ─── Prompt History ─────────────────────────────────────────────────────────
+
+  addPromptHistory(value: string, changedBy: string): void {
+    db.prepare(
+      "INSERT INTO prompt_history (id, timestamp, value, changedBy) VALUES (?, datetime('now'), ?, ?)"
+    ).run(uuidv4(), value, changedBy);
+  },
+
+  listPromptHistory(limit = 20): { id: string; timestamp: string; value: string; changedBy: string }[] {
+    return db.prepare(
+      "SELECT id, timestamp, value, changedBy FROM prompt_history ORDER BY timestamp DESC LIMIT ?"
+    ).all(limit) as { id: string; timestamp: string; value: string; changedBy: string }[];
+  },
+
+  // ─── Session / Message creation (para simulação no monitor) ──────────────────
+
+  upsertSession(data: {
+    id: string;
+    startTime: string;
+    status: string;
+    clientName?: string | null;
+    clientPhone?: string | null;
+    contactId?: string | null;
+  }): void {
+    const existing = db.prepare("SELECT id FROM sessions WHERE id = ?").get(data.id);
+    if (existing) {
+      db.prepare(
+        "UPDATE sessions SET status = ?, clientName = ?, clientPhone = ?, contactId = ? WHERE id = ?"
+      ).run(data.status, data.clientName ?? null, data.clientPhone ?? null, data.contactId ?? null, data.id);
+    } else {
+      db.prepare(
+        "INSERT INTO sessions (id, startTime, status, clientName, clientPhone, contactId) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(data.id, data.startTime, data.status, data.clientName ?? null, data.clientPhone ?? null, data.contactId ?? null);
+    }
+  },
+
+  createMessage(data: { sessionId: string; sender: string; content: string }): string {
+    const id = uuidv4();
+    db.prepare(
+      "INSERT INTO messages (id, sessionId, timestamp, sender, content) VALUES (?, ?, datetime('now'), ?, ?)"
+    ).run(id, data.sessionId, data.sender, data.content);
+    return id;
+  },
+
 };
 
 export default storage;

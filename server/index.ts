@@ -45,6 +45,7 @@ import {
   setSchedule,
 } from "./fagner/fagnerOrchestrator.js";
 import { serializeSession, deleteSession, getSession } from "./fagner/sessionManager.js";
+import { buildSystemPrompt } from "./fagner/systemPrompt.js";
 import {
   validateWebhookToken,
   listFlows,
@@ -355,9 +356,20 @@ app.delete("/api/users/:id", requireAuth, (req, res) => {
 
 // ─── Settings routes ──────────────────────────────────────────────────────────
 
+// GET /api/settings/prompt-history — histórico de alterações do prompt
+// IMPORTANTE: deve ficar ANTES de /api/settings/:key para não ser capturado como :key
+app.get("/api/settings/prompt-history", requireAuth, (_req, res) => {
+  return res.json(storage.listPromptHistory());
+});
+
 // GET /api/settings/:key
 app.get("/api/settings/:key", requireAuth, (req, res) => {
-  const value = storage.getSettingParsed(String(p(req.params.key)));
+  const key = String(p(req.params.key));
+  let value = storage.getSettingParsed(key);
+  // Fallback: se system_prompt nunca foi salvo, retorna o prompt padrão
+  if (value === null && key === "system_prompt") {
+    value = buildSystemPrompt("normal") as any;
+  }
   return res.json(value);
 });
 
@@ -365,6 +377,17 @@ app.get("/api/settings/:key", requireAuth, (req, res) => {
 app.post("/api/settings", requireAuth, (req, res) => {
   const { key, value } = req.body;
   if (!key) return res.status(400).json({ message: "Chave obrigatória" });
+  
+  // Se atualizando system_prompt, salva versão anterior no histórico
+  if (key === "system_prompt") {
+    const previous = storage.getSetting("system_prompt");
+    if (previous !== null && previous !== value) {
+      const userId = (req.session as any)?.userId;
+      const user = userId ? storage.getUserSafeById(userId) : null;
+      storage.addPromptHistory(previous, user?.name ?? "Sistema");
+    }
+  }
+  
   storage.setSetting(key, value ?? "");
   return res.json({ ok: true });
 });
@@ -452,14 +475,13 @@ app.post("/api/bot/simulate", requireAuth, async (req: Request, res: Response) =
   const textMsg = (message ?? "").trim() || (mediaMimeType?.startsWith("audio") ? "[áudio]" : "[imagem]");
   if (!textMsg) return res.status(400).json({ message: "Mensagem ou mídia obrigatória" });
 
-  // ── Auto-reset: se a sessão de simulação estiver concluída, reinicia automaticamente ──
-  // Isso resolve o bug onde o chat quebra após encerrar um fluxo no "Ao Vivo".
-  // session.isCompleted = true bloqueia processContact(), resultando em resposta vazia.
+  // ── Auto-reset: se a sessão de simulação estiver concluída OU travada, reinicia ──
+  // Resolve: (1) fluxo concluído bloqueia processContact(), (2) sessão presa em isProcessing após crash
   const existingSimSession = getSession(simContactId);
-  if (existingSimSession?.isCompleted) {
+  if (existingSimSession?.isCompleted || existingSimSession?.isProcessing) {
     deleteSession(simContactId);
     simPendingMessages.delete(simContactId);
-    emitLog(`[Simulate] Sessão ${simContactId} auto-resetada (fluxo anterior concluído). Nova sessão iniciada.`, "INFO");
+    emitLog(`[Simulate] Sessão ${simContactId} auto-resetada (${existingSimSession.isCompleted ? 'fluxo concluído' : 'sessão travada'}). Nova sessão iniciada.`, "INFO");
   }
 
   simPendingMessages.set(simContactId, []);
@@ -499,6 +521,42 @@ app.post("/api/bot/simulate", requireAuth, async (req: Request, res: Response) =
       companyName:   (simSession as any).flowData?.companyName,
       clientCnpj:    (simSession as any).flowData?.clientCnpj,
     } : null;
+
+    // ── Persistir sessão e mensagens no banco para o Monitor em Tempo Real ──
+    try {
+      const simDbSessionId = `sim-session-${userId}`;
+      storage.upsertSession({
+        id: simDbSessionId,
+        startTime: simSession?.createdAt?.toISOString() ?? new Date().toISOString(),
+        status: simSession?.isCompleted ? "COMPLETED" : "ACTIVE",
+        clientName: `Simulador (${userId})`,
+        clientPhone: "11900000000",
+        contactId: simContactId,
+      });
+
+      // Salva mensagem do usuário
+      storage.createMessage({ sessionId: simDbSessionId, sender: "user", content: textMsg });
+
+      // Salva respostas do bot
+      for (const reply of finalReplies) {
+        storage.createMessage({ sessionId: simDbSessionId, sender: "bot", content: reply });
+      }
+
+      // Broadcast via WebSocket para o LiveMonitor
+      const wsPayload = JSON.stringify({
+        type: "NEW_MESSAGE",
+        sessionId: simDbSessionId,
+        sender: "bot",
+        content: finalReplies[0],
+        timestamp: new Date().toISOString(),
+        clientName: `Simulador (${userId})`,
+      });
+      wssChat.clients.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(wsPayload);
+      });
+    } catch (persistErr: any) {
+      emitLog(`[Simulate] Aviso: falha ao persistir sessão/mensagens: ${persistErr.message}`, "WARN");
+    }
 
     return res.json({ response: finalReplies.join("\n\n"), replies: finalReplies, tokens: 0, session: sessionInfo });
 
