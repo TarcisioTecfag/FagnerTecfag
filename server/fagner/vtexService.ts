@@ -140,18 +140,40 @@ export async function searchProduct(
 
 // ─── Detecta intenção de busca por máquina na mensagem do cliente ─────────────
 
+// Palavras-chave de máquinas/equipamentos da Tecfag
+const MACHINE_KEYWORDS = [
+  "envasadora", "seladora", "rotuladora", "empacotadora", "rosqueadeira",
+  "tampadora", "dosadora", "encapsuladora", "embaladora", "ensacadora",
+  "etiquetadora", "labeladora", "datadora", "inkjet", "fechadora",
+  "recravadeira", "roscadora", "injetora", "extrusora", "misturador",
+];
+
 const MACHINE_INTENT_PATTERNS = [
-  /(?:preciso|quero|busco|procuro|tenho interesse|gostaria)\s+(?:de\s+)?(?:uma?|comprar)?\s*(?:máquina|envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora)/i,
-  /(?:envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora)/i,
+  // "preciso de uma seladora", "quero comprar envasadora"
+  /(?:preciso|quero|busco|procuro|tenho interesse|gostaria)\s+(?:de\s+)?(?:uma?|comprar)?\s*(?:máquina|envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora|datadora|fechadora|recravadeira)/i,
+  // "voce tem seladora", "tem envasadora no catalogo", "vende seladora"
+  /(?:tem|vende[m]?|possui|trabalha[m]?\s+com|catálogo|catalogo).*?(?:envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora|datadora|fechadora|recravadeira|máquina)/i,
+  // Palavra-chave isolada (ex: "seladora" pura na frase)
+  /(?:envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora|datadora|fechadora|recravadeira)/i,
+  // "máquina de embalar/selar/envasar"
   /máquina\s+(?:de\s+)?(?:embalar|selar|envasar|rotular|tampas?|dose?|encapsular|ensacar)/i,
+  // "equipamento de envase"
   /equipamento\s+(?:de|para)\s+(?:envase?|selagem|rotulagem)/i,
 ];
 
 export function detectMachineIntent(message: string): string | null {
   const m = message.toLowerCase();
+
+  // Primeiro, tenta encontrar uma palavra-chave de máquina diretamente na mensagem
+  for (const kw of MACHINE_KEYWORDS) {
+    if (m.includes(kw)) {
+      return kw; // Retorna a keyword limpa (ex: "seladora")
+    }
+  }
+
+  // Fallback: padrões mais complexos
   for (const pattern of MACHINE_INTENT_PATTERNS) {
     if (pattern.test(m)) {
-      // Extrai o termo mais relevante da mensagem
       const match = pattern.exec(m);
       return match ? match[0].trim() : message.trim();
     }
@@ -163,7 +185,10 @@ export function detectMachineIntent(message: string): string | null {
 
 export function formatVtexContextForGemini(result: VtexResult): string {
   if (!result.found) {
-    return `## BUSCA VTEX — TECFAG.COM.BR\n⚠️ Produto não encontrado para: "${result.normalizedQuery}"\nOriente o cliente a entrar em contato com o comercial para verificar disponibilidade ou sugerir alternativas similares.`;
+    return `## BUSCA VTEX — TECFAG.COM.BR
+Produto "${result.normalizedQuery}" não foi localizado no catálogo online neste momento.
+IMPORTANTE: Isso NÃO significa que a Tecfag não possui. A Tecfag trabalha com uma ampla linha de máquinas e soluções.
+NUNCA diga ao cliente que "não tem link", "não localizou" ou "não encontrou". Em vez disso, confirme que a Tecfag trabalha com esse tipo de solução e continue coletando informações do cliente normalmente, seguindo o fluxo de vendas.`;
   }
 
   const status = result.available

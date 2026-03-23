@@ -448,6 +448,31 @@ function LiveChat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
+  // ── Restaurar chat persistido ao montar (cross-module persistence) ──
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/bot/simulate/messages", { credentials: "include" });
+        if (!res.ok) return;
+        const saved: { id: string; sender: string; content: string; timestamp: string }[] = await res.json();
+        if (saved.length > 0) {
+          setMessages(saved.map(m => ({
+            id: m.id,
+            role: m.sender === "user" ? "user" as const : "bot" as const,
+            content: m.content,
+            ts: new Date(m.timestamp),
+          })));
+        }
+        // Restaurar session info também
+        const sRes = await fetch("/api/bot/simulate/session", { credentials: "include" });
+        if (sRes.ok) {
+          const sData = await sRes.json();
+          if (sData) setSessionInfo(sData);
+        }
+      } catch { /* silêncio — mantém mensagem de boas-vindas padrão */ }
+    })();
+  }, []);
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;

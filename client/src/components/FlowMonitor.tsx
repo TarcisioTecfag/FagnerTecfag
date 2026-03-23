@@ -8,7 +8,9 @@ import {
   User, Building2, Phone, Hash, CreditCard, FileText,
   Activity, Clock, Pause, CheckCircle2, Loader2, RefreshCw,
   AlertTriangle, ExternalLink, Mic, Image as ImageIcon,
+  MessageSquare,
 } from "lucide-react";
+import { useLocation } from "wouter";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +86,7 @@ const MOOD_EMOJI: Record<string, string> = {
 // ─── Session Card ─────────────────────────────────────────────────────────────
 
 function SessionCard({ session }: { session: SerializedSession }) {
+  const [, setLocation] = useLocation();
   const sinceLastMsg = Math.floor(
     (Date.now() - new Date(session.lastMessageAt).getTime()) / 1000
   );
@@ -251,9 +254,18 @@ function SessionCard({ session }: { session: SerializedSession }) {
           {" · "}{session.messageCount} msg
           {session.followUpCount > 0 && ` · ${session.followUpCount}× follow-up`}
         </span>
-        <span className="text-[9px] font-mono opacity-50">
-          última: {sinceLastMsg < 60 ? `${sinceLastMsg}s` : `${Math.floor(sinceLastMsg / 60)}min`}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-mono opacity-50">
+            última: {sinceLastMsg < 60 ? `${sinceLastMsg}s` : `${Math.floor(sinceLastMsg / 60)}min`}
+          </span>
+          <button
+            onClick={() => setLocation(`/monitor?session=${session.contactId}`)}
+            className="flex items-center gap-1 text-[10px] font-semibold text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-md border border-red-100 transition-colors"
+          >
+            <MessageSquare size={10} />
+            Ver Conversa
+          </button>
+        </div>
       </div>
     </div>
   );

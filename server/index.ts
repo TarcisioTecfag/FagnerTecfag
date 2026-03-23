@@ -584,6 +584,14 @@ app.delete("/api/bot/simulate/session", requireAuth, (req: Request, res: Respons
   return res.json({ ok: true });
 });
 
+// GET /api/bot/simulate/messages — retorna mensagens persistidas da sessão de simulação
+app.get("/api/bot/simulate/messages", requireAuth, (req: Request, res: Response) => {
+  const userId = (req.session as any)?.userId ?? "anon";
+  const simDbSessionId = `sim-session-${userId}`;
+  const messages = storage.listMessagesBySession(simDbSessionId);
+  return res.json(messages);
+});
+
 // ─── Dashboard routes ─────────────────────────────────────────────────────────
 
 // GET /api/dashboard/stats
