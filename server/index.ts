@@ -1,14 +1,17 @@
 import "dotenv/config";
 
 // ─── Global error handlers — captura crashes no startup para logs do Railway ──
+// IMPORTANTE: Não usar process.exit(1) aqui — mata o servidor por qualquer
+// promise rejection não capturada no runtime (ex: fetch falhou, API externa off).
+// Apenas loga o erro e deixa o servidor continuar.
 process.on("uncaughtException", (err) => {
   console.error("💥 UNCAUGHT EXCEPTION:", err.message);
   console.error(err.stack);
-  process.exit(1);
+  // NÃO chama process.exit(1) para não derrubar o servidor em produção
 });
 process.on("unhandledRejection", (reason) => {
   console.error("💥 UNHANDLED REJECTION:", reason);
-  process.exit(1);
+  // NÃO chama process.exit(1) — mantem o servidor vivo
 });
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
@@ -1031,7 +1034,8 @@ httpServer.listen(PORT, () => {
     const distPath = path.join(__dirname, "../dist/public");
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
-      app.get("*", (_req, res) =>
+      // Express v5: usar "/{*path}" em vez de "*"
+      app.get("/{*path}", (_req, res) =>
         res.sendFile(path.join(distPath, "index.html"))
       );
       console.log(`   Static files: ${distPath}`);
