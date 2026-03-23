@@ -23,6 +23,8 @@ setInterval(() => {
 }, 30_000).unref(); // .unref() para nao manter o processo vivo por causa do interval
 
 import express, { type Request, type Response, type NextFunction } from "express";
+import { registerLiveChatRoutes } from "./livechat/livechatRoutes.js";
+import { initLiveChatWs } from "./livechat/livechatWs.js";
 import cors from "cors";
 import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -1089,10 +1091,16 @@ httpServer.on("upgrade", (req, socket, head) => {
     wssChat.handleUpgrade(req, socket as any, head, (ws) => {
       wssChat.emit("connection", ws, req);
     });
+  } else if (url === "/ws/livechat") {
+    // Handled by initLiveChatWs — pass through (don't destroy)
   } else {
     socket.destroy();
   }
 });
+
+// ─── Live Chat: registra rotas e WebSocket ─────────────────────────────────
+registerLiveChatRoutes(app);
+initLiveChatWs(httpServer);
 
 
 // ─── Servidor: escuta na porta PRIMEIRO para o healthcheck do Railway passar ──

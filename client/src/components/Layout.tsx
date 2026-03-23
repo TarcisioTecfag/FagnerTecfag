@@ -15,6 +15,7 @@ import {
   DollarSign,
   ShoppingBag,
   MessageSquare,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -78,6 +79,7 @@ export default function Layout({ children }: LayoutProps) {
     { section: "Controle Operacional" },
     { name: "Painel de Controle", href: "/", icon: LayoutDashboard },
     { name: "Monitor em Tempo Real", href: "/monitor", icon: Activity },
+    { name: "Live Chat", href: "/livechat", icon: MessageCircle },
     { section: "Inteligência & CRM" },
     { name: "Editor de Prompt", href: "/prompt", icon: PenTool },
     { name: "Configuração de CRM", href: "/crm", icon: Database },

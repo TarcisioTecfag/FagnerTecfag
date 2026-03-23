@@ -128,3 +128,78 @@ export type VtexLog = typeof vtexLogs.$inferSelect;
 export type VtexFailure = typeof vtexFailures.$inferSelect;
 export type VtexSynonym = typeof vtexSynonyms.$inferSelect;
 
+// ─── Live Chat — Módulo isolado ───────────────────────────────────────────────
+
+export const lcVisitors = pgTable("lc_visitors", {
+  id: text("id").primaryKey(),
+  cookieId: text("cookieId").notNull(),
+  ip: text("ip"),
+  city: text("city"),
+  country: text("country"),
+  browser: text("browser"),
+  userAgent: text("userAgent"),
+  currentPage: text("currentPage"),
+  currentPageTitle: text("currentPageTitle"),
+  source: text("source"),                    // 'google_organic', 'google_ads', 'instagram', 'direct', etc.
+  utmSource: text("utmSource"),
+  utmMedium: text("utmMedium"),
+  utmCampaign: text("utmCampaign"),
+  referrer: text("referrer"),
+  totalVisits: integer("totalVisits").notNull().default(1),
+  totalPages: integer("totalPages").notNull().default(0),
+  totalChats: integer("totalChats").notNull().default(0),
+  category: text("category").notNull().default("visitor"),   // 'visitor', 'lead_warm', 'lead_hot', 'customer', 'returning'
+  engagementScore: integer("engagementScore").notNull().default(0),
+  isOnline: text("isOnline").notNull().default("true"),
+  firstSeenAt: text("firstSeenAt").notNull().default(sql`now()::text`),
+  lastSeenAt: text("lastSeenAt").notNull().default(sql`now()::text`),
+});
+
+export const lcPageviews = pgTable("lc_pageviews", {
+  id: text("id").primaryKey(),
+  visitorId: text("visitorId").notNull(),
+  url: text("url").notNull(),
+  pageTitle: text("pageTitle"),
+  scrollDepth: integer("scrollDepth"),         // 0-100 %
+  timeSpent: integer("timeSpent"),             // seconds
+  visitedAt: text("visitedAt").notNull().default(sql`now()::text`),
+});
+
+export const lcChats = pgTable("lc_chats", {
+  id: text("id").primaryKey(),
+  visitorId: text("visitorId").notNull(),
+  agentId: text("agentId"),                    // user id do painel (se humano assumir)
+  status: text("status").notNull().default("waiting"),  // 'waiting', 'ai_active', 'human_active', 'closed'
+  startedAt: text("startedAt").notNull().default(sql`now()::text`),
+  endedAt: text("endedAt"),
+  visitorName: text("visitorName"),
+  visitorEmail: text("visitorEmail"),
+  source: text("source").notNull().default("widget"),   // 'widget', 'proactive'
+  aiHandled: text("aiHandled").notNull().default("true"),
+  needsHuman: text("needsHuman").notNull().default("false"),   // flag de "não sei" → alerta no painel
+  proactiveApproach: text("proactiveApproach").notNull().default("false"),
+  mood: text("mood"),
+});
+
+export const lcMessages = pgTable("lc_messages", {
+  id: text("id").primaryKey(),
+  chatId: text("chatId").notNull(),
+  sender: text("sender").notNull(),            // 'visitor', 'ai', 'agent'
+  content: text("content").notNull(),
+  read: text("read").notNull().default("false"),
+  sentAt: text("sentAt").notNull().default(sql`now()::text`),
+});
+
+export const lcSettings = pgTable("lc_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
+// ─── Live Chat Types ──────────────────────────────────────────────────────────
+
+export type LcVisitor = typeof lcVisitors.$inferSelect;
+export type LcPageview = typeof lcPageviews.$inferSelect;
+export type LcChat = typeof lcChats.$inferSelect;
+export type LcMessage = typeof lcMessages.$inferSelect;
+export type LcSetting = typeof lcSettings.$inferSelect;
+

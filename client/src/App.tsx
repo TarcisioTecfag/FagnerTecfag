@@ -22,6 +22,7 @@ import UsersManagement from "./pages/UsersManagement";
 import CostsDashboard from "./pages/CostsDashboard";
 import VTEXConfig from "./pages/VTEXConfig";
 import ConversasConfig from "./pages/ConversasConfig";
+import LiveChat from "./pages/LiveChat";
 
 function Router() {
   const { user, isLoading } = useAuth();
@@ -65,6 +66,7 @@ function Router() {
             <Route path="/costs" component={CostsDashboard}/>
             <Route path="/vtex" component={VTEXConfig}/>
             <Route path="/conversas" component={ConversasConfig}/>
+            <Route path="/livechat" component={LiveChat}/>
             <Route component={NotFound} />
           </Switch>
         </Layout>

@@ -159,6 +159,72 @@ export async function bootstrapSchema(): Promise<void> {
         "expire" TIMESTAMPTZ NOT NULL
       );
       CREATE INDEX IF NOT EXISTS "IDX_http_sessions_expire" ON "http_sessions" ("expire");
+
+      -- ─── Live Chat (módulo isolado) ─────────────────────────────────
+      CREATE TABLE IF NOT EXISTS lc_visitors (
+        id              TEXT PRIMARY KEY,
+        "cookieId"      TEXT NOT NULL,
+        ip              TEXT,
+        city            TEXT,
+        country         TEXT,
+        browser         TEXT,
+        "userAgent"     TEXT,
+        "currentPage"   TEXT,
+        "currentPageTitle" TEXT,
+        source          TEXT,
+        "utmSource"     TEXT,
+        "utmMedium"     TEXT,
+        "utmCampaign"   TEXT,
+        referrer        TEXT,
+        "totalVisits"   INTEGER NOT NULL DEFAULT 1,
+        "totalPages"    INTEGER NOT NULL DEFAULT 0,
+        "totalChats"    INTEGER NOT NULL DEFAULT 0,
+        category        TEXT NOT NULL DEFAULT 'visitor',
+        "engagementScore" INTEGER NOT NULL DEFAULT 0,
+        "isOnline"      TEXT NOT NULL DEFAULT 'true',
+        "firstSeenAt"   TEXT NOT NULL DEFAULT now()::text,
+        "lastSeenAt"    TEXT NOT NULL DEFAULT now()::text
+      );
+
+      CREATE TABLE IF NOT EXISTS lc_pageviews (
+        id          TEXT PRIMARY KEY,
+        "visitorId" TEXT NOT NULL,
+        url         TEXT NOT NULL,
+        "pageTitle" TEXT,
+        "scrollDepth" INTEGER,
+        "timeSpent"   INTEGER,
+        "visitedAt"   TEXT NOT NULL DEFAULT now()::text
+      );
+
+      CREATE TABLE IF NOT EXISTS lc_chats (
+        id              TEXT PRIMARY KEY,
+        "visitorId"     TEXT NOT NULL,
+        "agentId"       TEXT,
+        status          TEXT NOT NULL DEFAULT 'waiting',
+        "startedAt"     TEXT NOT NULL DEFAULT now()::text,
+        "endedAt"       TEXT,
+        "visitorName"   TEXT,
+        "visitorEmail"  TEXT,
+        source          TEXT NOT NULL DEFAULT 'widget',
+        "aiHandled"     TEXT NOT NULL DEFAULT 'true',
+        "needsHuman"    TEXT NOT NULL DEFAULT 'false',
+        "proactiveApproach" TEXT NOT NULL DEFAULT 'false',
+        mood            TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS lc_messages (
+        id      TEXT PRIMARY KEY,
+        "chatId" TEXT NOT NULL,
+        sender  TEXT NOT NULL,
+        content TEXT NOT NULL,
+        read    TEXT NOT NULL DEFAULT 'false',
+        "sentAt" TEXT NOT NULL DEFAULT now()::text
+      );
+
+      CREATE TABLE IF NOT EXISTS lc_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `);
     console.log("[DB] ✅ Schema PostgreSQL criado/verificado com sucesso");
   } catch (e) {
