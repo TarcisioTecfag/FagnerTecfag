@@ -1078,7 +1078,8 @@ httpServer.on("upgrade", (req, socket, head) => {
 
 
 // ─── Servidor: escuta na porta PRIMEIRO para o healthcheck do Railway passar ──
-console.log(`[SERVER] PORT=${process.env.PORT} - chamando httpServer.listen...`);
+const HOST = "0.0.0.0"; // OBRIGATÓRIO: Railway proxy conecta via IPv4
+console.log(`[SERVER] PORT=${process.env.PORT} HOST=${HOST} - chamando httpServer.listen...`);
 httpServer.on("error", (err: NodeJS.ErrnoException) => {
   console.error(`[SERVER] ERRO no httpServer: ${err.code} ${err.message}`);
   if (err.code === "EADDRINUSE") {
@@ -1087,8 +1088,8 @@ httpServer.on("error", (err: NodeJS.ErrnoException) => {
   // Encerra o processo pois sem porta o servidor nao funciona
   process.exit(1);
 });
-httpServer.listen(PORT, () => {
-  console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
+httpServer.listen(PORT, HOST, () => {
+  console.log(`✅ Servidor rodando em http://${HOST}:${PORT}`);
   console.log(`   Banco: ${process.env.DATABASE_URL ? "PostgreSQL (Railway)" : "SQLite local"}`);
   console.log(`   Ambiente: ${process.env.NODE_ENV ?? "development"}`);
   console.log(`   FRONTEND_URL: ${process.env.FRONTEND_URL ?? "(não definido — usando regex *.vercel.app)"}`);
