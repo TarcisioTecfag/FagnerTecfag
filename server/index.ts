@@ -23,7 +23,6 @@ setInterval(() => {
 }, 30_000).unref(); // .unref() para nao manter o processo vivo por causa do interval
 
 import express, { type Request, type Response, type NextFunction } from "express";
-import cors from "cors";
 import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import session from "express-session";
