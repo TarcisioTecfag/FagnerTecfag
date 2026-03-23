@@ -102,7 +102,7 @@ const corsOptions: cors.CorsOptions = {
 };
 
 // Preflight explícito — responde OPTIONS antes de qualquer route/middleware
-app.options("*", cors(corsOptions));
+app.options("/*", cors(corsOptions));
 app.use(cors(corsOptions));
 
 // Varia o cache por Origin para evitar que proxies sirvam resposta CORS errada
