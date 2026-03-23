@@ -105,8 +105,9 @@ const corsOptions: cors.CorsOptions = {
 };
 
 // Preflight explícito — responde OPTIONS antes de qualquer route/middleware
-// NOTA: Express v5 usa path-to-regexp v8 que NÃO aceita "*" — usar "/{*path}"
-app.options("/{*path}", cors(corsOptions));
+// Usa RegExp ao invés de string para bypassar path-to-regexp v8 do Express v5
+// (strings com wildcard '*' e '/{*path}' têm sintaxe restrita no Express v5)
+app.options(/.*/, cors(corsOptions));
 app.use(cors(corsOptions));
 
 // Varia o cache por Origin para evitar que proxies sirvam resposta CORS errada
@@ -1034,8 +1035,8 @@ httpServer.listen(PORT, () => {
     const distPath = path.join(__dirname, "../dist/public");
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
-      // Express v5: usar "/{*path}" em vez de "*"
-      app.get("/{*path}", (_req, res) =>
+      // Usa RegExp para bypassar path-to-regexp e funcionar no Express v5
+      app.get(/.*/, (_req, res) =>
         res.sendFile(path.join(distPath, "index.html"))
       );
       console.log(`   Static files: ${distPath}`);
