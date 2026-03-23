@@ -93,6 +93,14 @@ const app = express();
 // nunca é enviado pelo browser → login falha silenciosamente em produção.
 app.set("trust proxy", 1);
 
+// ─── Global Request Logger (diagnóstico Railway) ─────────────────────────────
+// Loga TODOS os requests que chegam ao servidor. Em produção, se nenhum request
+// aparecer nos logs, o problema é no proxy/networking do Railway, não no código.
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  console.log(`[REQ] ${req.method} ${req.url} from=${req.ip} origin=${req.headers.origin ?? "none"}`);
+  next();
+});
+
 // ─── CORS manual ─────────────────────────────────────────────────────────────
 // NÃO usamos o pacote 'cors' pois ele tem incompatibilidades com Express v5.
 // Implementação manual garante que os headers SEMPRE sejam adicionados,
