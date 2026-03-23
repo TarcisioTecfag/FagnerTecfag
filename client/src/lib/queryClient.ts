@@ -3,6 +3,13 @@ import { API_BASE } from "@/lib/api";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    // Mensagens amigáveis para erros de infraestrutura (Vercel → Railway)
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      throw new Error(
+        `Servidor temporariamente indisponível (${res.status}). ` +
+        `Aguarde alguns segundos e tente novamente. Se o problema persistir, verifique os logs do Railway.`
+      );
+    }
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);
   }

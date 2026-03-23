@@ -142,10 +142,73 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+// ─── SQLite Session Store ──────────────────────────────────────────────────────
+// Substitui o MemoryStore padrão (volátil) por um store SQLite persistente.
+// Isso garante que as sessões sobrevivam a restarts do container no Railway.
+import { Store } from "express-session";
+
+class SqliteSessionStore extends Store {
+  private db: typeof import("better-sqlite3").prototype;
+
+  constructor(sqliteDb: any) {
+    super();
+    this.db = sqliteDb;
+    // Cria tabela de sessões se não existir
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS http_sessions (
+        sid TEXT PRIMARY KEY,
+        sess TEXT NOT NULL,
+        expired INTEGER NOT NULL
+      )
+    `);
+    // Limpa sessões expiradas a cada 15 min
+    setInterval(() => {
+      try {
+        this.db.prepare("DELETE FROM http_sessions WHERE expired < ?").run(Date.now());
+      } catch {}
+    }, 15 * 60 * 1000).unref();
+  }
+
+  get(sid: string, cb: (err?: any, session?: session.SessionData | null) => void) {
+    try {
+      const row = this.db.prepare("SELECT sess FROM http_sessions WHERE sid = ? AND expired > ?").get(sid, Date.now()) as { sess: string } | undefined;
+      cb(null, row ? JSON.parse(row.sess) : null);
+    } catch (e) { cb(e); }
+  }
+
+  set(sid: string, sessionData: session.SessionData, cb?: (err?: any) => void) {
+    try {
+      const maxAge = sessionData.cookie?.maxAge ?? 7 * 24 * 60 * 60 * 1000;
+      const expired = Date.now() + maxAge;
+      this.db.prepare(
+        "INSERT OR REPLACE INTO http_sessions (sid, sess, expired) VALUES (?, ?, ?)"
+      ).run(sid, JSON.stringify(sessionData), expired);
+      cb?.();
+    } catch (e) { cb?.(e); }
+  }
+
+  destroy(sid: string, cb?: (err?: any) => void) {
+    try {
+      this.db.prepare("DELETE FROM http_sessions WHERE sid = ?").run(sid);
+      cb?.();
+    } catch (e) { cb?.(e); }
+  }
+
+  touch(sid: string, sessionData: session.SessionData, cb?: (err?: any) => void) {
+    try {
+      const maxAge = sessionData.cookie?.maxAge ?? 7 * 24 * 60 * 60 * 1000;
+      const expired = Date.now() + maxAge;
+      this.db.prepare("UPDATE http_sessions SET expired = ? WHERE sid = ?").run(expired, sid);
+      cb?.();
+    } catch (e) { cb?.(e); }
+  }
+}
+
 // Session
 const isProduction = process.env.NODE_ENV === "production";
 app.use(
   session({
+    store: new SqliteSessionStore(db),
     secret: process.env.SESSION_SECRET ?? "tecfag-secret-2024",
     resave: false,
     saveUninitialized: false,
@@ -177,28 +240,46 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
+// ─── Ping (ultra-leve, sem DB, sem session — diagnóstico de 502) ──────────────
+app.get("/api/ping", (_req, res) => {
+  res.json({ pong: true, ts: Date.now(), uptime: process.uptime() });
+});
+
 // ─── Auth routes ─────────────────────────────────────────────────────────────
 
 // POST /api/login
 app.post("/api/login", (req, res) => {
+  const t0 = Date.now();
+  console.log(`[LOGIN] ► Request de ${req.ip} | origin: ${req.headers.origin} | email: ${req.body?.email}`);
+
   const { email, password } = req.body as { email: string; password: string };
   if (!email || !password) {
+    console.log(`[LOGIN] ✗ 400 — campos faltando (${Date.now() - t0}ms)`);
     return res.status(400).json({ message: "Email e senha são obrigatórios" });
   }
 
   const user = storage.getUserByEmail(email);
   if (!user) {
+    console.log(`[LOGIN] ✗ 401 — email não encontrado: ${email} (${Date.now() - t0}ms)`);
     return res.status(401).json({ message: "E-mail ou senha incorretos" });
   }
 
   const valid = bcrypt.compareSync(password, user.password);
   if (!valid) {
+    console.log(`[LOGIN] ✗ 401 — senha incorreta para ${email} (${Date.now() - t0}ms)`);
     return res.status(401).json({ message: "E-mail ou senha incorretos" });
   }
 
   (req.session as any).userId = user.id;
-  const { password: _pw, ...safeUser } = user;
-  return res.json({ user: safeUser });
+  req.session.save((err) => {
+    if (err) {
+      console.error(`[LOGIN] ✗ 500 — erro ao salvar sessão: ${err.message} (${Date.now() - t0}ms)`);
+      return res.status(500).json({ message: "Erro interno ao criar sessão" });
+    }
+    const { password: _pw, ...safeUser } = user;
+    console.log(`[LOGIN] ✓ 200 — ${email} logado com sucesso (${Date.now() - t0}ms)`);
+    return res.json({ user: safeUser });
+  });
 });
 
 // POST /api/logout
