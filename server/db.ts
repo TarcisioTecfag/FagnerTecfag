@@ -22,13 +22,31 @@ const DB_PATH = path.join(__dirname, "..", "data", "app.db");
 
 // Garante que a pasta data/ existe
 const dataDir = path.join(__dirname, "..", "data");
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+try {
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+} catch (e) {
+  console.error(`❌ Não foi possível criar o diretório de dados: ${dataDir}`, e);
+  console.error("   Verifique se o volume /app/data está montado no Railway.");
+  process.exit(1);
 }
 
-export const db = new Database(DB_PATH);
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+let db: Database.Database;
+try {
+  db = new Database(DB_PATH);
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  console.log(`✅ Banco SQLite aberto em: ${DB_PATH}`);
+} catch (e) {
+  console.error("❌ Falha ao abrir o banco SQLite:", e);
+  console.error("   Possível causa: binário nativo better-sqlite3 não compilado para esta plataforma.");
+  console.error("   Execute: npm rebuild better-sqlite3 --update-binary");
+  process.exit(1);
+}
+
+export { db };
+export default db;
 
 // ─── Schema SQLite ───────────────────────────────────────────────────────────
 // Cria todas as tabelas que o sistema precisa (idempotente via IF NOT EXISTS).
@@ -139,5 +157,3 @@ db.exec(`
     createdAt TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
-
-export default db;
