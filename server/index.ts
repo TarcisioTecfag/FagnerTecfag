@@ -1084,6 +1084,14 @@ wssLogs.on("connection", (ws) => {
 // WebSocket server for chat events (/ws/chat)
 const wssChat = new WebSocketServer({ noServer: true });
 
+// ─── Live Chat: registra rotas REST ─────────────────────────────────────────
+registerLiveChatRoutes(app);
+
+// ─── WebSocket server para /ws/livechat ─────────────────────────────────────
+// Criado aqui para usar o MESMO handler 'upgrade' acima (evita conflito)
+const wssLiveChat = new WebSocketServer({ noServer: true });
+initLiveChatWs(httpServer, wssLiveChat);
+
 httpServer.on("upgrade", (req, socket, head) => {
   const url = req.url ?? "";
   if (url === "/ws/logs") {
@@ -1095,15 +1103,13 @@ httpServer.on("upgrade", (req, socket, head) => {
       wssChat.emit("connection", ws, req);
     });
   } else if (url === "/ws/livechat") {
-    // Handled by initLiveChatWs — pass through (don't destroy)
+    wssLiveChat.handleUpgrade(req, socket as any, head, (ws) => {
+      wssLiveChat.emit("connection", ws, req);
+    });
   } else {
     socket.destroy();
   }
 });
-
-// ─── Live Chat: registra rotas e WebSocket ─────────────────────────────────
-registerLiveChatRoutes(app);
-initLiveChatWs(httpServer);
 
 
 // ─── Servidor: escuta na porta PRIMEIRO para o healthcheck do Railway passar ──

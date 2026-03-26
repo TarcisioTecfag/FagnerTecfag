@@ -256,20 +256,22 @@ async function startProactiveTimer(visitorId: string): Promise<void> {
 
 // ─── Init WebSocket server ────────────────────────────────────────────────────
 
-export function initLiveChatWs(server: http.Server): void {
-  const wss = new WebSocketServer({ noServer: true });
+export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServer): void {
+  // Usa o wss passado externamente (evita dois handlers 'upgrade' conflitantes no mesmo httpServer)
+  // Se não for passado, cria o próprio (compatibilidade com código legado)
+  const wss = externalWss ?? new WebSocketServer({ noServer: true });
 
-  // Handle upgrade — filter by path
-  server.on("upgrade", (request, socket, head) => {
-    const url = new URL(request.url ?? "", `http://${request.headers.host}`);
-
-    if (url.pathname === "/ws/livechat") {
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit("connection", ws, request);
-      });
-    }
-    // Don't handle other paths — let existing WS handlers take them
-  });
+  // Só registra o próprio upgrade handler se NÃO recebemos um wss externo
+  if (!externalWss) {
+    server.on("upgrade", (request, socket, head) => {
+      const url = new URL(request.url ?? "", `http://${request.headers.host}`);
+      if (url.pathname === "/ws/livechat") {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit("connection", ws, request);
+        });
+      }
+    });
+  }
 
   wss.on("connection", (ws, request) => {
     const connectionId = uuidv4();
