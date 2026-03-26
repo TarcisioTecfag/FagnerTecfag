@@ -148,7 +148,7 @@ function scoreColor(score: number): string {
 // â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function LiveChat() {
-  const [activeTab, setActiveTab] = useState<"chats" | "visitors" | "crm" | "stats">("chats");
+  const [activeTab, setActiveTab] = useState<"chats" | "visitors" | "crm" | "arquivados" | "atencao" | "stats">("chats");
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -158,6 +158,9 @@ function LiveChat() {
   const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
   const [allVisitors, setAllVisitors] = useState<Visitor[]>([]);
   const [pipelineData, setPipelineData] = useState<Record<string, Visitor[]>>({});
+  const [attentionOpen, setAttentionOpen] = useState(false);
+  const [attentionReason, setAttentionReason] = useState("Falta de informação");
+  const [attentionObs, setAttentionObs] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -201,6 +204,7 @@ function LiveChat() {
             setVisitors(data.visitors ?? []);
             setChats(data.chats ?? []);
             setStats(data.stats ?? null);
+            if (data.pipeline) setPipelineData(data.pipeline);
             break;
           case "VISITOR_ONLINE":
             setVisitors((prev) => {
@@ -248,6 +252,11 @@ function LiveChat() {
           case "CHAT_CLOSED":
             setChats((prev) => prev.map((c) =>
               c.id === data.chatId ? { ...c, status: "closed" } : c
+            ));
+            break;
+          case "CHAT_FLAGGED":
+            setChats((prev) => prev.map((c) =>
+              c.id === data.chatId ? { ...c, needsHuman: data.needsHuman, mood: data.mood } : c
             ));
             break;
           case "CHAT_TAKEN_OVER":
@@ -326,10 +335,10 @@ function LiveChat() {
       chatId,
       userId: "admin",
     }));
-    toast({ title: "Chat assumido", description: "VocÃª agora estÃ¡ respondendo este chat." });
+    toast({ title: "Chat assumido", description: "Você agora está respondendo este chat." });
   };
 
-  // â”€â”€ Close chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Close chat ───────────────────────────────────────────────────────────
   const handleCloseChat = (chatId: string) => {
     if (!wsRef.current) return;
     wsRef.current.send(JSON.stringify({ type: "CLOSE_CHAT", chatId }));
@@ -337,16 +346,40 @@ function LiveChat() {
     setChatMessages([]);
   };
 
-  // â”€â”€â”€ Derived data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Attention Flag ───────────────────────────────────────────────────────
+  const handleFlagAttention = () => {
+    if (!selectedChat || !wsRef.current) return;
+    
+    // Fagner system uses `needsHuman` to flag it. We'll set needsHuman to "attention" and "mood" to the reason
+    wsRef.current.send(JSON.stringify({ 
+      type: "FLAG_ATTENTION",
+      chatId: selectedChat.id,
+      userId: "admin",
+      attentionReason: attentionReason,
+      attentionObs: attentionObs,
+    }));
+
+    toast({ title: "🚨 Atenção Registrada", description: "O chat foi enviado para a aba de revisão de atenção." });
+    
+    setChats(prev => prev.map(c => c.id === selectedChat.id ? { ...c, needsHuman: "attention", mood: `${attentionReason}: ${attentionObs}` } : c));
+    setAttentionOpen(false);
+    setAttentionObs("");
+  };
+
+  // ─── Derived data ──────────────────────────────────────────────────────────
   const activeChats = chats.filter((c) => c.status !== "closed");
+  const archivedChats = chats.filter((c) => c.status === "closed");
+  const attentionChats = chats.filter((c) => c.needsHuman === "attention" || c.needsHuman === "true");
   const needsHumanChats = chats.filter((c) => c.needsHuman === "true" && c.status !== "closed");
 
-  // â”€â”€â”€ TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── TABS ──────────────────────────────────────────────────────────────────
   const tabs = [
     { id: "chats" as const, label: "Chats", icon: MessageCircle, count: activeChats.length },
     { id: "visitors" as const, label: "Visitantes", icon: Eye, count: visitors.length },
     { id: "crm" as const, label: "CRM", icon: Users },
-    { id: "stats" as const, label: "EstatÃ­sticas", icon: BarChart3 },
+    { id: "arquivados" as const, label: "Arquivados", icon: Layers, count: archivedChats.length },
+    { id: "atencao" as const, label: "Atenção 🚨", icon: AlertTriangle, count: attentionChats.length },
+    { id: "stats" as const, label: "Estatísticas", icon: BarChart3 },
   ];
 
   return (
@@ -439,27 +472,31 @@ function LiveChat() {
       {/* â•â•â• TAB CONTENT (flex-1, overflow-hidden) â•â•â• */}
       <div className="flex-1 overflow-hidden px-6 pb-5">
 
-        {/* â”€â”€â”€ Tab: Chats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        {activeTab === "chats" && (
+        {/* ─── Tabs: Chats, Arquivados, Atenção ──────────────────────────────── */}
+        {(activeTab === "chats" || activeTab === "arquivados" || activeTab === "atencao") && (() => {
+          const currentList = activeTab === "chats" ? activeChats : activeTab === "arquivados" ? archivedChats : attentionChats;
+          const currentTitle = activeTab === "chats" ? "Conversas" : activeTab === "arquivados" ? "Arquivados" : "Em Atenção";
+          
+          return (
           <div className="h-full flex gap-4 animate-tab-enter">
             {/* Chat list panel */}
             <div className="w-[320px] flex-shrink-0 flex flex-col bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-1.5">
                   <Layers className="w-4 h-4 text-red-500" />
-                  Conversas
+                  {currentTitle}
                 </h3>
-                <span className="text-[10px] text-zinc-400 font-medium">{activeChats.length} ativas</span>
+                <span className="text-[10px] text-zinc-400 font-medium">{currentList.length} itens</span>
               </div>
 
               <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-                {activeChats.length === 0 ? (
+                {currentList.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-zinc-400">
                     <MessageCircle className="w-10 h-10 mb-2 opacity-20" />
-                    <p className="text-xs">Nenhuma conversa ativa</p>
+                    <p className="text-xs">Nenhum chat listado</p>
                   </div>
                 ) : (
-                  activeChats.map((chat) => {
+                  currentList.map((chat) => {
                     const sb = statusBadge(chat.status);
                     const isSelected = selectedChat?.id === chat.id;
                     const isUrgent = chat.needsHuman === "true";
@@ -540,7 +577,7 @@ function LiveChat() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 relative">
                       {selectedChat.status === "ai_active" && (
                         <Button
                           size="sm"
@@ -552,6 +589,45 @@ function LiveChat() {
                           Assumir
                         </Button>
                       )}
+                      
+                      {/* Botão de Atenção */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAttentionOpen(!attentionOpen)}
+                        className="h-8 text-xs gap-1.5 border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300 relative"
+                      >
+                        🚨 Atenção
+                      </Button>
+
+                      {/* Dropdown de Atenção manual */}
+                      {attentionOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-zinc-200 p-4 z-50">
+                          <h4 className="text-sm font-bold text-zinc-800 mb-3">Marcar para Atenção</h4>
+                          <select 
+                            className="w-full text-sm p-2 border border-zinc-200 rounded-lg mb-3"
+                            value={attentionReason}
+                            onChange={(e) => setAttentionReason(e.target.value)}
+                          >
+                            <option value="Falta de informação">Falta de informação</option>
+                            <option value="Não respondeu">Não respondeu</option>
+                            <option value="Não entendeu o cliente">Não entendeu o cliente</option>
+                            <option value="Parou de responder">Parou de responder</option>
+                            <option value="Outro problema técnico">Outro problema técnico</option>
+                          </select>
+                          <Textarea 
+                            placeholder="Observação (opcional)"
+                            className="text-sm min-h-[60px] mb-3"
+                            value={attentionObs}
+                            onChange={(e) => setAttentionObs(e.target.value)}
+                          />
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => setAttentionOpen(false)}>Cancelar</Button>
+                            <Button size="sm" onClick={handleFlagAttention} className="bg-orange-500 hover:bg-orange-600">Salvar Flag</Button>
+                          </div>
+                        </div>
+                      )}
+
                       <Button
                         size="sm"
                         onClick={() => handleCloseChat(selectedChat.id)}
@@ -627,7 +703,7 @@ function LiveChat() {
                       <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-emerald-50/60 border border-emerald-100">
                         <Bot className="w-4 h-4 text-emerald-500" />
                         <p className="text-[11px] text-emerald-700 font-medium">
-                          Fagner estÃ¡ conduzindo este atendimento. Clique em "Assumir" para intervir.
+                          Fagner está conduzindo este atendimento. Clique em "Assumir" para intervir.
                         </p>
                       </div>
                     )}
@@ -644,9 +720,9 @@ function LiveChat() {
               )}
             </div>
           </div>
-        )}
+        )})()}
 
-        {/* â”€â”€â”€ Tab: Visitantes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ─── Tab: Visitantes ──────────────────────────────────────────── */}
         {activeTab === "visitors" && (
           <div className="h-full flex flex-col bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden animate-tab-enter">
             {/* Header */}
@@ -664,7 +740,7 @@ function LiveChat() {
                 <div className="flex flex-col items-center justify-center h-full text-zinc-400">
                   <Eye className="w-12 h-12 mb-3 opacity-20" />
                   <p className="text-sm font-medium">Nenhum visitante online</p>
-                  <p className="text-[11px]">Os visitantes aparecerÃ£o aqui em tempo real</p>
+                  <p className="text-[11px]">Os visitantes aparecerão aqui em tempo real</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -762,7 +838,7 @@ function LiveChat() {
                 { stage: "em_atendimento", label: "Em Atendimento", color: "#3b82f6", bgLight: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.3)" },
                 { stage: "finalizado_com_venda", label: "Finalizou Com Venda", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
                 { stage: "finalizado_sem_venda", label: "Finalizou Sem Venda", color: "#ef4444", bgLight: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.3)" },
-                { stage: "sem_resposta", label: "NÃ£o Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
+                { stage: "sem_resposta", label: "Não Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
               ].map((col) => {
                 const items = pipelineData[col.stage] || [];
                 return (

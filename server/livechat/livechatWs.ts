@@ -597,11 +597,18 @@ export function initLiveChatWs(server: http.Server): void {
               lcStorage.getStats(),
             ]);
 
+            const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
+            const pipeline: Record<string, any[]> = {};
+            for (const stage of stages) {
+              pipeline[stage] = await lcStorage.listVisitorsByPipeline(stage);
+            }
+
             ws.send(JSON.stringify({
               type: "INIT_STATE",
               visitors,
               chats,
               stats,
+              pipeline,
             }));
             break;
           }
@@ -643,6 +650,27 @@ export function initLiveChatWs(server: http.Server): void {
               agentId: data.userId,
               content: data.content,
               timestamp: new Date().toISOString(),
+            });
+            break;
+          }
+
+          // ── AGENT: Flag Attention ─────────────────────────────────
+          case "FLAG_ATTENTION": {
+            const chatToFlag = await lcStorage.getChatById(data.chatId);
+            if (!chatToFlag) break;
+            
+            const moodScore = data.attentionObs ? `${data.attentionReason}: ${data.attentionObs}` : data.attentionReason;
+            await lcStorage.updateChat(chatToFlag.id, {
+              needsHuman: "attention",
+              mood: moodScore,
+            });
+
+            // Optionally notify other agents so their dashboards update in real-time
+            broadcastToAgents({
+              type: "CHAT_FLAGGED",
+              chatId: chatToFlag.id,
+              needsHuman: "attention",
+              mood: moodScore
             });
             break;
           }
