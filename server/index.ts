@@ -114,6 +114,9 @@ function getAllowedOrigin(origin: string | undefined): string | null {
     process.env.FRONTEND_URL,        // ex: https://fagner-tecfag.vercel.app
     /\.vercel\.app$/,
     /\.railway\.app$/,
+    /tecfag\.com\.br$/,              // site principal VTEX
+    /\.vtexcommercestable\.com\.br$/,// domínio VTEX stable
+    /\.myvtex\.com$/,                // domínio VTEX dev
     /^https?:\/\/localhost(:\d+)?$/,
     /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
   ].some((p) => {

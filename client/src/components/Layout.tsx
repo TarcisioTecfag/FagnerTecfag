@@ -322,13 +322,13 @@ export default function Layout({ children }: LayoutProps) {
         <div
           key={location}
           className={`flex-1 animate-page-enter ${
-            location === "/" || location === "/monitor" || location === "/crm" || location === "/knowledge" || location === "/users" || location === "/costs" || location === "/vtex" || location === "/conversas"
+            location === "/" || location === "/monitor" || location === "/crm" || location === "/knowledge" || location === "/users" || location === "/costs" || location === "/vtex" || location === "/conversas" || location === "/livechat"
               ? "overflow-hidden flex flex-col"
               : "overflow-y-auto p-8"
           }`}
         >
           <div className={
-            location === "/" || location === "/monitor" || location === "/crm" || location === "/knowledge" || location === "/users" || location === "/costs" || location === "/vtex" || location === "/conversas"
+            location === "/" || location === "/monitor" || location === "/crm" || location === "/knowledge" || location === "/users" || location === "/costs" || location === "/vtex" || location === "/conversas" || location === "/livechat"
               ? "flex-1 h-full overflow-hidden flex flex-col"
               : "max-w-6xl mx-auto"
           }>

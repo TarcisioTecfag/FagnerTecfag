@@ -16,6 +16,7 @@ import http from "http";
 import { v4 as uuidv4 } from "uuid";
 import { lcStorage } from "./livechatStorage.js";
 import { processVisitorMessage, generateProactiveMessage, clearAISession } from "./livechatAI.js";
+import { recalculateVisitorCategory } from "./livechatScoring.js";
 
 // ─── Connection maps ─────────────────────────────────────────────────────────
 
@@ -222,6 +223,7 @@ export function initLiveChatWs(server: http.Server): void {
                 source: visitor.source ?? source,
               });
               visitorId = visitor!.id;
+              await recalculateVisitorCategory(visitorId);
             } else {
               // New visitor
               const geo = await geoLookup(ip);
@@ -294,6 +296,7 @@ export function initLiveChatWs(server: http.Server): void {
               await lcStorage.updateVisitor(visitorId, {
                 engagementScore: Math.min((visitor.engagementScore ?? 0) + scoreBoost, 100),
               });
+              await recalculateVisitorCategory(visitorId);
             }
 
             broadcastToAgents({
@@ -321,6 +324,7 @@ export function initLiveChatWs(server: http.Server): void {
                 await lcStorage.updateVisitor(visitorId, {
                   engagementScore: Math.min((v.engagementScore ?? 0) + 1, 100),
                 });
+                await recalculateVisitorCategory(visitorId);
               }
             }
             break;
@@ -345,6 +349,7 @@ export function initLiveChatWs(server: http.Server): void {
                 await lcStorage.updateVisitor(visitorId, {
                   engagementScore: Math.min((v.engagementScore ?? 0) + 20, 100),
                 });
+                await recalculateVisitorCategory(visitorId);
               }
             }
 
