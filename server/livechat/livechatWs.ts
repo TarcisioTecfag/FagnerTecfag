@@ -595,10 +595,15 @@ export function initLiveChatWs(server: http.Server): void {
             role = "agent";
             agentConnections.set(connectionId, { ws, userId: data.userId });
 
-            // Send current state
+            // Migrar visitantes com pipelineStage null (criados antes do fix)
+            try {
+              await lcStorage.migrateNullPipelineStages();
+            } catch {}
+
+            // Envia todos os visitantes recentes (não só online) para popular o painel
             const [visitors, chats, stats] = await Promise.all([
-              lcStorage.listOnlineVisitors(),
-              lcStorage.listChats(undefined, 50),
+              lcStorage.listAllVisitors(200),
+              lcStorage.listChats(undefined, 100),
               lcStorage.getStats(),
             ]);
 

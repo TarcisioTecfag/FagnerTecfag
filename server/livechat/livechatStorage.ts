@@ -149,6 +149,13 @@ export const lcStorage = {
       .limit(limit);
   },
 
+  // Migração: define pipelineStage para visitantes que ficaram com null
+  async migrateNullPipelineStages(): Promise<void> {
+    await db.update(lcVisitors)
+      .set({ pipelineStage: "novo_atendimento" })
+      .where(sql`"pipelineStage" IS NULL`);
+  },
+
   async getPipelineStats(): Promise<Record<string, number>> {
     const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
     const result: Record<string, number> = {};
