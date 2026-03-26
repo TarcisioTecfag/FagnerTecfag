@@ -330,9 +330,14 @@ export function initLiveChatWs(server: http.Server): void {
             }
 
             // Set pipeline stage to novo_atendimento for new/returning visitors
-            if (visitor && visitor.pipelineStage !== 'em_atendimento' && visitor.pipelineStage !== 'finalizado_com_venda') {
+            if (visitor && !visitor.pipelineStage) {
+              await lcStorage.updateVisitorPipeline(visitorId, "novo_atendimento");
+            } else if (visitor && visitor.pipelineStage !== 'em_atendimento' && visitor.pipelineStage !== 'finalizado_com_venda') {
               await lcStorage.updateVisitorPipeline(visitorId, "novo_atendimento");
             }
+
+            // Ensure isOnline is always set to true on reconnect
+            await lcStorage.setVisitorOnline(visitorId);
 
             // Store connection
             visitorConnections.set(visitorId, { ws, visitorId });

@@ -283,8 +283,25 @@ function LiveChat() {
       } catch {}
     };
 
-    ws.onerror = () => {};
-    ws.onclose = () => {};
+    ws.onerror = (e) => {
+      console.error("[LiveChat WS] erro:", e);
+    };
+
+    ws.onclose = () => {
+      // Reconectar após 3 segundos
+      setTimeout(() => {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+          const protocol2 = window.location.protocol === "https:" ? "wss:" : "ws:";
+          const wsUrl2 = `${protocol2}//${window.location.host}/ws/livechat`;
+          const ws2 = new WebSocket(wsUrl2);
+          wsRef.current = ws2;
+          ws2.onopen = () => ws2.send(JSON.stringify({ type: "AGENT_CONNECT", userId: "admin" }));
+          ws2.onerror = () => {};
+          ws2.onclose = ws.onclose;
+          ws2.onmessage = ws.onmessage;
+        }
+      }, 3000);
+    };
 
     const interval = setInterval(fetchData, 15000);
     return () => {
@@ -328,22 +345,37 @@ function LiveChat() {
   };
 
   // â”€â”€ Take over chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleTakeOver = (chatId: string) => {
-    if (!wsRef.current) return;
-    wsRef.current.send(JSON.stringify({
-      type: "TAKE_OVER",
-      chatId,
-      userId: "admin",
-    }));
+  const handleTakeOver = async (chatId: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "TAKE_OVER", chatId, userId: "admin" }));
+    }
+    try {
+      await fetch(`/api/livechat/chats/${chatId}/take-over`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "admin" }),
+      });
+    } catch {}
+    setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, status: "human_active" } : c));
     toast({ title: "Chat assumido", description: "Você agora está respondendo este chat." });
   };
 
   // ── Close chat ───────────────────────────────────────────────────────────
-  const handleCloseChat = (chatId: string) => {
-    if (!wsRef.current) return;
-    wsRef.current.send(JSON.stringify({ type: "CLOSE_CHAT", chatId }));
-    setSelectedChat(null);
-    setChatMessages([]);
+  const handleCloseChat = async (chatId: string) => {
+    // Notifica o visitante via WS (se disponível)
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "CLOSE_CHAT", chatId }));
+    }
+    // REST garante que o BD é atualizado mesmo se WS estiver offline
+    try {
+      await fetch(`/api/livechat/chats/${chatId}/close`, { method: "POST", credentials: "include" });
+    } catch {}
+    // Atualizar estado local imediatamente
+    setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, status: "closed" } : c));
+    if (selectedChat?.id === chatId) {
+      setSelectedChat(null);
+      setChatMessages([]);
+    }
   };
 
   // ── Attention Flag ───────────────────────────────────────────────────────
@@ -369,7 +401,8 @@ function LiveChat() {
   // ─── Derived data ──────────────────────────────────────────────────────────
   const activeChats = chats.filter((c) => c.status !== "closed");
   const archivedChats = chats.filter((c) => c.status === "closed");
-  const attentionChats = chats.filter((c) => c.needsHuman === "attention" || c.needsHuman === "true");
+  // Atenção: apenas chats explicitamente marcados pelo admin (needsHuman === "attention")
+  const attentionChats = chats.filter((c) => c.needsHuman === "attention");
   const needsHumanChats = chats.filter((c) => c.needsHuman === "true" && c.status !== "closed");
 
   // ─── TABS ──────────────────────────────────────────────────────────────────
@@ -541,7 +574,15 @@ function LiveChat() {
                           </span>
                         </div>
 
-                        {isUrgent && (
+                        {/* Na aba Atenção, mostrar motivo do flag */}
+                        {activeTab === "atencao" && chat.mood && (
+                          <div className="flex items-start gap-1 mt-1 px-2 py-1 rounded-md bg-orange-50 border border-orange-100">
+                            <span className="text-[10px]">🚨</span>
+                            <span className="text-[10px] text-orange-700 font-medium line-clamp-2">{chat.mood}</span>
+                          </div>
+                        )}
+                        {/* Nas outras abas, mostrar badge genérico de urgência */}
+                        {activeTab !== "atencao" && isUrgent && (
                           <div className="flex items-center gap-1 mt-1 px-2 py-1 rounded-md bg-red-50 border border-red-100">
                             <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
                             <span className="text-[10px] text-red-600 font-medium">Fagner precisa de ajuda!</span>
@@ -578,69 +619,91 @@ function LiveChat() {
                       </div>
                     </div>
                     <div className="flex gap-2 relative">
-                      {selectedChat.status === "ai_active" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleTakeOver(selectedChat.id)}
-                          className="h-8 text-xs gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300"
-                        >
-                          <User className="w-3 h-3" />
-                          Assumir
-                        </Button>
-                      )}
-                      
-                      {/* Botão de Atenção */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setAttentionOpen(!attentionOpen)}
-                        className="h-8 text-xs gap-1.5 border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300 relative"
-                      >
-                        🚨 Atenção
-                      </Button>
+                      {/* Botões de ação: ocultos na aba de Atenção (somente leitura) */}
+                      {activeTab !== "atencao" && (
+                        <>
+                          {selectedChat.status === "ai_active" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleTakeOver(selectedChat.id)}
+                              className="h-8 text-xs gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300"
+                            >
+                              <User className="w-3 h-3" />
+                              Assumir
+                            </Button>
+                          )}
 
-                      {/* Dropdown de Atenção manual */}
-                      {attentionOpen && (
-                        <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-zinc-200 p-4 z-50">
-                          <h4 className="text-sm font-bold text-zinc-800 mb-3">Marcar para Atenção</h4>
-                          <select 
-                            className="w-full text-sm p-2 border border-zinc-200 rounded-lg mb-3"
-                            value={attentionReason}
-                            onChange={(e) => setAttentionReason(e.target.value)}
+                          {/* Botão de Atenção */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setAttentionOpen(!attentionOpen)}
+                            className="h-8 text-xs gap-1.5 border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300 relative"
                           >
-                            <option value="Falta de informação">Falta de informação</option>
-                            <option value="Não respondeu">Não respondeu</option>
-                            <option value="Não entendeu o cliente">Não entendeu o cliente</option>
-                            <option value="Parou de responder">Parou de responder</option>
-                            <option value="Outro problema técnico">Outro problema técnico</option>
-                          </select>
-                          <Textarea 
-                            placeholder="Observação (opcional)"
-                            className="text-sm min-h-[60px] mb-3"
-                            value={attentionObs}
-                            onChange={(e) => setAttentionObs(e.target.value)}
-                          />
-                          <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="ghost" onClick={() => setAttentionOpen(false)}>Cancelar</Button>
-                            <Button size="sm" onClick={handleFlagAttention} className="bg-orange-500 hover:bg-orange-600">Salvar Flag</Button>
-                          </div>
-                        </div>
+                            🚨 Atenção
+                          </Button>
+
+                          {/* Dropdown de Atenção manual */}
+                          {attentionOpen && (
+                            <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-zinc-200 p-4 z-50">
+                              <h4 className="text-sm font-bold text-zinc-800 mb-3">Marcar para Atenção</h4>
+                              <select
+                                className="w-full text-sm p-2 border border-zinc-200 rounded-lg mb-3"
+                                value={attentionReason}
+                                onChange={(e) => setAttentionReason(e.target.value)}
+                              >
+                                <option value="Falta de informação">Falta de informação</option>
+                                <option value="Não respondeu">Não respondeu</option>
+                                <option value="Não entendeu o cliente">Não entendeu o cliente</option>
+                                <option value="Parou de responder">Parou de responder</option>
+                                <option value="Outro problema técnico">Outro problema técnico</option>
+                              </select>
+                              <Textarea
+                                placeholder="Observação (opcional)"
+                                className="text-sm min-h-[60px] mb-3"
+                                value={attentionObs}
+                                onChange={(e) => setAttentionObs(e.target.value)}
+                              />
+                              <div className="flex justify-end gap-2">
+                                <Button size="sm" variant="ghost" onClick={() => setAttentionOpen(false)}>Cancelar</Button>
+                                <Button size="sm" onClick={handleFlagAttention} className="bg-orange-500 hover:bg-orange-600">Salvar Flag</Button>
+                              </div>
+                            </div>
+                          )}
+
+                          <Button
+                            size="sm"
+                            onClick={() => handleCloseChat(selectedChat.id)}
+                            className="h-8 text-xs"
+                            style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
+                          >
+                            Encerrar
+                          </Button>
+                        </>
                       )}
 
-                      <Button
-                        size="sm"
-                        onClick={() => handleCloseChat(selectedChat.id)}
-                        className="h-8 text-xs"
-                        style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
-                      >
-                        Encerrar
-                      </Button>
+                      {/* Badge somente leitura quando visualizando aba Atenção */}
+                      {activeTab === "atencao" && (
+                        <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+                          👁 Visualização — somente leitura
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Messages area */}
                   <div className="flex-1 overflow-y-auto p-5 space-y-3" style={{ background: "linear-gradient(180deg, hsl(0 0% 98.5%) 0%, hsl(0 0% 97%) 100%)" }}>
+                    {/* Card de motivo — visível apenas na aba Atenção */}
+                    {activeTab === "atencao" && selectedChat.mood && (
+                      <div className="mb-4 p-4 rounded-xl bg-orange-50 border border-orange-200 flex gap-3">
+                        <span className="text-2xl">🚨</span>
+                        <div>
+                          <p className="text-sm font-bold text-orange-800 mb-0.5">Motivo do Flag</p>
+                          <p className="text-sm text-orange-700">{selectedChat.mood}</p>
+                        </div>
+                      </div>
+                    )}
                     {chatMessages.map((msg) => {
                       const isVisitor = msg.sender === "visitor";
                       const isAI = msg.sender === "ai";

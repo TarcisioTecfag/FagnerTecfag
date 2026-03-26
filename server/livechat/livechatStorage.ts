@@ -70,6 +70,8 @@ export const lcStorage = {
       utmMedium: data.utmMedium ?? null,
       utmCampaign: data.utmCampaign ?? null,
       referrer: data.referrer ?? null,
+      isOnline: "true",
+      pipelineStage: "novo_atendimento",
     });
     return (await this.getVisitorById(id))!;
   },
@@ -101,15 +103,26 @@ export const lcStorage = {
   },
 
   async listOnlineVisitors(): Promise<LcVisitor[]> {
+    // Primary: isOnline flag. Also include visitors seen in the last 3 minutes as fallback.
+    const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
     return db.select().from(lcVisitors)
-      .where(eq(lcVisitors.isOnline, "true"))
-      .orderBy(desc(lcVisitors.lastSeenAt));
+      .where(
+        sql`"isOnline" = 'true' OR "lastSeenAt" >= ${cutoff}`
+      )
+      .orderBy(desc(lcVisitors.lastSeenAt))
+      .limit(200);
   },
 
   async listAllVisitors(limit = 100): Promise<LcVisitor[]> {
     return db.select().from(lcVisitors)
       .orderBy(desc(lcVisitors.lastSeenAt))
       .limit(limit);
+  },
+
+  async setVisitorOnline(id: string): Promise<void> {
+    await db.update(lcVisitors)
+      .set({ isOnline: "true", lastSeenAt: new Date().toISOString() })
+      .where(eq(lcVisitors.id, id));
   },
 
   async setVisitorOffline(id: string): Promise<void> {

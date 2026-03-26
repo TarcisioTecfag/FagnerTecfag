@@ -84,6 +84,16 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json({ ok: true });
   });
 
+  router.post("/chats/:id/take-over", requireAuth, async (req: Request, res: Response) => {
+    const { userId } = req.body;
+    await lcStorage.updateChat(p(req.params.id), {
+      status: "human_active",
+      agentId: userId ?? "admin",
+      needsHuman: "false",
+    });
+    return res.json({ ok: true });
+  });
+
   router.post("/chats/:id/read", requireAuth, async (req: Request, res: Response) => {
     await lcStorage.markMessagesRead(p(req.params.id));
     return res.json({ ok: true });
