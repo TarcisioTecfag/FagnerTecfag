@@ -1,12 +1,12 @@
 /**
  * client/src/pages/LiveChat.tsx
  *
- * Painel de monitoramento do Live Chat — REFATORADO
- * 4 abas: Chats | Visitantes | CRM | Estatísticas
+ * Painel de monitoramento do Live Chat â€” REFATORADO
+ * 4 abas: Chats | Visitantes | CRM | EstatÃ­sticas
  * 
  * Layout 100vh fixo, scroll apenas interno.
- * Fagner atende 100% via IA — este painel é para MONITORAMENTO.
- * Opção de assumir manualmente em emergência.
+ * Fagner atende 100% via IA â€” este painel Ã© para MONITORAMENTO.
+ * OpÃ§Ã£o de assumir manualmente em emergÃªncia.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -38,7 +38,7 @@ import {
   Layers,
 } from "lucide-react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface Visitor {
   id: string;
@@ -59,6 +59,7 @@ interface Visitor {
   category: string;
   engagementScore: number;
   isOnline: string;
+  pipelineStage: string;
   firstSeenAt: string;
   lastSeenAt: string;
 }
@@ -94,37 +95,37 @@ interface Stats {
   totalVisitorsToday: number;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function categoryLabel(cat: string): { label: string; emoji: string; color: string; bg: string } {
   switch (cat) {
-    case "lead_hot": return { label: "Lead Quente", emoji: "🔴", color: "text-red-400", bg: "bg-red-500/15 border-red-500/20" };
-    case "lead_warm": return { label: "Lead Morno", emoji: "🟡", color: "text-yellow-400", bg: "bg-yellow-500/15 border-yellow-500/20" };
-    case "customer": return { label: "Cliente", emoji: "⭐", color: "text-blue-400", bg: "bg-blue-500/15 border-blue-500/20" };
-    case "returning": return { label: "Retorno", emoji: "🔄", color: "text-purple-400", bg: "bg-purple-500/15 border-purple-500/20" };
-    default: return { label: "Visitante", emoji: "🟢", color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/20" };
+    case "lead_hot": return { label: "Lead Quente", emoji: "ðŸ”´", color: "text-red-400", bg: "bg-red-500/15 border-red-500/20" };
+    case "lead_warm": return { label: "Lead Morno", emoji: "ðŸŸ¡", color: "text-yellow-400", bg: "bg-yellow-500/15 border-yellow-500/20" };
+    case "customer": return { label: "Cliente", emoji: "â­", color: "text-blue-400", bg: "bg-blue-500/15 border-blue-500/20" };
+    case "returning": return { label: "Retorno", emoji: "ðŸ”„", color: "text-purple-400", bg: "bg-purple-500/15 border-purple-500/20" };
+    default: return { label: "Visitante", emoji: "ðŸŸ¢", color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/20" };
   }
 }
 
 function statusBadge(status: string): { label: string; icon: string; color: string; bg: string } {
   switch (status) {
-    case "ai_active": return { label: "IA Ativa", icon: "🤖", color: "text-emerald-300", bg: "bg-emerald-500/15" };
-    case "human_active": return { label: "Agente", icon: "👤", color: "text-blue-300", bg: "bg-blue-500/15" };
-    case "waiting": return { label: "Aguardando", icon: "⏳", color: "text-yellow-300", bg: "bg-yellow-500/15" };
-    case "closed": return { label: "Encerrado", icon: "✅", color: "text-zinc-400", bg: "bg-zinc-500/15" };
-    default: return { label: status, icon: "❓", color: "text-zinc-400", bg: "bg-zinc-500/15" };
+    case "ai_active": return { label: "IA Ativa", icon: "ðŸ¤–", color: "text-emerald-300", bg: "bg-emerald-500/15" };
+    case "human_active": return { label: "Agente", icon: "ðŸ‘¤", color: "text-blue-300", bg: "bg-blue-500/15" };
+    case "waiting": return { label: "Aguardando", icon: "â³", color: "text-yellow-300", bg: "bg-yellow-500/15" };
+    case "closed": return { label: "Encerrado", icon: "âœ…", color: "text-zinc-400", bg: "bg-zinc-500/15" };
+    default: return { label: status, icon: "â“", color: "text-zinc-400", bg: "bg-zinc-500/15" };
   }
 }
 
 function sourceLabel(src?: string): { label: string; icon: string } {
   switch (src) {
-    case "google_organic": return { label: "Google Orgânico", icon: "🔍" };
-    case "google_ads": return { label: "Google Ads", icon: "📢" };
-    case "instagram": return { label: "Instagram", icon: "📸" };
-    case "facebook": return { label: "Facebook", icon: "📘" };
-    case "youtube": return { label: "YouTube", icon: "▶️" };
-    case "direct": return { label: "Direto", icon: "🔗" };
-    default: return { label: src ?? "Outro", icon: "🌐" };
+    case "google_organic": return { label: "Google OrgÃ¢nico", icon: "ðŸ”" };
+    case "google_ads": return { label: "Google Ads", icon: "ðŸ“¢" };
+    case "instagram": return { label: "Instagram", icon: "ðŸ“¸" };
+    case "facebook": return { label: "Facebook", icon: "ðŸ“˜" };
+    case "youtube": return { label: "YouTube", icon: "â–¶ï¸" };
+    case "direct": return { label: "Direto", icon: "ðŸ”—" };
+    default: return { label: src ?? "Outro", icon: "ðŸŒ" };
   }
 }
 
@@ -144,7 +145,7 @@ function scoreColor(score: number): string {
   return "from-emerald-500 to-teal-500";
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function LiveChat() {
   const [activeTab, setActiveTab] = useState<"chats" | "visitors" | "crm" | "stats">("chats");
@@ -156,28 +157,30 @@ function LiveChat() {
   const [agentInput, setAgentInput] = useState("");
   const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
   const [allVisitors, setAllVisitors] = useState<Visitor[]>([]);
-  const [crmFilter, setCrmFilter] = useState<string>("all");
+  const [pipelineData, setPipelineData] = useState<Record<string, Visitor[]>>({});
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // ── Fetch initial data ────────────────────────────────────────────
+  // â”€â”€ Fetch initial data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchData = useCallback(async () => {
     try {
-      const [visitorsRes, chatsRes, statsRes, allVisitorsRes] = await Promise.all([
+      const [visitorsRes, chatsRes, statsRes, allVisitorsRes, pipelineRes] = await Promise.all([
         fetch("/api/livechat/visitors", { credentials: "include" }),
         fetch("/api/livechat/chats", { credentials: "include" }),
         fetch("/api/livechat/stats", { credentials: "include" }),
         fetch("/api/livechat/visitors/all?limit=200", { credentials: "include" }),
+        fetch("/api/livechat/pipeline", { credentials: "include" }),
       ]);
       if (visitorsRes.ok) setVisitors(await visitorsRes.json());
       if (chatsRes.ok) setChats(await chatsRes.json());
       if (statsRes.ok) setStats(await statsRes.json());
       if (allVisitorsRes.ok) setAllVisitors(await allVisitorsRes.json());
+      if (pipelineRes.ok) setPipelineData(await pipelineRes.json());
     } catch {}
   }, []);
 
-  // ── WebSocket connection ──────────────────────────────────────────
+  // â”€â”€ WebSocket connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     fetchData();
 
@@ -234,7 +237,7 @@ function LiveChat() {
             break;
           case "NEEDS_HUMAN":
             toast({
-              title: "⚠️ Fagner precisa de ajuda!",
+              title: "âš ï¸ Fagner precisa de ajuda!",
               description: data.message,
               variant: "destructive",
             });
@@ -251,6 +254,21 @@ function LiveChat() {
             setChats((prev) => prev.map((c) =>
               c.id === data.chatId ? { ...c, status: "human_active" } : c
             ));
+            break;
+          case "PIPELINE_UPDATE":
+            if (data.visitor) {
+              setPipelineData((prev) => {
+                const next = { ...prev };
+                // Remove visitor from all stages
+                for (const stage of Object.keys(next)) {
+                  next[stage] = (next[stage] || []).filter((v: Visitor) => v.id !== data.visitorId);
+                }
+                // Add to new stage
+                if (!next[data.stage]) next[data.stage] = [];
+                next[data.stage] = [data.visitor, ...next[data.stage]];
+                return next;
+              });
+            }
             break;
         }
       } catch {}
@@ -271,7 +289,7 @@ function LiveChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  // ── Load chat messages ────────────────────────────────────────────
+  // â”€â”€ Load chat messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const loadChatMessages = async (chat: Chat) => {
     setSelectedChat(chat);
     try {
@@ -280,7 +298,7 @@ function LiveChat() {
     } catch {}
   };
 
-  // ── Agent send message (human takeover) ───────────────────────────
+  // â”€â”€ Agent send message (human takeover) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleAgentSend = () => {
     if (!agentInput.trim() || !selectedChat || !wsRef.current) return;
     wsRef.current.send(JSON.stringify({
@@ -300,7 +318,7 @@ function LiveChat() {
     setAgentInput("");
   };
 
-  // ── Take over chat ───────────────────────────────────────────────
+  // â”€â”€ Take over chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleTakeOver = (chatId: string) => {
     if (!wsRef.current) return;
     wsRef.current.send(JSON.stringify({
@@ -308,10 +326,10 @@ function LiveChat() {
       chatId,
       userId: "admin",
     }));
-    toast({ title: "Chat assumido", description: "Você agora está respondendo este chat." });
+    toast({ title: "Chat assumido", description: "VocÃª agora estÃ¡ respondendo este chat." });
   };
 
-  // ── Close chat ────────────────────────────────────────────────────
+  // â”€â”€ Close chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleCloseChat = (chatId: string) => {
     if (!wsRef.current) return;
     wsRef.current.send(JSON.stringify({ type: "CLOSE_CHAT", chatId }));
@@ -319,26 +337,22 @@ function LiveChat() {
     setChatMessages([]);
   };
 
-  // ─── Derived data ─────────────────────────────────────────────────
+  // â”€â”€â”€ Derived data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const activeChats = chats.filter((c) => c.status !== "closed");
   const needsHumanChats = chats.filter((c) => c.needsHuman === "true" && c.status !== "closed");
 
-  const filteredCrmVisitors = crmFilter === "all"
-    ? allVisitors
-    : allVisitors.filter((v) => v.category === crmFilter);
-
-  // ─── TABS ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const tabs = [
     { id: "chats" as const, label: "Chats", icon: MessageCircle, count: activeChats.length },
     { id: "visitors" as const, label: "Visitantes", icon: Eye, count: visitors.length },
     { id: "crm" as const, label: "CRM", icon: Users },
-    { id: "stats" as const, label: "Estatísticas", icon: BarChart3 },
+    { id: "stats" as const, label: "EstatÃ­sticas", icon: BarChart3 },
   ];
 
   return (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(0 0% 97%) 0%, hsl(0 5% 95%) 100%)" }}>
 
-      {/* ═══ COMPACT HEADER ═══ */}
+      {/* â•â•â• COMPACT HEADER â•â•â• */}
       <div className="flex-shrink-0 px-6 pt-5 pb-3">
         {/* Row 1: Title + Stats + Refresh */}
         <div className="flex items-center justify-between mb-3">
@@ -422,10 +436,10 @@ function LiveChat() {
         </div>
       </div>
 
-      {/* ═══ TAB CONTENT (flex-1, overflow-hidden) ═══ */}
+      {/* â•â•â• TAB CONTENT (flex-1, overflow-hidden) â•â•â• */}
       <div className="flex-1 overflow-hidden px-6 pb-5">
 
-        {/* ─── Tab: Chats ─────────────────────────────────────────── */}
+        {/* â”€â”€â”€ Tab: Chats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {activeTab === "chats" && (
           <div className="h-full flex gap-4 animate-tab-enter">
             {/* Chat list panel */}
@@ -481,7 +495,7 @@ function LiveChat() {
                                 {chat.visitorName || "Visitante"}
                               </p>
                               <p className="text-[10px] text-zinc-400">
-                                {chat.source === "proactive" ? "Proativo" : "Widget"} • {timeAgo(chat.startedAt)}
+                                {chat.source === "proactive" ? "Proativo" : "Widget"} â€¢ {timeAgo(chat.startedAt)}
                               </p>
                             </div>
                           </div>
@@ -521,7 +535,7 @@ function LiveChat() {
                           <span className={`${statusBadge(selectedChat.status).color}`}>
                             {statusBadge(selectedChat.status).icon} {statusBadge(selectedChat.status).label}
                           </span>
-                          <span>•</span>
+                          <span>â€¢</span>
                           <span>Iniciado {timeAgo(selectedChat.startedAt)}</span>
                         </div>
                       </div>
@@ -577,7 +591,7 @@ function LiveChat() {
                               {isAI && <Bot className="w-3 h-3" />}
                               {msg.sender === "agent" && <User className="w-3 h-3" />}
                               <span>{isVisitor ? "Visitante" : isAI ? "Fagner (IA)" : "Agente"}</span>
-                              <span>• {timeAgo(msg.sentAt)}</span>
+                              <span>â€¢ {timeAgo(msg.sentAt)}</span>
                             </div>
                             <p className="whitespace-pre-wrap">{msg.content}</p>
                           </div>
@@ -613,7 +627,7 @@ function LiveChat() {
                       <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-emerald-50/60 border border-emerald-100">
                         <Bot className="w-4 h-4 text-emerald-500" />
                         <p className="text-[11px] text-emerald-700 font-medium">
-                          Fagner está conduzindo este atendimento. Clique em "Assumir" para intervir.
+                          Fagner estÃ¡ conduzindo este atendimento. Clique em "Assumir" para intervir.
                         </p>
                       </div>
                     )}
@@ -632,7 +646,7 @@ function LiveChat() {
           </div>
         )}
 
-        {/* ─── Tab: Visitantes ────────────────────────────────────── */}
+        {/* â”€â”€â”€ Tab: Visitantes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {activeTab === "visitors" && (
           <div className="h-full flex flex-col bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden animate-tab-enter">
             {/* Header */}
@@ -650,7 +664,7 @@ function LiveChat() {
                 <div className="flex flex-col items-center justify-center h-full text-zinc-400">
                   <Eye className="w-12 h-12 mb-3 opacity-20" />
                   <p className="text-sm font-medium">Nenhum visitante online</p>
-                  <p className="text-[11px]">Os visitantes aparecerão aqui em tempo real</p>
+                  <p className="text-[11px]">Os visitantes aparecerÃ£o aqui em tempo real</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -676,7 +690,7 @@ function LiveChat() {
                             <div>
                               <p className="text-sm font-semibold text-zinc-800 flex items-center gap-1.5">
                                 <MapPin className="w-3 h-3 text-zinc-400" />
-                                {v.city || "—"}{v.country ? `, ${v.country}` : ""}
+                                {v.city || "â€”"}{v.country ? `, ${v.country}` : ""}
                               </p>
                               <p className="text-[10px] text-zinc-400">{v.browser}</p>
                             </div>
@@ -738,229 +752,200 @@ function LiveChat() {
           </div>
         )}
 
-        {/* ─── Tab: CRM ──────────────────────────────────────────── */}
+        {/* â”€â”€â”€ Tab: CRM Kanban â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {activeTab === "crm" && (
-          <div className="h-full flex gap-4 animate-tab-enter">
-            {/* Left panel: Filter + List */}
-            <div className="flex-1 flex flex-col bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden">
-              {/* Category filter row */}
-              <div className="px-4 py-3 border-b border-zinc-100">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {[
-                    { id: "all", label: "Todos", count: allVisitors.length, emoji: "📋" },
-                    { id: "lead_hot", label: "Quentes", count: allVisitors.filter(v => v.category === "lead_hot").length, emoji: "🔴" },
-                    { id: "lead_warm", label: "Mornos", count: allVisitors.filter(v => v.category === "lead_warm").length, emoji: "🟡" },
-                    { id: "customer", label: "Clientes", count: allVisitors.filter(v => v.category === "customer").length, emoji: "⭐" },
-                    { id: "returning", label: "Retorno", count: allVisitors.filter(v => v.category === "returning").length, emoji: "🔄" },
-                    { id: "visitor", label: "Visitantes", count: allVisitors.filter(v => v.category === "visitor").length, emoji: "🟢" },
-                  ].map((f) => (
-                    <button
-                      key={f.id}
-                      onClick={() => setCrmFilter(f.id)}
-                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
-                        crmFilter === f.id
-                          ? "bg-red-50 text-red-700 border border-red-200 shadow-sm"
-                          : "text-zinc-500 hover:bg-zinc-50 border border-transparent"
-                      }`}
-                    >
-                      <span>{f.emoji}</span>
-                      {f.label}
-                      <span className={`px-1 py-0 rounded text-[9px] font-bold ${
-                        crmFilter === f.id ? "bg-red-200/50 text-red-700" : "bg-zinc-100 text-zinc-400"
-                      }`}>
-                        {f.count}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Visitor list */}
-              <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-                {filteredCrmVisitors.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-zinc-400">
-                    <Users className="w-10 h-10 mb-2 opacity-20" />
-                    <p className="text-xs">Nenhum visitante nesta categoria</p>
-                  </div>
-                ) : (
-                  filteredCrmVisitors.map((v) => {
-                    const cat = categoryLabel(v.category);
-                    const isSelected = selectedVisitor?.id === v.id;
-
-                    return (
-                      <div
-                        key={v.id}
-                        onClick={() => setSelectedVisitor(isSelected ? null : v)}
-                        className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200 border ${
-                          isSelected
-                            ? "border-red-200 shadow-md"
-                            : "border-transparent hover:border-zinc-100 hover:bg-zinc-50/50"
-                        }`}
-                        style={isSelected ? { background: "linear-gradient(135deg, rgba(127,29,29,0.04), rgba(220,38,38,0.02))" } : {}}
-                      >
-                        {/* Avatar */}
-                        <div className="relative flex-shrink-0">
-                          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-zinc-100 to-zinc-200 flex items-center justify-center text-xs font-bold text-zinc-500">
-                            {(v.city || "?")[0].toUpperCase()}
-                          </div>
-                          {v.isOnline === "true" && (
-                            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white" />
-                          )}
+          <div className="h-full flex flex-col animate-tab-enter">
+            {/* Kanban columns */}
+            <div className="flex-1 flex gap-3 overflow-x-auto overflow-y-hidden pb-2">
+              {[
+                { stage: "novo_atendimento", label: "Novo Atendimento", color: "#22c55e", bgLight: "rgba(34,197,94,0.06)", borderColor: "rgba(34,197,94,0.3)" },
+                { stage: "em_atendimento", label: "Em Atendimento", color: "#3b82f6", bgLight: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.3)" },
+                { stage: "finalizado_com_venda", label: "Finalizou Com Venda", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
+                { stage: "finalizado_sem_venda", label: "Finalizou Sem Venda", color: "#ef4444", bgLight: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.3)" },
+                { stage: "sem_resposta", label: "NÃ£o Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
+              ].map((col) => {
+                const items = pipelineData[col.stage] || [];
+                return (
+                  <div
+                    key={col.stage}
+                    className="flex-1 min-w-[220px] max-w-[280px] flex flex-col bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden"
+                  >
+                    {/* Column header with color bar */}
+                    <div className="flex-shrink-0">
+                      <div className="h-1 w-full" style={{ background: col.color }} />
+                      <div className="px-3 py-2.5 border-b border-zinc-100" style={{ background: col.bgLight }}>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-[11px] font-bold text-zinc-700 leading-tight">{col.label}</h4>
+                          <span
+                            className="px-1.5 py-0.5 rounded-md text-[10px] font-bold text-white"
+                            style={{ background: col.color }}
+                          >
+                            {items.length}
+                          </span>
                         </div>
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-zinc-800 truncate">{v.city || "Desconhecido"}</p>
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${cat.bg}`}>
-                              {cat.emoji} {cat.label}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-400">
-                            <span>{v.browser}</span>
-                            <span>•</span>
-                            <span>{v.totalVisits} visitas</span>
-                            <span>•</span>
-                            <span>{v.totalChats} chats</span>
-                          </div>
-                        </div>
-
-                        {/* Score + Time */}
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-8 h-1.5 rounded-full bg-zinc-100 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full bg-gradient-to-r ${scoreColor(v.engagementScore)}`}
-                                style={{ width: `${Math.min(v.engagementScore, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] font-bold text-zinc-600 w-5 text-right">{v.engagementScore}</span>
-                          </div>
-                          <span className="text-[10px] text-zinc-300">{timeAgo(v.lastSeenAt)}</span>
-                        </div>
-
-                        {isSelected && <ChevronRight className="w-4 h-4 text-red-400 flex-shrink-0" />}
                       </div>
-                    );
-                  })
-                )}
-              </div>
+                    </div>
+
+                    {/* Scrollable card list */}
+                    <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                      {items.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-zinc-300">
+                          <Users className="w-6 h-6 mb-1.5 opacity-40" />
+                          <p className="text-[10px]">Nenhum</p>
+                        </div>
+                      ) : (
+                        items.map((v: Visitor) => {
+                          const src = sourceLabel(v.source);
+                          const isSelected = selectedVisitor?.id === v.id;
+
+                          return (
+                            <div
+                              key={v.id}
+                              onClick={() => setSelectedVisitor(isSelected ? null : v)}
+                              className={`p-2.5 rounded-xl border cursor-pointer transition-all duration-200 hover:shadow-md group ${
+                                isSelected
+                                  ? "shadow-md"
+                                  : "hover:border-zinc-200"
+                              }`}
+                              style={{
+                                borderColor: isSelected ? col.borderColor : "rgba(228,228,231,0.6)",
+                                background: isSelected ? col.bgLight : "white",
+                              }}
+                            >
+                              {/* Name + online status */}
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="relative">
+                                    <div
+                                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold text-white"
+                                      style={{ background: col.color }}
+                                    >
+                                      {(v.city || "?")[0].toUpperCase()}
+                                    </div>
+                                    {v.isOnline === "true" && (
+                                      <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-white" />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="text-[11px] font-semibold text-zinc-800 leading-tight truncate max-w-[120px]">
+                                      {v.city || "Visitante"}
+                                    </p>
+                                    <p className="text-[9px] text-zinc-400">{v.browser}</p>
+                                  </div>
+                                </div>
+                                <span className="text-[9px] text-zinc-300">{timeAgo(v.lastSeenAt)}</span>
+                              </div>
+
+                              {/* Score bar */}
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <div className="flex-1 h-1 rounded-full bg-zinc-100 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full bg-gradient-to-r ${scoreColor(v.engagementScore)}`}
+                                    style={{ width: `${Math.min(v.engagementScore, 100)}%` }}
+                                  />
+                                </div>
+                                <span className="text-[9px] font-bold text-zinc-500 w-4 text-right">{v.engagementScore}</span>
+                              </div>
+
+                              {/* Meta info */}
+                              <div className="flex items-center gap-2 text-[9px] text-zinc-400">
+                                <span>{src.icon} {src.label}</span>
+                                <span>â€¢ {v.totalChats} chats</span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Right panel: Detail card */}
-            <div className={`w-[360px] flex-shrink-0 transition-all duration-300 ${selectedVisitor ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`}>
-              {selectedVisitor && (
-                <div className="h-full bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-y-auto animate-tab-enter">
-                  {/* Detail header */}
-                  <div className="px-5 py-4 border-b border-zinc-100">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold text-white" style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}>
-                        {(selectedVisitor.city || "?")[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-zinc-800">
-                          {selectedVisitor.city || "Desconhecido"}
-                        </h3>
-                        <p className="text-[11px] text-zinc-400">
-                          {selectedVisitor.country} • {selectedVisitor.browser}
-                        </p>
-                      </div>
+            {/* Detail panel (compact overlay at bottom) */}
+            {selectedVisitor && (
+              <div className="flex-shrink-0 mt-3 bg-white rounded-2xl border border-zinc-200/60 shadow-lg overflow-hidden animate-pop-in" style={{ maxHeight: "220px" }}>
+                <div className="flex h-full">
+                  {/* Left: visitor info */}
+                  <div className="flex-1 p-4 flex items-start gap-4 overflow-y-auto">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center text-base font-bold text-white flex-shrink-0" style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}>
+                      {(selectedVisitor.city || "?")[0].toUpperCase()}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${categoryLabel(selectedVisitor.category).bg}`}>
-                        {categoryLabel(selectedVisitor.category).emoji} {categoryLabel(selectedVisitor.category).label}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                        selectedVisitor.isOnline === "true"
-                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                          : "bg-zinc-50 text-zinc-500 border border-zinc-200"
-                      }`}>
-                        {selectedVisitor.isOnline === "true" ? "🟢 Online" : "⚫ Offline"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Score section */}
-                  <div className="px-5 py-4 border-b border-zinc-100">
-                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">Engagement Score</p>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2.5 rounded-full bg-zinc-100 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full bg-gradient-to-r ${scoreColor(selectedVisitor.engagementScore)} transition-all duration-700`}
-                          style={{ width: `${Math.min(selectedVisitor.engagementScore, 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-lg font-bold text-zinc-800">{selectedVisitor.engagementScore}</span>
-                      <span className="text-[10px] text-zinc-400">/100</span>
-                    </div>
-                  </div>
-
-                  {/* Metrics grid */}
-                  <div className="px-5 py-4 border-b border-zinc-100">
-                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-3">📈 Métricas</p>
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { label: "Visitas", value: selectedVisitor.totalVisits, icon: Activity },
-                        { label: "Páginas", value: selectedVisitor.totalPages, icon: Layers },
-                        { label: "Chats", value: selectedVisitor.totalChats, icon: MessageCircle },
-                      ].map((m) => (
-                        <div key={m.label} className="text-center p-2.5 rounded-xl bg-zinc-50 border border-zinc-100">
-                          <m.icon className="w-4 h-4 mx-auto text-zinc-400 mb-1" />
-                          <p className="text-lg font-bold text-zinc-800">{m.value}</p>
-                          <p className="text-[9px] text-zinc-400 font-medium">{m.label}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Source info */}
-                  <div className="px-5 py-4 border-b border-zinc-100">
-                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-3">📊 Origem</p>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs text-zinc-600">
-                        <MousePointer className="w-3.5 h-3.5 text-zinc-400" />
-                        <span>{sourceLabel(selectedVisitor.source).icon} {sourceLabel(selectedVisitor.source).label}</span>
-                      </div>
-                      {selectedVisitor.utmCampaign && (
-                        <div className="flex items-center gap-2 text-xs text-zinc-600">
-                          <Zap className="w-3.5 h-3.5 text-zinc-400" />
-                          <span>Campanha: {selectedVisitor.utmCampaign}</span>
-                        </div>
-                      )}
-                      {selectedVisitor.currentPage && (
-                        <div className="flex items-center gap-2 text-xs text-zinc-600">
-                          <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
-                          <span className="truncate">{selectedVisitor.currentPageTitle ?? selectedVisitor.currentPage}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Activity timeline */}
-                  <div className="px-5 py-4">
-                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-3">🕐 Atividade</p>
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-500">Primeiro acesso</span>
-                        <span className="text-zinc-700 font-medium">
-                          {new Date(selectedVisitor.firstSeenAt).toLocaleDateString("pt-BR")}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-sm font-bold text-zinc-800">{selectedVisitor.city || "Desconhecido"}</h3>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${categoryLabel(selectedVisitor.category).bg}`}>
+                          {categoryLabel(selectedVisitor.category).emoji} {categoryLabel(selectedVisitor.category).label}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                          selectedVisitor.isOnline === "true"
+                            ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                            : "bg-zinc-50 text-zinc-500 border border-zinc-200"
+                        }`}>
+                          {selectedVisitor.isOnline === "true" ? "ðŸŸ¢ Online" : "âš« Offline"}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-500">Última atividade</span>
+                      <p className="text-[11px] text-zinc-400 mb-2">{selectedVisitor.country} â€¢ {selectedVisitor.browser} â€¢ {sourceLabel(selectedVisitor.source).icon} {sourceLabel(selectedVisitor.source).label}</p>
+
+                      <div className="flex items-center gap-4">
+                        {[
+                          { label: "Visitas", value: selectedVisitor.totalVisits },
+                          { label: "PÃ¡ginas", value: selectedVisitor.totalPages },
+                          { label: "Chats", value: selectedVisitor.totalChats },
+                          { label: "Score", value: `${selectedVisitor.engagementScore}/100` },
+                        ].map((m) => (
+                          <div key={m.label} className="text-center">
+                            <p className="text-base font-bold text-zinc-800">{m.value}</p>
+                            <p className="text-[9px] text-zinc-400">{m.label}</p>
+                          </div>
+                        ))}
+                        <div className="flex-1 max-w-[120px]">
+                          <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full bg-gradient-to-r ${scoreColor(selectedVisitor.engagementScore)}`}
+                              style={{ width: `${Math.min(selectedVisitor.engagementScore, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: activity timeline */}
+                  <div className="w-[280px] flex-shrink-0 border-l border-zinc-100 p-4 overflow-y-auto">
+                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">ðŸ• Atividade</p>
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-500">Primeiro acesso</span>
+                        <span className="text-zinc-700 font-medium">{new Date(selectedVisitor.firstSeenAt).toLocaleDateString("pt-BR")}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-500">Ãšltima atividade</span>
                         <span className="text-zinc-700 font-medium">{timeAgo(selectedVisitor.lastSeenAt)}</span>
                       </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-500">Primeiro acesso (hora)</span>
-                        <span className="text-zinc-700 font-medium">
-                          {new Date(selectedVisitor.firstSeenAt).toLocaleString("pt-BR")}
-                        </span>
-                      </div>
+                      {selectedVisitor.currentPage && (
+                        <div className="flex items-center gap-1 mt-1.5 px-2 py-1 rounded-lg bg-zinc-50 border border-zinc-100">
+                          <ExternalLink className="w-3 h-3 text-zinc-400 flex-shrink-0" />
+                          <span className="text-[10px] text-zinc-600 truncate">{selectedVisitor.currentPageTitle || selectedVisitor.currentPage}</span>
+                        </div>
+                      )}
+                      {selectedVisitor.utmCampaign && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <Zap className="w-3 h-3 text-zinc-400" />
+                          <span className="text-[10px] text-zinc-600">Campanha: {selectedVisitor.utmCampaign}</span>
+                        </div>
+                      )}
                     </div>
+                    <button
+                      onClick={() => setSelectedVisitor(null)}
+                      className="mt-3 w-full text-[10px] text-zinc-400 hover:text-zinc-600 transition-colors py-1"
+                    >
+                      âœ• Fechar
+                    </button>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 

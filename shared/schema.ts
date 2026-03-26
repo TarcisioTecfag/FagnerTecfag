@@ -151,6 +151,8 @@ export const lcVisitors = pgTable("lc_visitors", {
   category: text("category").notNull().default("visitor"),   // 'visitor', 'lead_warm', 'lead_hot', 'customer', 'returning'
   engagementScore: integer("engagementScore").notNull().default(0),
   isOnline: text("isOnline").notNull().default("true"),
+  pipelineStage: text("pipelineStage").notNull().default("novo_atendimento"),
+  // Valores: 'novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'
   firstSeenAt: text("firstSeenAt").notNull().default(sql`now()::text`),
   lastSeenAt: text("lastSeenAt").notNull().default(sql`now()::text`),
 });

@@ -92,6 +92,7 @@ export const lcStorage = {
         category: data.category ?? existing.category,
         engagementScore: data.engagementScore ?? existing.engagementScore,
         isOnline: data.isOnline ?? existing.isOnline,
+        pipelineStage: (data as any).pipelineStage ?? existing.pipelineStage,
         lastSeenAt: new Date().toISOString(),
       })
       .where(eq(lcVisitors.id, id));
@@ -115,6 +116,36 @@ export const lcStorage = {
     await db.update(lcVisitors)
       .set({ isOnline: "false", lastSeenAt: new Date().toISOString() })
       .where(eq(lcVisitors.id, id));
+  },
+
+  // ── Pipeline CRM ────────────────────────────────────────────────────
+
+  async updateVisitorPipeline(id: string, stage: string): Promise<LcVisitor | null> {
+    const existing = await this.getVisitorById(id);
+    if (!existing) return null;
+    await db.update(lcVisitors)
+      .set({ pipelineStage: stage, lastSeenAt: new Date().toISOString() })
+      .where(eq(lcVisitors.id, id));
+    return this.getVisitorById(id);
+  },
+
+  async listVisitorsByPipeline(stage: string, limit = 200): Promise<LcVisitor[]> {
+    return db.select().from(lcVisitors)
+      .where(eq(lcVisitors.pipelineStage, stage))
+      .orderBy(desc(lcVisitors.lastSeenAt))
+      .limit(limit);
+  },
+
+  async getPipelineStats(): Promise<Record<string, number>> {
+    const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
+    const result: Record<string, number> = {};
+    for (const stage of stages) {
+      const [row] = await db.select({ c: sql<number>`count(*)` })
+        .from(lcVisitors)
+        .where(eq(lcVisitors.pipelineStage, stage));
+      result[stage] = Number(row?.c ?? 0);
+    }
+    return result;
   },
 
   async incrementVisitorPages(id: string): Promise<void> {

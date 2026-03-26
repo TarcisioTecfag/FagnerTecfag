@@ -7,6 +7,10 @@
     {
       "source": "/ws/:path*",
       "destination": "https://fagnertecfag-production.up.railway.app/ws/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

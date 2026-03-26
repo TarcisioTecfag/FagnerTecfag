@@ -71,8 +71,23 @@ Profissional, humano, prestativo e consultivo. Como um vendedor experiente de lo
 4. NUNCA use asteriscos, bullets, negrito ou listas. Só texto corrido.
 5. NUNCA diga que "não encontrou" ou "não tem" um produto. A Tecfag trabalha com uma ampla linha — se não achou no catálogo online, diga que tem e prossiga.
 6. Quando encontrar um produto no catálogo, envie o link naturalmente na conversa.
-7. Se NÃO souber responder algo, diga: "Vou verificar isso pra você, só um momento!" — NUNCA invente informação.
+7. Se NÃO souber responder algo técnico específico, diga que vai verificar com a equipe técnica. NUNCA invente informação.
 8. Português fluente, como uma conversa natural.
+9. SEJA BREVE! Respostas curtas e diretas. Máximo 2-3 frases por mensagem. Quanto mais curto, melhor.
+10. NUNCA comece com frases longas de boas-vindas. Vá direto ao ponto.
+
+## SAUDAÇÕES
+Quando o cliente mandar uma saudação simples (oi, olá, bom dia, boa tarde, etc):
+- Responda com uma saudação CURTA e natural, seguida de uma pergunta direta.
+- Exemplo: "Boa tarde! 😊 Em que posso te ajudar hoje?"
+- NUNCA responda com frases longas ou se apresente formalmente na primeira mensagem de resposta.
+- Se o cliente apenas disse "oi", NÃO peça informações — apenas cumprimente e pergunte como pode ajudar.
+
+## SINALIZAÇÃO DE RESULTADO (OBRIGATÓRIO)
+Ao final de CADA resposta sua, AVALIE silenciosamente o rumo da conversa. Se detectar um desfecho claro, inclua UMA das tags abaixo NO FINAL ABSOLUTO da sua mensagem (depois do texto):
+- [OUTCOME:SALE] → Quando o cliente CONFIRMA que vai comprar, solicita orçamento formal, pede para fechar negócio, ou fornece dados para faturamento. Só use quando há intenção CLARA de compra.
+- [OUTCOME:NO_SALE] → Quando o cliente diz explicitamente que NÃO tem interesse, que já comprou de outro, que não vai prosseguir, ou se despede sem intenção de compra.
+Se a conversa ainda está em andamento, NÃO inclua nenhuma tag. Essas tags são INVISÍVEIS para o cliente.
 
 ## IDENTIDADE
 - Nome: Fagner
@@ -219,20 +234,22 @@ export async function processVisitorMessage(
     const candidateTokens: number = data?.usageMetadata?.candidatesTokenCount ?? 0;
     const totalTokens = promptTokens + candidateTokens;
 
-    // Update history
+    // Strip outcome tags from visible reply (keep raw for detection in livechatWs)
+    const cleanReply = raw.replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "").trim();
+
+    // Update history (use clean reply in history too)
     session.history.push({ role: "user", parts: userParts });
-    session.history.push({ role: "model", parts: [{ text: raw }] });
+    session.history.push({ role: "model", parts: [{ text: cleanReply }] });
     if (session.history.length > 60) session.history = session.history.slice(-60);
 
     // Check if AI doesn't know — triggers human takeover
+    // More strict patterns to avoid false positives
     const DONT_KNOW_PATTERNS = [
-      /vou verificar/i,
-      /só um momento/i,
-      /vou consultar/i,
-      /deixa eu ver/i,
-      /aguarde.*que.*volto/i,
+      /vou verificar.*equipe/i,
+      /vou consultar.*técnic/i,
+      /preciso verificar.*especificação/i,
     ];
-    const needsHuman = DONT_KNOW_PATTERNS.some((p) => p.test(raw));
+    const needsHuman = DONT_KNOW_PATTERNS.some((p) => p.test(cleanReply));
 
     // Log cost
     try {
@@ -245,12 +262,13 @@ export async function processVisitorMessage(
       });
     } catch {}
 
+    // Return raw (with outcome tags) so livechatWs can detect outcome, but clean reply for the visitor message
     return { reply: raw, needsHuman, tokens: totalTokens };
   } catch (err: any) {
     console.error("[LiveChat AI] Gemini error:", err.message);
     return {
-      reply: "Vou verificar isso pra você, só um momento!",
-      needsHuman: true,
+      reply: "Desculpa, tive um probleminha aqui! Pode repetir?",
+      needsHuman: false,
       tokens: 0,
     };
   }
@@ -270,10 +288,14 @@ Você é Fagner, representante comercial da Tecfag. Um visitante está no site h
 URL: ${pageUrl}
 ${pageTitle ? `Título: ${pageTitle}` : ""}
 
-Gere UMA mensagem curta e natural de abordagem (máx 2 frases). Seja simpático mas não invasivo.
-Mencione o produto/página que ele está vendo se possível.
-NÃO use asteriscos, bullets ou formatação. Só texto corrido.
-Responda SOMENTE com a mensagem, nada mais.
+Aja exatamente como solicitado e cumpra TODAS estas regras:
+1. Comece com uma saudação dependendo da hora atual (bom dia, boa tarde ou boa noite).
+2. Comente brevemente sobre o dia da semana ("Que segunda perfeita", "Nessa bela quinta-feira", etc) de forma alegre.
+3. Se apresente: "meu nome é Fagner".
+4. Pergunte como pode ajudar.
+Exemplo de estilo desejado: "Boa tarde! Que segunda perfeita, meu nome é Fagner, como posso te ajudar hoje?"
+
+NÃO USE asteriscos, bullets ou formatação. Apenas o texto direto. Responda SOMENTE com a mensagem.
 `.trim();
 
   try {

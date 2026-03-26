@@ -34,6 +34,18 @@ interface AgentConnection {
 
 const visitorConnections = new Map<string, VisitorConnection>();
 const agentConnections = new Map<string, AgentConnection>();
+interface FollowUpTimers {
+  t3m?: NodeJS.Timeout;
+  t8m?: NodeJS.Timeout;
+  t10m?: NodeJS.Timeout;
+}
+const followUpTimers = new Map<string, FollowUpTimers>();
+
+interface ChatMessageBuffer {
+  timer: NodeJS.Timeout;
+  content: string[];
+}
+const chatMessageBuffers = new Map<string, ChatMessageBuffer>();
 
 // ─── Broadcast to all agents ──────────────────────────────────────────────────
 
@@ -44,6 +56,78 @@ function broadcastToAgents(data: object): void {
       conn.ws.send(payload);
     }
   });
+}
+
+// ─── Broadcast pipeline update to agents ──────────────────────────────────────
+
+async function broadcastPipelineUpdate(visitorId: string, stage: string): Promise<void> {
+  const visitor = await lcStorage.getVisitorById(visitorId);
+  broadcastToAgents({
+    type: "PIPELINE_UPDATE",
+    visitorId,
+    stage,
+    visitor,
+  });
+}
+
+// ─── Follow-up Timers (3m, 8m, 10m limit) ────────────────────────────────────
+
+function startFollowUpTimers(visitorId: string, chatId: string): void {
+  clearFollowUpTimers(visitorId);
+  const timers: FollowUpTimers = {};
+
+  // 3 minutes follow-up
+  timers.t3m = setTimeout(async () => {
+    try {
+      const chat = await lcStorage.getChatById(chatId);
+      if (!chat || chat.status === "closed" || chat.status !== "ai_active") return;
+      
+      const msg = "Opa, você ainda está aí?";
+      await lcStorage.createMessage({ chatId, sender: "ai", content: msg });
+      sendToVisitor(visitorId, { type: "CHAT_REPLY", chatId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
+      broadcastToAgents({ type: "CHAT_MESSAGE", chatId, visitorId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
+    } catch (err: any) { console.error("[Timers] 3m err:", err.message); }
+  }, 3 * 60 * 1000);
+
+  // 8 minutes follow-up
+  timers.t8m = setTimeout(async () => {
+    try {
+      const chat = await lcStorage.getChatById(chatId);
+      if (!chat || chat.status === "closed" || chat.status !== "ai_active") return;
+      
+      const msg = "Ainda posso ajudar com algo? Nosso atendimento é humanizado, fique à vontade para perguntar.";
+      await lcStorage.createMessage({ chatId, sender: "ai", content: msg });
+      sendToVisitor(visitorId, { type: "CHAT_REPLY", chatId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
+      broadcastToAgents({ type: "CHAT_MESSAGE", chatId, visitorId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
+    } catch (err: any) { console.error("[Timers] 8m err:", err.message); }
+  }, 8 * 60 * 1000);
+
+  // 10 minutes closure
+  timers.t10m = setTimeout(async () => {
+    try {
+      const chat = await lcStorage.getChatById(chatId);
+      if (chat && chat.status !== "closed") {
+        await lcStorage.closeChat(chatId);
+        await lcStorage.updateVisitorPipeline(visitorId, "sem_resposta");
+        clearAISession(chatId);
+        broadcastToAgents({ type: "CHAT_CLOSED", chatId });
+        broadcastPipelineUpdate(visitorId, "sem_resposta");
+        console.log(`[LiveChat] Visitante ${visitorId} movido para 'sem_resposta' (timeout 10min)`);
+      }
+    } catch (err: any) { console.error("[Timers] 10m err:", err.message); }
+  }, 10 * 60 * 1000);
+
+  followUpTimers.set(visitorId, timers);
+}
+
+function clearFollowUpTimers(visitorId: string): void {
+  const timers = followUpTimers.get(visitorId);
+  if (timers) {
+    if (timers.t3m) clearTimeout(timers.t3m);
+    if (timers.t8m) clearTimeout(timers.t8m);
+    if (timers.t10m) clearTimeout(timers.t10m);
+    followUpTimers.delete(visitorId);
+  }
 }
 
 // ─── Send to visitor ──────────────────────────────────────────────────────────
@@ -245,6 +329,11 @@ export function initLiveChatWs(server: http.Server): void {
               visitorId = visitor.id;
             }
 
+            // Set pipeline stage to novo_atendimento for new/returning visitors
+            if (visitor && visitor.pipelineStage !== 'em_atendimento' && visitor.pipelineStage !== 'finalizado_com_venda') {
+              await lcStorage.updateVisitorPipeline(visitorId, "novo_atendimento");
+            }
+
             // Store connection
             visitorConnections.set(visitorId, { ws, visitorId });
 
@@ -330,6 +419,26 @@ export function initLiveChatWs(server: http.Server): void {
             break;
           }
 
+          // ── VISITOR: Set name ─────────────────────────────────────
+          case "SET_VISITOR_NAME": {
+            if (!visitorId || !data.name) break;
+            
+            const chat = await lcStorage.getActiveChatByVisitor(visitorId);
+            if (chat) {
+              await lcStorage.updateChat(chat.id, { visitorName: data.name });
+              chat.visitorName = data.name;
+              const visitor = await lcStorage.getVisitorById(visitorId);
+              
+              broadcastToAgents({
+                type: "NEW_CHAT",
+                chat,
+                visitor,
+                proactive: false,
+              });
+            }
+            break;
+          }
+
           // ── VISITOR: Chat message ─────────────────────────────────
           case "CHAT_MESSAGE": {
             if (!visitorId) break;
@@ -342,6 +451,10 @@ export function initLiveChatWs(server: http.Server): void {
                 source: "widget",
                 visitorName: data.visitorName,
               });
+
+              // Pipeline: move to "em_atendimento"
+              await lcStorage.updateVisitorPipeline(visitorId, "em_atendimento");
+              broadcastPipelineUpdate(visitorId, "em_atendimento");
 
               // Engagement: +20 for starting chat
               const v = await lcStorage.getVisitorById(visitorId);
@@ -363,6 +476,9 @@ export function initLiveChatWs(server: http.Server): void {
               content: data.content,
             });
 
+            // Clear no-response timer (visitor responded)
+            clearFollowUpTimers(visitorId);
+
             // Notify agents
             broadcastToAgents({
               type: "CHAT_MESSAGE",
@@ -373,59 +489,98 @@ export function initLiveChatWs(server: http.Server): void {
               timestamp: new Date().toISOString(),
             });
 
-            // If AI is handling this chat, generate response
+            // If AI is handling this chat, buffer message and generate response after 5s
             if (chat.status === "ai_active" || chat.status === "waiting") {
               // Update status to ai_active
               await lcStorage.updateChat(chat.id, { status: "ai_active" });
 
+              // Manage buffer
+              let buffer = chatMessageBuffers.get(chat.id);
+              if (buffer) {
+                clearTimeout(buffer.timer);
+                buffer.content.push(data.content);
+              } else {
+                buffer = { timer: null as any, content: [data.content] };
+                chatMessageBuffers.set(chat.id, buffer);
+              }
+
               // Show typing indicator to visitor
               sendToVisitor(visitorId, { type: "TYPING_START" });
 
-              const visitor = await lcStorage.getVisitorById(visitorId);
-              const aiResponse = await processVisitorMessage(
-                chat.id,
-                data.content,
-                visitor?.currentPage ?? undefined,
-              );
+              const currentVisitorId = visitorId as string;
 
-              sendToVisitor(visitorId, { type: "TYPING_STOP" });
+              // Reset 5s timer
+              buffer.timer = setTimeout(async () => {
+                const combinedContent = chatMessageBuffers.get(chat.id)?.content.join("\n\n") || data.content;
+                chatMessageBuffers.delete(chat.id);
 
-              // Save AI response
-              await lcStorage.createMessage({
-                chatId: chat.id,
-                sender: "ai",
-                content: aiResponse.reply,
-              });
+                const visitor = await lcStorage.getVisitorById(currentVisitorId);
+                const aiResponse = await processVisitorMessage(
+                  chat.id,
+                  combinedContent,
+                  visitor?.currentPage ?? undefined,
+                );
 
-              // Send AI reply to visitor
-              sendToVisitor(visitorId, {
-                type: "CHAT_REPLY",
-                chatId: chat.id,
-                sender: "ai",
-                content: aiResponse.reply,
-                timestamp: new Date().toISOString(),
-              });
+                sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
 
-              // Notify agents about AI reply
-              broadcastToAgents({
-                type: "CHAT_MESSAGE",
-                chatId: chat.id,
-                visitorId,
-                sender: "ai",
-                content: aiResponse.reply,
-                timestamp: new Date().toISOString(),
-              });
+                // Strip outcome tags for visible content
+                const cleanReply = aiResponse.reply.replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "").trim();
 
-              // If AI needs human help
-              if (aiResponse.needsHuman) {
-                await lcStorage.updateChat(chat.id, { needsHuman: "true" });
-                broadcastToAgents({
-                  type: "NEEDS_HUMAN",
+                // Save AI response (clean, without tags)
+                await lcStorage.createMessage({
                   chatId: chat.id,
-                  visitorId,
-                  message: "Fagner precisa de ajuda nesta conversa!",
+                  sender: "ai",
+                  content: cleanReply,
                 });
-              }
+
+                // Send AI reply to visitor (clean)
+                sendToVisitor(currentVisitorId, {
+                  type: "CHAT_REPLY",
+                  chatId: chat.id,
+                  sender: "ai",
+                  content: cleanReply,
+                  timestamp: new Date().toISOString(),
+                });
+
+                // Notify agents about AI reply (clean)
+                broadcastToAgents({
+                  type: "CHAT_MESSAGE",
+                  chatId: chat.id,
+                  visitorId: currentVisitorId,
+                  sender: "ai",
+                  content: cleanReply,
+                  timestamp: new Date().toISOString(),
+                });
+
+                // If AI needs human help
+                if (aiResponse.needsHuman) {
+                  await lcStorage.updateChat(chat.id, { needsHuman: "true" });
+                  broadcastToAgents({
+                    type: "NEEDS_HUMAN",
+                    chatId: chat.id,
+                    visitorId: currentVisitorId,
+                    message: "Fagner precisa de ajuda nesta conversa!",
+                  });
+                }
+
+                // Detect pipeline outcome from AI response
+                if (aiResponse.reply.includes("[OUTCOME:SALE]")) {
+                  await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_com_venda");
+                  await lcStorage.closeChat(chat.id);
+                  clearAISession(chat.id);
+                  broadcastPipelineUpdate(currentVisitorId, "finalizado_com_venda");
+                  broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id });
+                } else if (aiResponse.reply.includes("[OUTCOME:NO_SALE]")) {
+                  await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_sem_venda");
+                  await lcStorage.closeChat(chat.id);
+                  clearAISession(chat.id);
+                  broadcastPipelineUpdate(currentVisitorId, "finalizado_sem_venda");
+                  broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id });
+                }
+
+                // Start follow-ups (3m, 8m, 10m)
+                startFollowUpTimers(currentVisitorId, chat.id);
+              }, 5000); // 5 sec cooldown
             }
             break;
           }
@@ -544,6 +699,12 @@ export function initLiveChatWs(server: http.Server): void {
 
         visitorConnections.delete(visitorId);
         await lcStorage.setVisitorOffline(visitorId);
+
+        // If visitor had an active chat and disconnects, start follow up timeout
+        const activeChat = await lcStorage.getActiveChatByVisitor(visitorId);
+        if (activeChat) {
+          startFollowUpTimers(visitorId, activeChat.id);
+        }
 
         broadcastToAgents({
           type: "VISITOR_OFFLINE",

@@ -102,6 +102,21 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json({ ok: true });
   });
 
+  // ── Pipeline CRM ──────────────────────────────────────────────────
+  router.get("/pipeline", requireAuth, async (_req: Request, res: Response) => {
+    const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
+    const result: Record<string, any[]> = {};
+    for (const stage of stages) {
+      result[stage] = await lcStorage.listVisitorsByPipeline(stage);
+    }
+    return res.json(result);
+  });
+
+  router.get("/pipeline/stats", requireAuth, async (_req: Request, res: Response) => {
+    const stats = await lcStorage.getPipelineStats();
+    return res.json(stats);
+  });
+
   // Mount all routes under /api/livechat
   app.use("/api/livechat", router);
 
