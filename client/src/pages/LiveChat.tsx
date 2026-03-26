@@ -168,17 +168,20 @@ function LiveChat() {
   // â”€â”€ Fetch initial data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchData = useCallback(async () => {
     try {
-      const [visitorsRes, chatsRes, statsRes, allVisitorsRes, pipelineRes] = await Promise.all([
-        fetch("/api/livechat/visitors", { credentials: "include" }),
+      const [chatsRes, statsRes, allVisitorsRes, pipelineRes] = await Promise.all([
         fetch("/api/livechat/chats", { credentials: "include" }),
         fetch("/api/livechat/stats", { credentials: "include" }),
         fetch("/api/livechat/visitors/all?limit=200", { credentials: "include" }),
         fetch("/api/livechat/pipeline", { credentials: "include" }),
       ]);
-      if (visitorsRes.ok) setVisitors(await visitorsRes.json());
       if (chatsRes.ok) setChats(await chatsRes.json());
       if (statsRes.ok) setStats(await statsRes.json());
-      if (allVisitorsRes.ok) setAllVisitors(await allVisitorsRes.json());
+      if (allVisitorsRes.ok) {
+        const allV = await allVisitorsRes.json();
+        setAllVisitors(allV);
+        // Visitors tab mostra todos os recentes, não apenas "online" pelo flag
+        setVisitors(allV);
+      }
       if (pipelineRes.ok) setPipelineData(await pipelineRes.json());
     } catch {}
   }, []);

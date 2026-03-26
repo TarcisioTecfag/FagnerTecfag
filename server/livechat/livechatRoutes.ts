@@ -114,6 +114,8 @@ export function registerLiveChatRoutes(app: any): void {
 
   // ── Pipeline CRM ──────────────────────────────────────────────────
   router.get("/pipeline", requireAuth, async (_req: Request, res: Response) => {
+    // Garantir que visitantes sem pipelineStage sejam classificados
+    try { await lcStorage.migrateNullPipelineStages(); } catch {}
     const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
     const result: Record<string, any[]> = {};
     for (const stage of stages) {
