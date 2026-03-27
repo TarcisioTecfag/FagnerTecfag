@@ -148,6 +148,18 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json(stats);
   });
 
+  // ── Reset Completo (Admin only) ─────────────────────────────────────────────
+  router.delete("/reset-all", requireAuth, async (_req: Request, res: Response) => {
+    try {
+      await lcStorage.resetAllLiveChatData();
+      console.log("[LiveChat] ✅ Reset completo realizado por admin");
+      return res.json({ ok: true, message: "Todos os dados do Live Chat foram apagados." });
+    } catch (err: any) {
+      console.error("[LiveChat] DELETE /reset-all error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
   // Mount all routes under /api/livechat
   app.use("/api/livechat", router);
 

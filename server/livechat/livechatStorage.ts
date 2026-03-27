@@ -136,6 +136,16 @@ export const lcStorage = {
       .where(eq(lcVisitors.id, id));
   },
 
+  // ── Reset Completo ──────────────────────────────────────────────────────────────────
+
+  async resetAllLiveChatData(): Promise<void> {
+    // Deleta na ordem correta respeitando FK: mensagens > chats > pageviews > visitantes
+    await db.execute(sql`DELETE FROM lc_messages`);
+    await db.execute(sql`DELETE FROM lc_chats`);
+    await db.execute(sql`DELETE FROM lc_pageviews`);
+    await db.execute(sql`DELETE FROM lc_visitors`);
+  },
+
   // ── Pipeline CRM ────────────────────────────────────────────────────
 
   async addVisitorNote(visitorId: string, stage: string, content: string) {
