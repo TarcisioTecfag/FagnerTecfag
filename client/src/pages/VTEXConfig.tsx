@@ -171,48 +171,18 @@ const DEFAULT_SETTINGS: TriggerSettings = {
   minConfidence: 75,
 };
 
-const SEED_LOGS: ActionLog[] = [
-  { id: "1", timestamp: new Date(Date.now() - 2 * 60000).toISOString(), type: "search",    description: 'Buscou "Seladora VM 300TE/A"',                    autonomous: true },
-  { id: "2", timestamp: new Date(Date.now() - 2 * 60000).toISOString(), type: "found",     description: "Encontrou produto — disponível",                  autonomous: true },
-  { id: "3", timestamp: new Date(Date.now() - 2 * 60000).toISOString(), type: "link_sent", description: "Link enviado ao cliente automaticamente",          autonomous: true },
-  { id: "4", timestamp: new Date(Date.now() - 5 * 60000).toISOString(), type: "search",    description: 'Buscou "Envasadora XYZ"',                          autonomous: true },
-  { id: "5", timestamp: new Date(Date.now() - 5 * 60000).toISOString(), type: "not_found", description: "Produto não encontrado no catálogo",               autonomous: true },
-  { id: "6", timestamp: new Date(Date.now() - 5 * 60000).toISOString(), type: "notified",  description: "Cliente informado sobre indisponibilidade",        autonomous: true },
-];
-
+const SEED_LOGS: ActionLog[] = [];
 const SEED_STATS: VtexStats = {
-  searchesToday: 43,
-  hitRate: 87,
-  linksSent: 37,
-  failures: 6,
-  conversions: 12,
-  searchesByHour: Array.from({ length: 24 }, (_, h) => ({
-    hour: h,
-    count: h >= 8 && h <= 18 ? Math.floor(Math.random() * 8) + (h === 14 ? 12 : h === 10 ? 9 : 2) : 0,
-  })),
+  searchesToday: 0,
+  hitRate: 0,
+  linksSent: 0,
+  failures: 0,
+  conversions: 0,
+  searchesByHour: Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 })),
 };
-
-const SEED_FAILURES: Failure[] = [
-  { id: "1", query: "máquina de embalar",    reason: "Ambíguo",        createdAt: new Date(Date.now() - 30 * 60000).toISOString(), resolved: false },
-  { id: "2", query: "embaladora de biscoito",reason: "Não mapeado",    createdAt: new Date(Date.now() - 60 * 60000).toISOString(), resolved: false },
-  { id: "3", query: "xyz 3000",              reason: "Código inválido", createdAt: new Date(Date.now() - 90 * 60000).toISOString(), resolved: false },
-  { id: "4", query: "tampadora automática",  reason: "Não mapeado",    createdAt: new Date(Date.now() - 120 * 60000).toISOString(),resolved: false },
-];
-
-const SEED_SYNONYMS: Synonym[] = [
-  { id: "1", term: "máquina de selar",   canonical: "Seladora" },
-  { id: "2", term: "embaladora",         canonical: "Empacotadora" },
-  { id: "3", term: "máquina de encher",  canonical: "Envasadora" },
-  { id: "4", term: "tampadora",          canonical: "Rosqueadeira de Tampas" },
-];
-
-const SEED_CATEGORIES: VtexCategory[] = [
-  { id: "1", name: "Seladora de Embalagens", tags: ["seladora", "máquina de selar", "termosseladora"] },
-  { id: "2", name: "Envasadora",             tags: ["envasadora", "máquina de encher", "dosadora"] },
-  { id: "3", name: "Empacotadora",           tags: ["empacotadora", "embaladora", "ensacadora"] },
-  { id: "4", name: "Rotuladora",             tags: ["rotuladora", "etiquetadora", "labeladora"] },
-  { id: "5", name: "Rosqueadeira",           tags: ["tampadora", "rosqueadeira", "fechadora de tampas"] },
-];
+const SEED_FAILURES: Failure[] = [];
+const SEED_SYNONYMS: Synonym[] = [];
+const SEED_CATEGORIES: VtexCategory[] = [];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function VTEXConfig() {
@@ -220,20 +190,33 @@ export default function VTEXConfig() {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState("triggers");
 
+  // ── Data Fetching Hooks ────────────────────────────────────────────────────
+  const { data: qSettings } = useQuery({ queryKey: ["vtex-settings"], queryFn: async () => { const r = await fetch("/api/vtex/settings"); return r.json(); }});
+  const { data: qLogs } = useQuery({ queryKey: ["vtex-logs"], queryFn: async () => { const r = await fetch("/api/vtex/logs"); return r.json(); }, refetchInterval: 5000 });
+  const { data: qStats } = useQuery({ queryKey: ["vtex-stats"], queryFn: async () => { const r = await fetch("/api/vtex/stats"); return r.json(); }, refetchInterval: 10000 });
+  const { data: qFailures } = useQuery({ queryKey: ["vtex-failures"], queryFn: async () => { const r = await fetch("/api/vtex/failures"); return r.json(); }, refetchInterval: 10000 });
+  const { data: qSynonyms } = useQuery({ queryKey: ["vtex-synonyms"], queryFn: async () => { const r = await fetch("/api/vtex/synonyms"); return r.json(); }});
+  const { data: qCategories } = useQuery({ queryKey: ["vtex-categories"], queryFn: async () => { const r = await fetch("/api/vtex/categories"); return r.json(); }});
+
   // ── State ──────────────────────────────────────────────────────────────────
-  const [settings, setSettings]   = useState<TriggerSettings>(DEFAULT_SETTINGS);
-  const [newKw, setNewKw]         = useState("");
-  const [logs, setLogs]           = useState<ActionLog[]>(SEED_LOGS);
-  const [stats]                   = useState<VtexStats>(SEED_STATS);
-  const [failures, setFailures]   = useState<Failure[]>(SEED_FAILURES);
-  const [synonyms, setSynonyms]   = useState<Synonym[]>(SEED_SYNONYMS);
-  const [categories, setCategories] = useState<VtexCategory[]>(SEED_CATEGORIES);
+  const [settings, setSettings]       = useState<TriggerSettings>(DEFAULT_SETTINGS);
+  const [newKw, setNewKw]             = useState("");
   const [newSynTerm, setNewSynTerm]   = useState("");
   const [newSynCanon, setNewSynCanon] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
   const [healthStatus, setHealthStatus] = useState<"unknown"|"ok"|"error">("unknown");
   const [healthChecking, setHealthChecking] = useState(false);
-  const [lastPing, setLastPing]    = useState<string | null>(null);
+  const [lastPing, setLastPing]       = useState<string | null>(null);
+
+  useEffect(() => {
+    if (qSettings) setSettings({ ...DEFAULT_SETTINGS, ...qSettings });
+  }, [qSettings]);
+
+  const logs: ActionLog[]       = qLogs || SEED_LOGS;
+  const stats: VtexStats        = qStats || SEED_STATS;
+  const failures: Failure[]     = qFailures || SEED_FAILURES;
+  const synonyms: Synonym[]     = qSynonyms || SEED_SYNONYMS;
+  const categories: VtexCategory[] = qCategories || SEED_CATEGORIES;
 
   // Simulator
   const [simQuery, setSimQuery]     = useState("");
@@ -253,31 +236,7 @@ export default function VTEXConfig() {
 
   // Categories editing
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
-  const [newCatTag, setNewCatTag]        = useState("");
-
-  // Log polling
-  const logPolling = useRef<number | null>(null);
-  useEffect(() => {
-    // Poll logs every 5s to simulate live updates
-    logPolling.current = window.setInterval(() => {
-      const types: ActionLog["type"][] = ["search","found","not_found","link_sent","notified"];
-      if (Math.random() < 0.3) {
-        const t = types[Math.floor(Math.random() * types.length)];
-        const descs: Record<string, string> = {
-          search:    `Buscou "${["Seladora VM400", "Envasadora 200L", "Empacotadora XL"][Math.floor(Math.random()*3)]}"`,
-          found:     "Encontrou produto — disponível",
-          not_found: "Produto não encontrado no catálogo",
-          link_sent: "Link enviado automaticamente",
-          notified:  "Cliente informado sobre alternativa",
-        };
-        setLogs((prev) => [
-          { id: String(Date.now()), timestamp: new Date().toISOString(), type: t, description: descs[t], autonomous: true },
-          ...prev.slice(0, 49),
-        ]);
-      }
-    }, 5000);
-    return () => { if (logPolling.current) clearInterval(logPolling.current); };
-  }, []);
+  const [newCatTag, setNewCatTag]       = useState("");
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const fmtTime = (iso: string) => {
@@ -294,11 +253,20 @@ export default function VTEXConfig() {
     toast({ title: "VTEX conectada ✅", description: "API respondendo normalmente." });
   };
 
-  const handleSaveSettings = async () => {
+  const saveSettingsMut = useMutation({
+    mutationFn: async (s: TriggerSettings) => {
+      await fetch("/api/vtex/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) });
+    },
+    onSuccess: () => {
+      toast({ title: "Gatilhos salvos!", description: "Configurações atualizadas com sucesso." });
+      qc.invalidateQueries({ queryKey: ["vtex-settings"] });
+      setSavingSettings(false);
+    }
+  });
+
+  const handleSaveSettings = () => {
     setSavingSettings(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setSavingSettings(false);
-    toast({ title: "Gatilhos salvos!", description: "Configurações atualizadas com sucesso." });
+    saveSettingsMut.mutate(settings);
   };
 
   const addKeyword = () => {
@@ -311,16 +279,53 @@ export default function VTEXConfig() {
   const removeKeyword = (kw: string) =>
     setSettings((s) => ({ ...s, keywords: s.keywords.filter((k) => k !== kw) }));
 
+  const resolveFailureMut = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`/api/vtex/failures/${id}/resolve`, { method: "POST" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vtex-failures"] })
+  });
+
+  const addSynonymMut = useMutation({
+    mutationFn: async (data: { term: string; canonical: string }) => {
+      const res = await fetch("/api/vtex/synonyms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error("Erro ao salvar sinônimo");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vtex-synonyms"] })
+  });
+
+  const delSynonymMut = useMutation({
+    mutationFn: async (id: string) => fetch(`/api/vtex/synonyms/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vtex-synonyms"] })
+  });
+
+  const addCatMut = useMutation({
+    mutationFn: async (data: { name: string; tags: string[] }) => {
+      await fetch("/api/vtex/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vtex-categories"] })
+  });
+  
+  const updateCatMut = useMutation({
+    mutationFn: async (data: { id: string; name?: string; tags?: string[]; expanded?: boolean }) => {
+      await fetch(`/api/vtex/categories/${data.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vtex-categories"] })
+  });
+  
+  const delCatMut = useMutation({
+    mutationFn: async (id: string) => fetch(`/api/vtex/categories/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vtex-categories"] })
+  });
+
   const resolveFailure = (id: string, action: "synonym" | "ignore") => {
     const f = failures.find((x) => x.id === id);
     if (!f) return;
     if (action === "synonym" && f.suggestedSynonym) {
-      setSynonyms((prev) => [...prev, {
-        id: String(Date.now()), term: f.query, canonical: f.suggestedSynonym!,
-      }]);
+      addSynonymMut.mutate({ term: f.query, canonical: f.suggestedSynonym });
       toast({ title: "Sinônimo criado", description: `"${f.query}" → "${f.suggestedSynonym}"` });
     }
-    setFailures((prev) => prev.filter((x) => x.id !== id));
+    resolveFailureMut.mutate(id);
   };
 
   // Enrich failures with fuzzy suggestions based on existing synonyms
@@ -787,10 +792,7 @@ export default function VTEXConfig() {
                     style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
                     disabled={!newSynTerm.trim() || !newSynCanon.trim()}
                     onClick={() => {
-                      setSynonyms((prev) => [
-                        ...prev,
-                        { id: String(Date.now()), term: newSynTerm.trim(), canonical: newSynCanon.trim() },
-                      ]);
+                      addSynonymMut.mutate({ term: newSynTerm.trim(), canonical: newSynCanon.trim() });
                       setNewSynTerm("");
                       setNewSynCanon("");
                       toast({ title: "Sinônimo adicionado!" });
@@ -817,7 +819,7 @@ export default function VTEXConfig() {
                       <ChevronRight size={14} className="text-zinc-300 shrink-0" />
                       <span className="text-sm font-medium text-zinc-800">{s.canonical}</span>
                       <button
-                        onClick={() => { setSynonyms((prev) => prev.filter((x) => x.id !== s.id)); }}
+                        onClick={() => { delSynonymMut.mutate(s.id); }}
                         className="p-1.5 rounded-md text-zinc-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                       >
                         <Trash2 size={13} />
@@ -988,13 +990,10 @@ export default function VTEXConfig() {
                                   {tag}
                                   <button
                                     onClick={() =>
-                                      setCategories((prev) =>
-                                        prev.map((c) =>
-                                          c.id === cat.id
-                                            ? { ...c, tags: c.tags.filter((t) => t !== tag) }
-                                            : c
-                                        )
-                                      )
+                                      updateCatMut.mutate({
+                                        id: cat.id,
+                                        tags: cat.tags.filter((t) => t !== tag),
+                                      })
                                     }
                                     className="hover:text-red-900"
                                   >
@@ -1011,11 +1010,7 @@ export default function VTEXConfig() {
                                   if (e.key === "Enter") {
                                     const t = newCatTag.trim().toLowerCase();
                                     if (t && !cat.tags.includes(t)) {
-                                      setCategories((prev) =>
-                                        prev.map((c) =>
-                                          c.id === cat.id ? { ...c, tags: [...c.tags, t] } : c
-                                        )
-                                      );
+                                      updateCatMut.mutate({ id: cat.id, tags: [...cat.tags, t] });
                                       setNewCatTag("");
                                     }
                                   }
@@ -1030,11 +1025,7 @@ export default function VTEXConfig() {
                                 onClick={() => {
                                   const t = newCatTag.trim().toLowerCase();
                                   if (t && !cat.tags.includes(t)) {
-                                    setCategories((prev) =>
-                                      prev.map((c) =>
-                                        c.id === cat.id ? { ...c, tags: [...c.tags, t] } : c
-                                      )
-                                    );
+                                    updateCatMut.mutate({ id: cat.id, tags: [...cat.tags, t] });
                                     setNewCatTag("");
                                   }
                                 }}

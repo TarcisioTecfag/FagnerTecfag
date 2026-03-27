@@ -128,6 +128,8 @@ function sourceLabel(src?: string): { label: string; icon: string } {
     case "facebook": return { label: "Facebook", icon: "\u{1F4D8}" };
     case "youtube": return { label: "YouTube", icon: "\u25B6\uFE0F" };
     case "direct": return { label: "Direto", icon: "\u{1F517}" };
+    case "referral": return { label: "Indica\u00E7\u00E3o", icon: "\u{1F91D}" };
+    case "whatsapp": return { label: "WhatsApp", icon: "\u{1F4AC}" };
     default: return { label: src ?? "Outro", icon: "\u{1F30E}" };
   }
 }
@@ -1081,131 +1083,153 @@ function LiveChat() {
               })}
             </div>
 
-            {/* Detail panel (compact overlay at bottom) */}
+            {/* Painel de Detalhes do Visitante (modal expandido) */}
             {selectedVisitor && (
-              <div className="flex-shrink-0 mt-3 bg-white rounded-2xl border border-zinc-200/60 shadow-lg overflow-hidden animate-pop-in" style={{ maxHeight: "220px" }}>
-                <div className="flex h-full">
-                  {/* Left: visitor info */}
-                  <div className="flex-1 p-4 flex items-start gap-4 overflow-y-auto">
-                    <div className="w-11 h-11 rounded-xl flex items-center justify-center text-base font-bold text-white flex-shrink-0" style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}>
-                      {(selectedVisitor.name || selectedVisitor.city || "?")[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-sm font-bold text-zinc-800">{selectedVisitor.name || selectedVisitor.city || "Desconhecido"}</h3>
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${categoryLabel(selectedVisitor.category).bg}`}>
-                          {categoryLabel(selectedVisitor.category).emoji} {categoryLabel(selectedVisitor.category).label}
-                        </span>
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
-                          selectedVisitor.isOnline === "true"
-                            ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                            : "bg-zinc-50 text-zinc-500 border border-zinc-200"
-                        }`}>
-                          {selectedVisitor.isOnline === "true" ? "\u{1F7E2} Online" : "\u26AB Offline"}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-zinc-400 mb-2">{selectedVisitor.country}{" \u2022 "}{selectedVisitor.browser}{" \u2022 "}{sourceLabel(selectedVisitor.source).icon} {sourceLabel(selectedVisitor.source).label}</p>
+              <div className="flex-shrink-0 mt-3 bg-white rounded-2xl border border-zinc-200/60 shadow-lg overflow-hidden animate-pop-in">
+                <div className="flex" style={{ maxHeight: "280px" }}>
 
-                      <div className="flex items-center gap-4">
-                        {[
-                          { label: "Visitas", value: selectedVisitor.totalVisits },
-                          { label: "P\u00E1ginas", value: selectedVisitor.totalPages },
-                          { label: "Chats", value: selectedVisitor.totalChats },
-                          { label: "Score", value: `${selectedVisitor.engagementScore}/100` },
-                        ].map((m) => (
-                          <div key={m.label} className="text-center">
-                            <p className="text-base font-bold text-zinc-800">{m.value}</p>
-                            <p className="text-[9px] text-zinc-400">{m.label}</p>
-                          </div>
-                        ))}
-                        <div className="flex-1 max-w-[120px]">
-                          <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full bg-gradient-to-r ${scoreColor(selectedVisitor.engagementScore)}`}
-                              style={{ width: `${Math.min(selectedVisitor.engagementScore, 100)}%` }}
-                            />
-                          </div>
+                  {/* Col 1: Identidade + Métricas */}
+                  <div className="w-[260px] flex-shrink-0 p-4 flex flex-col gap-3 border-r border-zinc-100">
+                    {/* Avatar + Nome */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold text-white flex-shrink-0" style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}>
+                        {(selectedVisitor.name || selectedVisitor.city || "?")[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-zinc-800 leading-tight truncate">{selectedVisitor.name || selectedVisitor.city || "Desconhecido"}</h3>
+                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${categoryLabel(selectedVisitor.category).bg}`}>
+                            {categoryLabel(selectedVisitor.category).emoji} {categoryLabel(selectedVisitor.category).label}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                            selectedVisitor.isOnline === "true"
+                              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                              : "bg-zinc-50 text-zinc-500 border border-zinc-200"
+                          }`}>
+                            {selectedVisitor.isOnline === "true" ? "\u{1F7E2} Online" : "\u26AB Offline"}
+                          </span>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Right: activity timeline */}
-                  <div className="w-[280px] flex-shrink-0 border-l border-zinc-100 p-4 overflow-y-auto">
-                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">{"\u{1F4CB}"} Atividade</p>
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-zinc-500">Primeiro acesso</span>
-                        <span className="text-zinc-700 font-medium">{new Date(selectedVisitor.firstSeenAt).toLocaleDateString("pt-BR")}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-zinc-500">{"\u00DA"}ltima atividade</span>
-                        <span className="text-zinc-700 font-medium">{timeAgo(selectedVisitor.lastSeenAt)}</span>
-                      </div>
-                      {selectedVisitor.currentPage && (
-                        <div className="flex items-center gap-1 mt-1.5 px-2 py-1 rounded-lg bg-zinc-50 border border-zinc-100">
-                          <ExternalLink className="w-3 h-3 text-zinc-400 flex-shrink-0" />
-                          <span className="text-[10px] text-zinc-600 truncate">{selectedVisitor.currentPageTitle || selectedVisitor.currentPage}</span>
+                    {/* Info linha */}
+                    <p className="text-[10px] text-zinc-400 leading-relaxed">
+                      {[selectedVisitor.country, selectedVisitor.browser, `${sourceLabel(selectedVisitor.source).icon} ${sourceLabel(selectedVisitor.source).label}`].filter(Boolean).join(" • ")}
+                    </p>
+
+                    {/* Métricas 4 colunas */}
+                    <div className="grid grid-cols-4 gap-1">
+                      {[
+                        { label: "Visitas", value: selectedVisitor.totalVisits },
+                        { label: "Páginas", value: selectedVisitor.totalPages },
+                        { label: "Chats", value: selectedVisitor.totalChats },
+                        { label: "Score", value: selectedVisitor.engagementScore },
+                      ].map((m) => (
+                        <div key={m.label} className="text-center bg-zinc-50 rounded-lg py-1.5">
+                          <p className="text-sm font-bold text-zinc-800">{m.value}</p>
+                          <p className="text-[8px] text-zinc-400">{m.label}</p>
                         </div>
-                      )}
-                      {selectedVisitor.utmCampaign && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <Zap className="w-3 h-3 text-zinc-400" />
-                          <span className="text-[10px] text-zinc-600">Campanha: {selectedVisitor.utmCampaign}</span>
-                        </div>
-                      )}
+                      ))}
                     </div>
-                    {/* Histórico de conversas */}
-                    {visitorChats.length > 0 && (
-                      <div className="mt-3 pt-2 border-t border-zinc-100">
-                        <p className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-1.5">Hist\u00F3rico ({visitorChats.length})</p>
-                        <div className="space-y-1">
-                          {visitorChats.slice(0, 5).map(c => (
-                            <div 
-                              key={c.id} 
-                              onClick={() => openVisitorChat(c.id)}
-                              className="flex items-center gap-1.5 px-1.5 py-1 rounded-md bg-zinc-50 text-[9px] text-zinc-500 cursor-pointer hover:bg-zinc-100 transition-colors"
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.status === 'closed' ? 'bg-zinc-300' : 'bg-emerald-400'}`} />
-                              <span className="truncate flex-1 hover:text-red-500 transition-colors font-medium">Abrir chat {c.visitorName || ''}</span>
-                              <span className="text-zinc-300 flex-shrink-0">{timeAgo(c.startedAt)}</span>
-                            </div>
-                          ))}
-                        </div>
+
+                    {/* Barra de Score */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[9px] text-zinc-400">
+                        <span>Engajamento</span>
+                        <span className="font-bold">{selectedVisitor.engagementScore}/100</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-r ${scoreColor(selectedVisitor.engagementScore)} transition-all duration-700`}
+                          style={{ width: `${Math.min(selectedVisitor.engagementScore, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Datas */}
+                    <div className="space-y-1 text-[10px]">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">Primeiro acesso</span>
+                        <span className="text-zinc-600 font-medium">{new Date(selectedVisitor.firstSeenAt).toLocaleDateString("pt-BR")}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">Última atividade</span>
+                        <span className="text-zinc-600 font-medium">{timeAgo(selectedVisitor.lastSeenAt)}</span>
+                      </div>
+                    </div>
+
+                    {/* Página atual */}
+                    {selectedVisitor.currentPage && (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-50 border border-zinc-100">
+                        <ExternalLink className="w-3 h-3 text-zinc-400 flex-shrink-0" />
+                        <span className="text-[10px] text-zinc-600 truncate">{selectedVisitor.currentPageTitle || selectedVisitor.currentPage}</span>
                       </div>
                     )}
+
                     <button
                       onClick={() => setSelectedVisitor(null)}
-                      className="mt-3 w-full text-[10px] text-zinc-400 hover:text-zinc-600 transition-colors py-1"
+                      className="mt-auto text-[10px] text-zinc-400 hover:text-zinc-600 transition-colors py-1 w-full text-center"
                     >
                       {"\u2715"} Fechar
                     </button>
                   </div>
-                  
-                  {/* Right 2: Notas IA */}
-                  <div className="w-[300px] flex-shrink-0 border-l border-zinc-100 p-4 flex flex-col h-full bg-zinc-50/50">
+
+                  {/* Col 2: Histórico de Chats */}
+                  <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden">
+                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2 flex-shrink-0">
+                      {"\u{1F4AC}"} Conversas ({visitorChats.length})
+                    </p>
+                    <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                      {visitorChats.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
+                          <MessageCircle className="w-6 h-6 mb-1 opacity-40" />
+                          <p className="text-[10px] text-center">Sem conversas anteriores</p>
+                        </div>
+                      ) : (
+                        visitorChats.map(c => (
+                          <div
+                            key={c.id}
+                            onClick={() => openVisitorChat(c.id)}
+                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100 cursor-pointer hover:bg-red-50 hover:border-red-200 transition-all group"
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.status === "closed" ? "bg-zinc-300" : "bg-emerald-400"}`} />
+                            <span className="truncate flex-1 text-[10px] text-zinc-600 group-hover:text-red-600 font-medium transition-colors">
+                              {c.visitorName || "Chat sem nome"}
+                            </span>
+                            <span className="text-[9px] text-zinc-300 flex-shrink-0">{timeAgo(c.startedAt)}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Col 3: Notas da IA */}
+                  <div className="flex-1 p-4 flex flex-col overflow-hidden bg-zinc-50/30">
                     <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2 flex-shrink-0">
                       {"\u{1F4DD}"} Notas da IA
                     </p>
                     <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                       {selectedVisitor.notes && selectedVisitor.notes.length > 0 ? (
                         [...selectedVisitor.notes].reverse().map((n, i) => (
-                          <div key={i} className="p-2.5 bg-white border border-zinc-200/60 rounded-xl shadow-sm">
-                            <div className="flex justify-between items-center mb-1.5">
+                          <div key={i} className="p-2.5 bg-white border border-zinc-200/70 rounded-xl shadow-sm">
+                            <div className="flex justify-between items-center mb-1">
                               <span className="text-[10px] font-bold text-red-600">{n.stage}</span>
-                              <span className="text-[9px] text-zinc-400">{new Date(n.date).toLocaleDateString()} {new Date(n.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                              <span className="text-[9px] text-zinc-300">
+                                {new Date(n.date).toLocaleDateString("pt-BR")} {new Date(n.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
                             </div>
                             <p className="text-[11px] text-zinc-600 leading-snug">{n.content}</p>
                           </div>
                         ))
                       ) : (
-                         <div className="flex flex-col items-center justify-center p-4 text-zinc-300 h-full">
+                        <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
                           <Bot className="w-8 h-8 mb-2 opacity-30" />
-                          <p className="text-[10px] text-center max-w-[150px]">O Fagner gerar\u00E1 notas aqui automaticamente.</p>
+                          <p className="text-[10px] text-center max-w-[160px]">O Fagner gerar\u00E1 notas automaticamente ao encerrar uma conversa.</p>
                         </div>
                       )}
                     </div>
                   </div>
+
                 </div>
               </div>
             )}

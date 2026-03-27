@@ -564,36 +564,34 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 const rawReply = aiResponse.reply;
                 let finalScore = visitor?.engagementScore ?? 0;
                 
-                const scoreMatch = rawReply.match(/\\[SCORE:(\\d+)\\]/i);
+                const scoreMatch = rawReply.match(/\[SCORE:(\d+)\]/i);
                 if (scoreMatch) {
                   const botScore = parseInt(scoreMatch[1], 10);
-                  // O Fagner envia o score (qualificação baseada na intenção)
-                  // Combina o score do banco com a intenção gerada
-                  finalScore = Math.min(finalScore + Math.floor(botScore / 2), 100);
+                  finalScore = Math.min(botScore, 100);
                   try {
                     await lcStorage.updateVisitor(currentVisitorId, { engagementScore: finalScore });
                     await recalculateVisitorCategory(currentVisitorId);
                   } catch {}
                 }
 
-                // Remover TODAS as tags invisíveis
+                // Remover TODAS as tags invísiveis antes de exibir ao cliente
                 const cleanReply = rawReply
-                  .replace(/\\[OUTCOME:(SALE|NO_SALE)\\]/gi, "")
-                  .replace(/\\[SCORE:\\d+\\]/gi, "")
+                  .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "")
+                  .replace(/\[SCORE:\d+\]/gi, "")
                   .trim();
 
-                // Fatiar parágrafos ou frases para o delay sequencial
-                const chunks = cleanReply.split(/(?<=[.?!])\\s+/).filter(Boolean);
+                // Fatiar por pontução final para envio sequencial humanizado
+                const chunks = cleanReply.split(/(?<=[.!?])\s+/).filter(Boolean);
                 
                 // Mestre de Marionete (Delay Natural)
                 for (let i = 0; i < chunks.length; i++) {
                   const chunk = chunks[i].trim();
                   if (!chunk) continue;
                   
-                  // Se não for o primeiro chunk, exibe "Typing..." de novo e espera 2s a 3s dependendo do tamanho
+                  // A partir do 2º chunk: ativa Typing e aguarda um delay proporcional
                   if (i > 0) {
                      sendToVisitor(currentVisitorId, { type: "TYPING_START" });
-                     const delayForReading = Math.min(Math.max(chunk.length * 30, 1500), 4000);
+                     const delayForReading = Math.min(Math.max(chunk.length * 35, 1200), 3500);
                      await new Promise(r => setTimeout(r, delayForReading));
                   }
 
@@ -637,8 +635,11 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   });
                 }
 
-                // Detect pipeline outcome from AI response
-                if (aiResponse.reply.includes("[OUTCOME:SALE]")) {
+                // Detectar desfecho usando rawReply (ainda contém as tags originais)
+                const hasSale = /\[OUTCOME:SALE\]/i.test(rawReply);
+                const hasNoSale = /\[OUTCOME:NO_SALE\]/i.test(rawReply);
+
+                if (hasSale) {
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_com_venda");
                   const note = await generateConversationNote(chat.id);
                   if (note) await lcStorage.addVisitorNote(currentVisitorId, "Venda", note);
@@ -646,10 +647,10 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   clearAISession(chat.id);
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_com_venda");
                   broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id });
-                } else if (aiResponse.reply.includes("[OUTCOME:NO_SALE]")) {
+                } else if (hasNoSale) {
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_sem_venda");
                   const note = await generateConversationNote(chat.id);
-                  if (note) await lcStorage.addVisitorNote(currentVisitorId, "S/ Venda", note);
+                  if (note) await lcStorage.addVisitorNote(currentVisitorId, "Sem Venda", note);
                   await lcStorage.closeChat(chat.id);
                   clearAISession(chat.id);
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_sem_venda");
