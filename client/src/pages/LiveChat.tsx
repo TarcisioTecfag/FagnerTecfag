@@ -187,11 +187,15 @@ function LiveChat() {
     } catch {}
   }, []);
 
-  // â”€â”€ WebSocket connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— WebSocket connection —————————————————————————————————————————————————
   useEffect(() => {
     fetchData();
 
-    const wsUrl = `${WS_URL}/ws/livechat`;
+    // Vercel não suporta proxy WebSocket — em produção, conectar diretamente ao Railway
+    const WS_BASE = import.meta.env.DEV
+      ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`
+      : "wss://fagnertecfag-production.up.railway.app";
+    const wsUrl = `${WS_BASE}/ws/livechat`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -244,7 +248,7 @@ function LiveChat() {
             break;
           case "NEEDS_HUMAN":
             toast({
-              title: "âš ï¸ Fagner precisa de ajuda!",
+              title: "⚠️ Fagner precisa de ajuda!",
               description: data.message,
               variant: "destructive",
             });
@@ -294,7 +298,10 @@ function LiveChat() {
       // Reconectar após 3 segundos
       setTimeout(() => {
         if (wsRef.current?.readyState !== WebSocket.OPEN) {
-          const wsUrl2 = `${WS_URL}/ws/livechat`;
+          const WS_BASE2 = import.meta.env.DEV
+            ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`
+            : "wss://fagnertecfag-production.up.railway.app";
+          const wsUrl2 = `${WS_BASE2}/ws/livechat`;
           const ws2 = new WebSocket(wsUrl2);
           wsRef.current = ws2;
           ws2.onopen = () => ws2.send(JSON.stringify({ type: "AGENT_CONNECT", userId: "admin" }));

@@ -40,9 +40,14 @@ export function registerLiveChatRoutes(app: any): void {
   });
 
   router.get("/visitors/all", requireAuth, async (req: Request, res: Response) => {
-    const limit = parseInt(req.query.limit as string) || 100;
-    const visitors = await lcStorage.listAllVisitors(limit);
-    return res.json(visitors);
+    try {
+      const limit = parseInt(req.query.limit as string) || 100;
+      const visitors = await lcStorage.listAllVisitors(limit);
+      return res.json(visitors);
+    } catch (err: any) {
+      console.error("[LiveChat] GET /visitors/all error:", err?.message, err?.stack);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
   });
 
   router.get("/visitors/:id", requireAuth, async (req: Request, res: Response) => {
@@ -114,14 +119,18 @@ export function registerLiveChatRoutes(app: any): void {
 
   // ── Pipeline CRM ──────────────────────────────────────────────────
   router.get("/pipeline", requireAuth, async (_req: Request, res: Response) => {
-    // Garantir que visitantes sem pipelineStage sejam classificados
-    try { await lcStorage.migrateNullPipelineStages(); } catch {}
-    const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
-    const result: Record<string, any[]> = {};
-    for (const stage of stages) {
-      result[stage] = await lcStorage.listVisitorsByPipeline(stage);
+    try {
+      try { await lcStorage.migrateNullPipelineStages(); } catch {}
+      const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
+      const result: Record<string, any[]> = {};
+      for (const stage of stages) {
+        result[stage] = await lcStorage.listVisitorsByPipeline(stage);
+      }
+      return res.json(result);
+    } catch (err: any) {
+      console.error("[LiveChat] GET /pipeline error:", err?.message, err?.stack);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
     }
-    return res.json(result);
   });
 
   router.get("/pipeline/stats", requireAuth, async (_req: Request, res: Response) => {
