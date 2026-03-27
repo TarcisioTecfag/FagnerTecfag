@@ -392,4 +392,73 @@ export const lcStorage = {
   },
 };
 
+/**
+ * Garante que todas as colunas do schema existem no DB do Railway.
+ * Usa ADD COLUMN IF NOT EXISTS — seguro de rodar toda vez que o servidor inicializa.
+ * Resolve o problema de migrações não aplicadas que causam 500 silenciosos.
+ */
+export async function ensureLiveChatSchema(): Promise<void> {
+  const cols: Array<[string, string]> = [
+    // lc_visitors
+    ['lc_visitors', '"id" TEXT'],
+    ['lc_visitors', '"cookieId" TEXT'],
+    ['lc_visitors', '"ip" TEXT'],
+    ['lc_visitors', '"city" TEXT'],
+    ['lc_visitors', '"country" TEXT'],
+    ['lc_visitors', '"browser" TEXT'],
+    ['lc_visitors', '"userAgent" TEXT'],
+    ['lc_visitors', '"currentPage" TEXT'],
+    ['lc_visitors', '"currentPageTitle" TEXT'],
+    ['lc_visitors', '"source" TEXT'],
+    ['lc_visitors', '"utmSource" TEXT'],
+    ['lc_visitors', '"utmMedium" TEXT'],
+    ['lc_visitors', '"utmCampaign" TEXT'],
+    ['lc_visitors', '"referrer" TEXT'],
+    ['lc_visitors', '"totalVisits" INTEGER NOT NULL DEFAULT 1'],
+    ['lc_visitors', '"totalPages" INTEGER NOT NULL DEFAULT 0'],
+    ['lc_visitors', '"totalChats" INTEGER NOT NULL DEFAULT 0'],
+    ['lc_visitors', '"category" TEXT NOT NULL DEFAULT \'visitor\''],
+    ['lc_visitors', '"engagementScore" INTEGER NOT NULL DEFAULT 0'],
+    ['lc_visitors', '"isOnline" TEXT NOT NULL DEFAULT \'true\''],
+    ['lc_visitors', '"pipelineStage" TEXT NOT NULL DEFAULT \'novo_atendimento\''],
+    ['lc_visitors', '"firstSeenAt" TEXT NOT NULL DEFAULT now()::text'],
+    ['lc_visitors', '"lastSeenAt" TEXT NOT NULL DEFAULT now()::text'],
+    ['lc_visitors', '"name" TEXT'],
+    // lc_chats
+    ['lc_chats', '"mood" TEXT'],
+    ['lc_chats', '"visitorEmail" TEXT'],
+    ['lc_chats', '"visitorName" TEXT'],
+    ['lc_chats', '"needsHuman" TEXT NOT NULL DEFAULT \'false\''],
+    ['lc_chats', '"proactiveApproach" TEXT NOT NULL DEFAULT \'false\''],
+    ['lc_chats', '"aiHandled" TEXT NOT NULL DEFAULT \'true\''],
+    // lc_messages
+    ['lc_messages', '"read" TEXT NOT NULL DEFAULT \'false\''],
+  ];
+
+  let applied = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const [table, colDef] of cols) {
+    const colName = colDef.split(' ')[0].replace(/"/g, '');
+    try {
+      await db.execute(sql.raw(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${colDef}`));
+      applied++;
+    } catch (e: any) {
+      // PG error 42701 = column already exists (only on older PG)
+      if (!e.message?.includes('already exists')) {
+        errors.push(`${table}.${colName}: ${e.message}`);
+      } else {
+        skipped++;
+      }
+    }
+  }
+
+  if (errors.length) {
+    console.error('[LiveChat] ensureLiveChatSchema ERRORS:', errors);
+  } else {
+    console.log(`[LiveChat] ✅ ensureLiveChatSchema: ${applied} colunas verificadas, ${skipped} já existiam`);
+  }
+}
+
 export default lcStorage;

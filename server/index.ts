@@ -25,6 +25,7 @@ setInterval(() => {
 import express, { type Request, type Response, type NextFunction } from "express";
 import { registerLiveChatRoutes } from "./livechat/livechatRoutes.js";
 import { initLiveChatWs } from "./livechat/livechatWs.js";
+import { ensureLiveChatSchema } from "./livechat/livechatStorage.js";
 import cors from "cors";
 import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -1083,6 +1084,9 @@ wssLogs.on("connection", (ws) => {
 
 // WebSocket server for chat events (/ws/chat)
 const wssChat = new WebSocketServer({ noServer: true });
+
+// ─── Live Chat: garante schema do DB antes de aceitar conexões ──────────────
+ensureLiveChatSchema().catch(e => console.error('[LiveChat] ensureLiveChatSchema failed:', e.message));
 
 // ─── Live Chat: registra rotas REST ─────────────────────────────────────────
 registerLiveChatRoutes(app);
