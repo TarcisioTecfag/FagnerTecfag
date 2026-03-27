@@ -96,7 +96,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
       const chat = await lcStorage.getChatById(chatId);
       if (!chat || chat.status === "closed" || chat.status !== "ai_active") return;
       
-      const msg = "Ainda posso ajudar com algo? Nosso atendimento é humanizado, fique à vontade para perguntar.";
+      const msg = "Ainda posso ajudar com algo? Qualquer dúvida é só falar! 😊";
       await lcStorage.createMessage({ chatId, sender: "ai", content: msg });
       sendToVisitor(visitorId, { type: "CHAT_REPLY", chatId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
       broadcastToAgents({ type: "CHAT_MESSAGE", chatId, visitorId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
@@ -460,21 +460,31 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
           case "CHAT_MESSAGE": {
             if (!visitorId) break;
 
-            // Get or create chat with Mutex protection against race conditions
+            // Get or create chat — proteção real contra race conditions
+            // O lock fica ativo até o chat existir no banco, evitando chats duplicados
             let chat: any = null;
-            if (chatCreationLocks.has(visitorId)) {
-                chat = await chatCreationLocks.get(visitorId);
+
+            // Checa se já há uma promise de criação em andamento
+            const existingLock = chatCreationLocks.get(visitorId);
+            if (existingLock) {
+              chat = await existingLock;
             } else {
+              // Busca chat ativo primeiro
               chat = await lcStorage.getActiveChatByVisitor(visitorId);
               if (!chat) {
-                const createPromise = (async () => {
+                // Criar lock ANTES de iniciar a promise para bloquear chamadas paralelas
+                let resolveLock!: (c: any) => void;
+                const lockPromise = new Promise<any>(res => { resolveLock = res; });
+                chatCreationLocks.set(visitorId, lockPromise);
+
+                try {
                   const newChat = await lcStorage.createChat({
                     visitorId,
                     source: "widget",
                     visitorName: data.visitorName,
                   });
 
-                  // Engagement: +20 for starting chat
+                  // Engajamento +20 por iniciar chat
                   const v = await lcStorage.getVisitorById(visitorId);
                   if (v) {
                     await lcStorage.updateVisitor(visitorId, {
@@ -482,17 +492,20 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     });
                     await recalculateVisitorCategory(visitorId);
                   }
-                  return newChat;
-                })();
-                
-                chatCreationLocks.set(visitorId, createPromise);
-                try {
-                  chat = await createPromise;
+
+                  chat = newChat;
+                  resolveLock(chat); // libera quem estava esperando
+                } catch (err) {
+                  resolveLock(null);
+                  throw err;
                 } finally {
-                  chatCreationLocks.delete(visitorId);
+                  // Só remove o lock após pequeno delay para garantir que leitores concorrentes recebam o chat
+                  setTimeout(() => chatCreationLocks.delete(visitorId), 500);
                 }
               }
             }
+
+            if (!chat) break; // Falha na criação — abortar
 
             // SEMPRE mover para em_atendimento quando visitante envia mensagem
             try {
