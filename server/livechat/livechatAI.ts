@@ -304,33 +304,46 @@ export async function processVisitorMessage(
 // ─── Gerar Nota e Resumo para CRM ──────────────────────────────────────────
 
 export async function generateConversationNote(chatId: string): Promise<string | null> {
-  const session = aiSessions.get(chatId);
-  if (!session || session.history.length === 0) return null;
-
   const apiKey = (await storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "";
   if (!apiKey) return null;
 
-  const summaryPrompt = `
-Você é um analista de CRM. Você receberá um histórico de interação de chat entre o cliente e o Fagner (Representante IA).
-Sua tarefa é escrever UMA única recomendação de nota resumindo de forma bem breve em terceira pessoa:
-- O que o cliente queria e que produtos foram oferecidos.
-- Por que a conversa foi movida de estágio (por exemplo, "Cliente demonstrou alto interesse para comprar x mas sumiu", ou "Venda fechada com pedido X").
-Não use jargões, seja extremamente direto e sem saudações. Escreva APENAS a nota (1 a 3 sentenças).
-`;
+  // Lê o histórico do banco (funciona mesmo após clearAISession)
+  let historyText: string;
+  try {
+    const messages = await lcStorage.listMessagesByChat(chatId);
+    if (!messages || messages.length === 0) return null;
+    historyText = messages
+      .slice(-30) // últimas 30 mensagens
+      .map(m => {
+        const who = m.sender === "visitor" ? "Cliente" : "Fagner";
+        // Remove tags internas se houverem
+        const clean = m.content.replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "").replace(/\[SCORE:\d+\]/gi, "").trim();
+        return `${who}: ${clean}`;
+      })
+      .join("\n");
+  } catch {
+    return null;
+  }
+
+  const summaryPrompt = `Você é um analista de CRM. Abaixo está o histórico de um chat entre o Cliente e Fagner (Representante IA da Tecfag).
+Escreva UMA nota de CRM em terceira pessoa, extremamente direta (1 a 3 frases):
+- O que o cliente queria.
+- Quais produtos foram mencionados.
+- Resultado final da conversa.
+Sem saudações, sem jargões, apenas a nota objetiva.`.trim();
 
   try {
     const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
     const payload = {
       systemInstruction: { parts: [{ text: summaryPrompt }] },
-      contents: [...session.history.map(h => ({
-        role: h.role === "model" ? "model" : "user",
-        parts: h.parts
-      }))],
+      contents: [{ role: "user", parts: [{ text: historyText }] }],
       generationConfig: { temperature: 0.3, maxOutputTokens: 256 },
     };
 
     const data = await geminiRequest(url, payload);
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+    const note = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+    console.log(`[LiveChat AI] Nota CRM gerada para chat ${chatId}:`, note?.slice(0, 80));
+    return note;
   } catch (err) {
     console.error("[LiveChat AI] Error generating note:", err);
     return null;

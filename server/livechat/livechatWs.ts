@@ -523,12 +523,11 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               timestamp: new Date().toISOString(),
             });
 
-            // If AI is handling this chat, buffer message and generate response after 5s
+            // Se a IA está conduzindo, bufferiza até 5s de silêncio antes de responder
             if (chat.status === "ai_active" || chat.status === "waiting") {
-              // Update status to ai_active
               await lcStorage.updateChat(chat.id, { status: "ai_active" });
 
-              // Manage buffer
+              // Gerenciar buffer de mensagens (debounce de 5s)
               let buffer = chatMessageBuffers.get(chat.id);
               if (buffer) {
                 clearTimeout(buffer.timer);
@@ -538,32 +537,45 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 chatMessageBuffers.set(chat.id, buffer);
               }
 
-              // Show typing indicator to visitor
-              sendToVisitor(visitorId, { type: "TYPING_START" });
-
+              // NÃO mostrar typing ainda — só após os 5s de respeit de mensagem
               const currentVisitorId = visitorId as string;
 
-              // Reset 5s timer
+              // Timer de 5s: só processa quando o cliente pára de digitar
               buffer.timer = setTimeout(async () => {
                 const combinedContent = chatMessageBuffers.get(chat.id)?.content.join("\n\n") || data.content;
                 chatMessageBuffers.delete(chat.id);
+
+                // Só AGORA mostra o indicador de digitação
+                sendToVisitor(currentVisitorId, { type: "TYPING_START" });
+
+                // Nome automático para o chat baseado na 1ª mensagem do cliente
+                try {
+                  const chatNow = await lcStorage.getChatById(chat.id);
+                  if (chatNow && !chatNow.visitorName) {
+                    const firstMsg = combinedContent.trim().slice(0, 60);
+                    const chatLabel = firstMsg.length > 40
+                      ? firstMsg.slice(0, 40) + "..."
+                      : firstMsg;
+                    await lcStorage.updateChat(chat.id, { visitorName: chatLabel });
+                  }
+                } catch {}
 
                 const visitor = await lcStorage.getVisitorById(currentVisitorId);
                 const aiResponse = await processVisitorMessage(
                   chat.id,
                   combinedContent,
                   visitor?.currentPage ?? undefined,
-                ) as any; // Allow isError
+                ) as any;
 
                 if (aiResponse.isError) {
                   sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
-                  return; // Silent fail, do not send message
+                  return; // Falha silenciosa
                 }
 
-                // Extração de Score e Limpeza de Tags
+                // Extrair score (regex com escape simples correto)
                 const rawReply = aiResponse.reply;
                 let finalScore = visitor?.engagementScore ?? 0;
-                
+
                 const scoreMatch = rawReply.match(/\[SCORE:(\d+)\]/i);
                 if (scoreMatch) {
                   const botScore = parseInt(scoreMatch[1], 10);
@@ -574,37 +586,71 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   } catch {}
                 }
 
-                // Remover TODAS as tags invísiveis antes de exibir ao cliente
+                // Remover todas as tags invisíveis antes de exibir ao cliente
                 const cleanReply = rawReply
                   .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "")
                   .replace(/\[SCORE:\d+\]/gi, "")
                   .trim();
 
-                // Fatiar por pontução final para envio sequencial humanizado
-                const chunks = cleanReply.split(/(?<=[.!?])\s+/).filter(Boolean);
-                
-                // Mestre de Marionete (Delay Natural)
+                // Separa emojis no final das frases e quebra por pontuação
+                // Sem lookbehind nem flag /u para manter compatibilidade TS
+                function splitIntoChunks(text: string): string[] {
+                  const result: string[] = [];
+                  // Divide manualmente por . ! ? seguidos de espaço
+                  let remaining = text.trim();
+                  while (remaining.length > 0) {
+                    // Procura fim de frase
+                    const matchIdx = remaining.search(/[.!?]\s+/);
+                    if (matchIdx === -1) {
+                      result.push(remaining.trim());
+                      break;
+                    }
+                    // Inclui o ponto na frase
+                    const sentence = remaining.slice(0, matchIdx + 1).trim();
+                    if (sentence) result.push(sentence);
+                    remaining = remaining.slice(matchIdx + 1).trim();
+                  }
+                  // Para cada frase, verifica se tem emoji solto no final e separa
+                  const finalChunks: string[] = [];
+                  for (const sentence of result) {
+                    // Detecta surrogates (emojis) no final: \uD800-\uDFFF
+                    const surrogateAtEnd = /^([\s\S]*?)\s+([\uD800-\uDFFF][\s\S]*)$/.exec(sentence);
+                    if (surrogateAtEnd) {
+                      const textPart = surrogateAtEnd[1].trim();
+                      const emojiPart = surrogateAtEnd[2].trim();
+                      if (textPart) finalChunks.push(textPart);
+                      if (emojiPart) finalChunks.push(emojiPart);
+                    } else {
+                      finalChunks.push(sentence);
+                    }
+                  }
+                  return finalChunks.filter(Boolean);
+                }
+
+                const chunks = splitIntoChunks(cleanReply);
+
+                // Envio sequencial com delay natural (simula digitação humana)
                 for (let i = 0; i < chunks.length; i++) {
-                  const chunk = chunks[i].trim();
+                  const chunk = chunks[i];
                   if (!chunk) continue;
-                  
-                  // A partir do 2º chunk: ativa Typing e aguarda um delay proporcional
+
+                  // A partir do 2º chunk: ativa Typing e aguarda
                   if (i > 0) {
-                     sendToVisitor(currentVisitorId, { type: "TYPING_START" });
-                     const delayForReading = Math.min(Math.max(chunk.length * 35, 1200), 3500);
-                     await new Promise(r => setTimeout(r, delayForReading));
+                    sendToVisitor(currentVisitorId, { type: "TYPING_START" });
+                    // Emojis/surrogates são curtos — delay mínimo de 800ms
+                    const isEmoji = /^[\uD800-\uDFFF\s]+$/.test(chunk);
+                    const delayMs = isEmoji ? 800 : Math.min(Math.max(chunk.length * 35, 1200), 3500);
+                    await new Promise(r => setTimeout(r, delayMs));
                   }
 
                   sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
 
-                  // Salvar sub-mensagem
                   await lcStorage.createMessage({
                     chatId: chat.id,
                     sender: "ai",
                     content: chunk,
                   });
 
-                  // Enviar resposta AI (chunk) para o visitante
                   sendToVisitor(currentVisitorId, {
                     type: "CHAT_REPLY",
                     chatId: chat.id,
@@ -613,7 +659,6 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     timestamp: new Date().toISOString(),
                   });
 
-                  // Notificar agentes do painel
                   broadcastToAgents({
                     type: "CHAT_MESSAGE",
                     chatId: chat.id,
@@ -640,16 +685,18 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 const hasNoSale = /\[OUTCOME:NO_SALE\]/i.test(rawReply);
 
                 if (hasSale) {
-                  await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_com_venda");
+                  // Gerar nota ANTES de limpar a sessão
                   const note = await generateConversationNote(chat.id);
+                  await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_com_venda");
                   if (note) await lcStorage.addVisitorNote(currentVisitorId, "Venda", note);
                   await lcStorage.closeChat(chat.id);
                   clearAISession(chat.id);
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_com_venda");
                   broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id });
                 } else if (hasNoSale) {
-                  await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_sem_venda");
+                  // Gerar nota ANTES de limpar a sessão
                   const note = await generateConversationNote(chat.id);
+                  await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_sem_venda");
                   if (note) await lcStorage.addVisitorNote(currentVisitorId, "Sem Venda", note);
                   await lcStorage.closeChat(chat.id);
                   clearAISession(chat.id);
