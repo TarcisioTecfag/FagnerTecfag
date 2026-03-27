@@ -95,25 +95,25 @@ interface Stats {
   totalVisitorsToday: number;
 }
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Helpers —————————————————————————————————————————————————
 
 function categoryLabel(cat: string): { label: string; emoji: string; color: string; bg: string } {
   switch (cat) {
-    case "lead_hot": return { label: "Lead Quente", emoji: "ðŸ”´", color: "text-red-400", bg: "bg-red-500/15 border-red-500/20" };
-    case "lead_warm": return { label: "Lead Morno", emoji: "ðŸŸ¡", color: "text-yellow-400", bg: "bg-yellow-500/15 border-yellow-500/20" };
-    case "customer": return { label: "Cliente", emoji: "â­", color: "text-blue-400", bg: "bg-blue-500/15 border-blue-500/20" };
-    case "returning": return { label: "Retorno", emoji: "ðŸ”„", color: "text-purple-400", bg: "bg-purple-500/15 border-purple-500/20" };
-    default: return { label: "Visitante", emoji: "ðŸŸ¢", color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/20" };
+    case "lead_hot": return { label: "Lead Quente", emoji: "\u{1F534}", color: "text-red-400", bg: "bg-red-500/15 border-red-500/20" };
+    case "lead_warm": return { label: "Lead Morno", emoji: "\u{1F7E1}", color: "text-yellow-400", bg: "bg-yellow-500/15 border-yellow-500/20" };
+    case "customer": return { label: "Cliente", emoji: "\u2B50", color: "text-blue-400", bg: "bg-blue-500/15 border-blue-500/20" };
+    case "returning": return { label: "Retorno", emoji: "\u{1F504}", color: "text-purple-400", bg: "bg-purple-500/15 border-purple-500/20" };
+    default: return { label: "Visitante", emoji: "\u{1F7E2}", color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/20" };
   }
 }
 
 function statusBadge(status: string): { label: string; icon: string; color: string; bg: string } {
   switch (status) {
-    case "ai_active": return { label: "IA Ativa", icon: "ðŸ¤–", color: "text-emerald-300", bg: "bg-emerald-500/15" };
-    case "human_active": return { label: "Agente", icon: "ðŸ‘¤", color: "text-blue-300", bg: "bg-blue-500/15" };
-    case "waiting": return { label: "Aguardando", icon: "â³", color: "text-yellow-300", bg: "bg-yellow-500/15" };
-    case "closed": return { label: "Encerrado", icon: "âœ…", color: "text-zinc-400", bg: "bg-zinc-500/15" };
-    default: return { label: status, icon: "â“", color: "text-zinc-400", bg: "bg-zinc-500/15" };
+    case "ai_active": return { label: "IA Ativa", icon: "\u{1F916}", color: "text-emerald-600", bg: "bg-emerald-500/15" };
+    case "human_active": return { label: "Agente", icon: "\u{1F464}", color: "text-blue-600", bg: "bg-blue-500/15" };
+    case "waiting": return { label: "Aguardando", icon: "\u23F3", color: "text-yellow-600", bg: "bg-yellow-500/15" };
+    case "closed": return { label: "Encerrado", icon: "\u2705", color: "text-zinc-500", bg: "bg-zinc-500/15" };
+    default: return { label: status, icon: "\u25FB", color: "text-zinc-500", bg: "bg-zinc-500/15" };
   }
 }
 
@@ -568,7 +568,7 @@ function LiveChat() {
                                 {chat.visitorName || "Visitante"}
                               </p>
                               <p className="text-[10px] text-zinc-400">
-                                {chat.source === "proactive" ? "Proativo" : "Widget"} â€¢ {timeAgo(chat.startedAt)}
+                                {chat.source === "proactive" ? "Proativo" : "Widget"} &bull; {timeAgo(chat.startedAt)}
                               </p>
                             </div>
                           </div>
@@ -584,8 +584,8 @@ function LiveChat() {
                             <span className="text-[10px] text-orange-700 font-medium line-clamp-2">{chat.mood}</span>
                           </div>
                         )}
-                        {/* Nas outras abas, mostrar badge genérico de urgência */}
-                        {activeTab !== "atencao" && isUrgent && (
+                        {/* Nas outras abas exceto Atenção e Arquivados, mostrar badge de urgência */}
+                        {activeTab !== "atencao" && activeTab !== "arquivados" && isUrgent && (
                           <div className="flex items-center gap-1 mt-1 px-2 py-1 rounded-md bg-red-50 border border-red-100">
                             <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
                             <span className="text-[10px] text-red-600 font-medium">Fagner precisa de ajuda!</span>
@@ -616,14 +616,14 @@ function LiveChat() {
                           <span className={`${statusBadge(selectedChat.status).color}`}>
                             {statusBadge(selectedChat.status).icon} {statusBadge(selectedChat.status).label}
                           </span>
-                          <span>â€¢</span>
+                          <span>&bull;</span>
                           <span>Iniciado {timeAgo(selectedChat.startedAt)}</span>
                         </div>
                       </div>
                     </div>
                     <div className="flex gap-2 relative">
-                      {/* Botões de ação: ocultos na aba de Atenção (somente leitura) */}
-                      {activeTab !== "atencao" && (
+                      {/* Botões de ação: ocultos na aba Atenção e Arquivados */}
+                      {activeTab !== "atencao" && activeTab !== "arquivados" && (
                         <>
                           {selectedChat.status === "ai_active" && (
                             <Button
@@ -686,10 +686,17 @@ function LiveChat() {
                         </>
                       )}
 
-                      {/* Badge somente leitura quando visualizando aba Atenção */}
+                      {/* Badge somente leitura — aba Atenção */}
                       {activeTab === "atencao" && (
                         <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
                           👁 Visualização — somente leitura
+                        </span>
+                      )}
+
+                      {/* Badge somente leitura — aba Arquivados */}
+                      {activeTab === "arquivados" && (
+                        <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-50 text-zinc-500 border border-zinc-200">
+                          🗄️ Conversa arquivada
                         </span>
                       )}
                     </div>
@@ -733,7 +740,7 @@ function LiveChat() {
                               {isAI && <Bot className="w-3 h-3" />}
                               {msg.sender === "agent" && <User className="w-3 h-3" />}
                               <span>{isVisitor ? "Visitante" : isAI ? "Fagner (IA)" : "Agente"}</span>
-                              <span>â€¢ {timeAgo(msg.sentAt)}</span>
+                              <span>&bull; {timeAgo(msg.sentAt)}</span>
                             </div>
                             <p className="whitespace-pre-wrap">{msg.content}</p>
                           </div>
@@ -745,7 +752,14 @@ function LiveChat() {
 
                   {/* Input area */}
                   <div className="px-4 py-3 border-t border-zinc-100 bg-white">
-                    {selectedChat.status === "human_active" ? (
+                    {activeTab === "arquivados" || selectedChat.status === "closed" ? (
+                      <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-zinc-50 border border-zinc-100">
+                        <Layers className="w-4 h-4 text-zinc-400" />
+                        <p className="text-[11px] text-zinc-500 font-medium">
+                          Conversa encerrada — histórico somente para leitura.
+                        </p>
+                      </div>
+                    ) : selectedChat.status === "human_active" ? (
                       <div className="flex gap-2">
                         <Textarea
                           value={agentInput}
