@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { WS_URL } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -190,8 +191,7 @@ function LiveChat() {
   useEffect(() => {
     fetchData();
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/livechat`;
+    const wsUrl = `${WS_URL}/ws/livechat`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -294,8 +294,7 @@ function LiveChat() {
       // Reconectar após 3 segundos
       setTimeout(() => {
         if (wsRef.current?.readyState !== WebSocket.OPEN) {
-          const protocol2 = window.location.protocol === "https:" ? "wss:" : "ws:";
-          const wsUrl2 = `${protocol2}//${window.location.host}/ws/livechat`;
+          const wsUrl2 = `${WS_URL}/ws/livechat`;
           const ws2 = new WebSocket(wsUrl2);
           wsRef.current = ws2;
           ws2.onopen = () => ws2.send(JSON.stringify({ type: "AGENT_CONNECT", userId: "admin" }));
