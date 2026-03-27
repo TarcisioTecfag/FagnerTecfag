@@ -138,6 +138,20 @@ export const lcStorage = {
 
   // ── Pipeline CRM ────────────────────────────────────────────────────
 
+  async addVisitorNote(visitorId: string, stage: string, content: string) {
+    const visitor = await this.getVisitorById(visitorId);
+    if (!visitor) return;
+    const currentNotes = Array.isArray(visitor.notes) ? visitor.notes : [];
+    const newNote = {
+      date: new Date().toISOString(),
+      stage,
+      content
+    };
+    await db.update(lcVisitors)
+      .set({ notes: [...currentNotes, newNote] as any })
+      .where(eq(lcVisitors.id, visitorId));
+  },
+
   async updateVisitorPipeline(id: string, stage: string): Promise<LcVisitor | null> {
     const existing = await this.getVisitorById(id);
     if (!existing) return null;
@@ -436,6 +450,7 @@ export async function ensureLiveChatSchema(): Promise<void> {
     ['lc_visitors', '"firstSeenAt" TEXT NOT NULL DEFAULT now()::text'],
     ['lc_visitors', '"lastSeenAt" TEXT NOT NULL DEFAULT now()::text'],
     ['lc_visitors', '"name" TEXT'],
+    ['lc_visitors', '"notes" JSONB DEFAULT \'[]\'::jsonb'],
     // lc_chats
     ['lc_chats', '"mood" TEXT'],
     ['lc_chats', '"visitorEmail" TEXT'],

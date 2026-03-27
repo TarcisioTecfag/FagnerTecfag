@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, real, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, real, integer, jsonb } from "drizzle-orm/pg-core";
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
@@ -114,6 +114,14 @@ export const vtexSynonyms = pgTable("vtex_synonyms", {
   createdAt: text("createdAt").notNull().default(sql`now()`),
 });
 
+export const vtexCategories = pgTable("vtex_categories", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  tags: jsonb("tags").$type<string[]>().default([]).notNull(),
+  expanded: text("expanded").default("false"),
+  createdAt: text("createdAt").notNull().default(sql`now()`),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
@@ -127,6 +135,7 @@ export type VtexSettings = typeof vtexSettings.$inferSelect;
 export type VtexLog = typeof vtexLogs.$inferSelect;
 export type VtexFailure = typeof vtexFailures.$inferSelect;
 export type VtexSynonym = typeof vtexSynonyms.$inferSelect;
+export type VtexCategory = typeof vtexCategories.$inferSelect;
 
 // ─── Live Chat — Módulo isolado ───────────────────────────────────────────────
 
@@ -156,6 +165,7 @@ export const lcVisitors = pgTable("lc_visitors", {
   firstSeenAt: text("firstSeenAt").notNull().default(sql`now()::text`),
   lastSeenAt: text("lastSeenAt").notNull().default(sql`now()::text`),
   name: text("name"),   // Nome fornecido pelo visitante via widget
+  notes: jsonb("notes").$type<{ date: string; stage: string; content: string }[]>().default([]),
 });
 
 export const lcPageviews = pgTable("lc_pageviews", {

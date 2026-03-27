@@ -1068,6 +1068,48 @@ app.delete("/api/vtex/synonyms/:id", requireAuth, async (req, res) => {
   return res.json({ ok: true });
 });
 
+// GET /api/vtex/categories
+app.get("/api/vtex/categories", requireAuth, async (_req, res) => {
+  return res.json(await storage.listVtexCategories());
+});
+
+// POST /api/vtex/categories
+app.post("/api/vtex/categories", requireAuth, async (req, res) => {
+  const { name, tags } = req.body;
+  if (!name || !Array.isArray(tags)) return res.status(400).json({ message: "name e tags(array) obrigatórios" });
+  const category = await storage.createVtexCategory({ name, tags });
+  emitLog(`[VTEX] Categoria criada: "${name}"`, "INFO");
+  return res.status(201).json(category);
+});
+
+// PATCH /api/vtex/categories/:id
+app.patch("/api/vtex/categories/:id", requireAuth, async (req, res) => {
+  const { name, tags, expanded } = req.body;
+  const category = await storage.updateVtexCategory(p(req.params.id), { name, tags, expanded });
+  if (!category) return res.status(404).json({ message: "Categoria não encontrada" });
+  return res.json(category);
+});
+
+// DELETE /api/vtex/categories/:id
+app.delete("/api/vtex/categories/:id", requireAuth, async (req, res) => {
+  const deleted = await storage.deleteVtexCategory(p(req.params.id));
+  if (!deleted) return res.status(404).json({ message: "Categoria não encontrada" });
+  return res.json({ ok: true });
+});
+
+// POST /api/vtex/search (Simulador)
+app.post("/api/vtex/search", requireAuth, async (req, res) => {
+  const { query } = req.body;
+  if (!query) return res.status(400).json({ message: "query obrigatória" });
+  try {
+    const { searchProduct } = await import("./fagner/vtexService.js");
+    const result = await searchProduct(query);
+    return res.json(result);
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
+});
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT) || 3001;

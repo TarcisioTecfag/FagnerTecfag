@@ -90,6 +90,10 @@ export async function searchProduct(
   const normalizedQuery = await applySynonyms(rawQuery.trim());
   const encodedQuery = encodeURIComponent(normalizedQuery);
 
+  try {
+    await storage.createVtexLog({ type: "search", description: `Buscou "${rawQuery}"`, autonomous: true });
+  } catch {}
+
   const url = `${VTEX_BASE}/api/catalog_system/pub/products/search?fq=ft:${encodedQuery}&_from=0&_to=5`;
 
   try {
@@ -103,12 +107,16 @@ export async function searchProduct(
 
     if (!res.ok) {
       console.warn(`[VTEX] HTTP ${res.status} para query "${normalizedQuery}"`);
+      await storage.createVtexLog({ type: "not_found", description: "Produto não encontrado no catálogo" }).catch(() => {});
+      await storage.createVtexFailure({ query: rawQuery, reason: "HTTP " + res.status }).catch(() => {});
       return { found: false, query: rawQuery, normalizedQuery };
     }
 
     const products: any[] = await res.json();
 
     if (!Array.isArray(products) || products.length === 0) {
+      await storage.createVtexLog({ type: "not_found", description: "Produto não encontrado no catálogo" }).catch(() => {});
+      await storage.createVtexFailure({ query: rawQuery, reason: "Não mapeado" }).catch(() => {});
       return { found: false, query: rawQuery, normalizedQuery };
     }
 
@@ -118,10 +126,13 @@ export async function searchProduct(
     const price   = seller?.Price ?? null;
     const avail   = (seller?.AvailableQuantity ?? 0) > 0;
     const imgUrl  = item?.images?.[0]?.imageUrl ?? null;
+    const productName = p.productName ?? p.productTitle ?? normalizedQuery;
+
+    await storage.createVtexLog({ type: "found", description: avail ? "Encontrou produto — disponível" : "Encontrou produto — indisponível", product: productName }).catch(() => {});
 
     return {
       found:          true,
-      productName:    p.productName ?? p.productTitle ?? normalizedQuery,
+      productName,
       productId:      p.productId ?? "",
       link:           `${VTEX_BASE}/${p.linkText}/p`,
       price,
@@ -133,6 +144,8 @@ export async function searchProduct(
     };
   } catch (err: any) {
     console.error(`[VTEX] Erro ao buscar "${normalizedQuery}":`, err.message);
+    await storage.createVtexLog({ type: "not_found", description: "Falha na comunicação com catálogo" }).catch(() => {});
+    await storage.createVtexFailure({ query: rawQuery, reason: "Erro API" }).catch(() => {});
     return { found: false, query: rawQuery, normalizedQuery };
   }
 }

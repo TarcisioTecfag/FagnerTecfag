@@ -64,6 +64,7 @@ interface Visitor {
   firstSeenAt: string;
   lastSeenAt: string;
   name?: string;
+  notes?: { date: string; stage: string; content: string }[];
 }
 
 interface Chat {
@@ -188,6 +189,17 @@ function LiveChat() {
       if (pipelineRes.ok) setPipelineData(await pipelineRes.json());
     } catch {}
   }, []);
+
+  const openVisitorChat = (chatId: string) => {
+    const chatToOpen = visitorChats.find(c => c.id === chatId) || chats.find(c => c.id === chatId);
+    if (chatToOpen) {
+      setActiveTab("chats");
+      setSelectedChat(chatToOpen);
+      loadChatMessages(chatToOpen);
+    } else {
+      toast({ description: "Chat não encontrado nos registros atuais." });
+    }
+  };
 
   // ——— WebSocket connection —————————————————————————————————————————————————
   useEffect(() => {
@@ -1149,9 +1161,13 @@ function LiveChat() {
                         <p className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-1.5">Hist\u00F3rico ({visitorChats.length})</p>
                         <div className="space-y-1">
                           {visitorChats.slice(0, 5).map(c => (
-                            <div key={c.id} className="flex items-center gap-1.5 px-1.5 py-1 rounded-md bg-zinc-50 text-[9px] text-zinc-500">
+                            <div 
+                              key={c.id} 
+                              onClick={() => openVisitorChat(c.id)}
+                              className="flex items-center gap-1.5 px-1.5 py-1 rounded-md bg-zinc-50 text-[9px] text-zinc-500 cursor-pointer hover:bg-zinc-100 transition-colors"
+                            >
                               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.status === 'closed' ? 'bg-zinc-300' : 'bg-emerald-400'}`} />
-                              <span className="truncate flex-1">{c.visitorName || 'Chat'}</span>
+                              <span className="truncate flex-1 hover:text-red-500 transition-colors font-medium">Abrir chat {c.visitorName || ''}</span>
                               <span className="text-zinc-300 flex-shrink-0">{timeAgo(c.startedAt)}</span>
                             </div>
                           ))}
@@ -1164,6 +1180,31 @@ function LiveChat() {
                     >
                       {"\u2715"} Fechar
                     </button>
+                  </div>
+                  
+                  {/* Right 2: Notas IA */}
+                  <div className="w-[300px] flex-shrink-0 border-l border-zinc-100 p-4 flex flex-col h-full bg-zinc-50/50">
+                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2 flex-shrink-0">
+                      {"\u{1F4DD}"} Notas da IA
+                    </p>
+                    <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                      {selectedVisitor.notes && selectedVisitor.notes.length > 0 ? (
+                        [...selectedVisitor.notes].reverse().map((n, i) => (
+                          <div key={i} className="p-2.5 bg-white border border-zinc-200/60 rounded-xl shadow-sm">
+                            <div className="flex justify-between items-center mb-1.5">
+                              <span className="text-[10px] font-bold text-red-600">{n.stage}</span>
+                              <span className="text-[9px] text-zinc-400">{new Date(n.date).toLocaleDateString()} {new Date(n.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-600 leading-snug">{n.content}</p>
+                          </div>
+                        ))
+                      ) : (
+                         <div className="flex flex-col items-center justify-center p-4 text-zinc-300 h-full">
+                          <Bot className="w-8 h-8 mb-2 opacity-30" />
+                          <p className="text-[10px] text-center max-w-[150px]">O Fagner gerar\u00E1 notas aqui automaticamente.</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

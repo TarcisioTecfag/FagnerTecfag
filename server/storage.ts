@@ -27,6 +27,7 @@ import {
   vtexLogs,
   vtexFailures,
   vtexSynonyms,
+  vtexCategories,
 } from "../shared/schema.js";
 import { pool } from "./db.js";
 
@@ -129,6 +130,14 @@ export interface VtexSynonym {
   id: string;
   term: string;
   canonical: string;
+  createdAt: string;
+}
+
+export interface VtexCategory {
+  id: string;
+  name: string;
+  tags: string[];
+  expanded: string;
   createdAt: string;
 }
 
@@ -605,6 +614,40 @@ export const storage = {
 
   async deleteVtexSynonym(id: string): Promise<boolean> {
     const result = await db.delete(vtexSynonyms).where(eq(vtexSynonyms.id, id));
+    return (result as any).rowCount > 0;
+  },
+
+  // ─── VTEX Categories ─────────────────────────────────────────────────────────
+
+  async listVtexCategories(): Promise<VtexCategory[]> {
+    return await db.select().from(vtexCategories).orderBy(asc(vtexCategories.name)) as VtexCategory[];
+  },
+
+  async getVtexCategoryById(id: string): Promise<VtexCategory | null> {
+    const rows = await db.select().from(vtexCategories).where(eq(vtexCategories.id, id)).limit(1);
+    return (rows[0] as VtexCategory) ?? null;
+  },
+
+  async createVtexCategory(data: { name: string; tags: string[] }): Promise<VtexCategory> {
+    const id = uuidv4();
+    await db.insert(vtexCategories).values({ id, name: data.name, tags: data.tags });
+    const rows = await db.select().from(vtexCategories).where(eq(vtexCategories.id, id)).limit(1);
+    return rows[0] as VtexCategory;
+  },
+
+  async updateVtexCategory(id: string, data: Partial<{ name: string; tags: string[]; expanded: boolean }>): Promise<VtexCategory | null> {
+    const cat = await storage.getVtexCategoryById(id);
+    if (!cat) return null;
+    await db.update(vtexCategories).set({
+      name: data.name ?? cat.name,
+      tags: data.tags ?? cat.tags,
+      expanded: data.expanded !== undefined ? (data.expanded ? "true" : "false") : cat.expanded,
+    }).where(eq(vtexCategories.id, id));
+    return storage.getVtexCategoryById(id);
+  },
+
+  async deleteVtexCategory(id: string): Promise<boolean> {
+    const result = await db.delete(vtexCategories).where(eq(vtexCategories.id, id));
     return (result as any).rowCount > 0;
   },
 

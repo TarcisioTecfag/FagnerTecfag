@@ -83,11 +83,18 @@ Quando o cliente mandar uma saudação simples (oi, olá, bom dia, boa tarde, et
 - NUNCA responda com frases longas ou se apresente formalmente na primeira mensagem de resposta.
 - Se o cliente apenas disse "oi", NÃO peça informações — apenas cumprimente e pergunte como pode ajudar.
 
-## SINALIZAÇÃO DE RESULTADO (OBRIGATÓRIO)
-Ao final de CADA resposta sua, AVALIE silenciosamente o rumo da conversa. Se detectar um desfecho claro, inclua UMA das tags abaixo NO FINAL ABSOLUTO da sua mensagem (depois do texto):
-- [OUTCOME:SALE] → Quando o cliente CONFIRMA que vai comprar, solicita orçamento formal, pede para fechar negócio, ou fornece dados para faturamento. Só use quando há intenção CLARA de compra.
-- [OUTCOME:NO_SALE] → Quando o cliente diz explicitamente que NÃO tem interesse, que já comprou de outro, que não vai prosseguir, ou se despede sem intenção de compra.
-Se a conversa ainda está em andamento, NÃO inclua nenhuma tag. Essas tags são INVISÍVEIS para o cliente.
+## SINALIZAÇÃO DE RESULTADO E ENGAGEMENT (OBRIGATÓRIO)
+Ao final de CADA resposta sua, você DEVE avaliar duas coisas:
+1. O rumo da conversa (se há intenção de compra clara, recusa, ou andamento).
+2. O nível do engajamento do cliente de 0 a 100 (0 = Frio/Desinteressado, 50 = Curioso/Explorando, 100 = Muito Quente/Pronto pra comprar).
+
+Com bases nas suas avaliações SILENCIOSAS, inclua as tags corretas NO FINAL ABSOLUTO da sua mensagem:
+- [OUTCOME:SALE] [SCORE:100] → Cliente de fato pediu orçamentos, fechou venda, ou está finalizando.
+- [OUTCOME:NO_SALE] [SCORE:0] → Cliente está curioso sem dinheiro, diz que já comprou, sem interesse.
+- SE a conversa ainda está em ANDAMENTO, adicione APENAS a tag com a sua avaliação do calor atual. Ex: [SCORE:65]
+
+Você NÃO PODE ASSUMIR O QUE O CLIENTE QUER SE FOR AMBÍGUO. Se o cliente pedir "PP" diga: "Nós temos a Envasadora PP. É isso que você busca ou outro modelo?".
+Essas tags são INVISÍVEIS para o cliente. SEMPRE coloque as chaves [ ] corretamente!
 
 ## IDENTIDADE
 - Nome: Fagner
@@ -146,6 +153,7 @@ export interface LiveChatAIResponse {
   reply: string;
   needsHuman: boolean;
   tokens: number;
+  isError?: boolean;
 }
 
 export async function processVisitorMessage(
@@ -157,9 +165,10 @@ export async function processVisitorMessage(
 
   if (!apiKey) {
     return {
-      reply: "Olá! No momento estou com uma breve instabilidade. Pode tentar de novo em alguns instantes? 🙏",
+      reply: "",
       needsHuman: false,
       tokens: 0,
+      isError: true,
     };
   }
 
@@ -267,10 +276,47 @@ export async function processVisitorMessage(
   } catch (err: any) {
     console.error("[LiveChat AI] Gemini error:", err.message);
     return {
-      reply: "Desculpa, tive um probleminha aqui! Pode repetir?",
+      reply: "",
       needsHuman: false,
       tokens: 0,
+      isError: true,
     };
+  }
+}
+
+// ─── Gerar Nota e Resumo para CRM ──────────────────────────────────────────
+
+export async function generateConversationNote(chatId: string): Promise<string | null> {
+  const session = aiSessions.get(chatId);
+  if (!session || session.history.length === 0) return null;
+
+  const apiKey = (await storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "";
+  if (!apiKey) return null;
+
+  const summaryPrompt = `
+Você é um analista de CRM. Você receberá um histórico de interação de chat entre o cliente e o Fagner (Representante IA).
+Sua tarefa é escrever UMA única recomendação de nota resumindo de forma bem breve em terceira pessoa:
+- O que o cliente queria e que produtos foram oferecidos.
+- Por que a conversa foi movida de estágio (por exemplo, "Cliente demonstrou alto interesse para comprar x mas sumiu", ou "Venda fechada com pedido X").
+Não use jargões, seja extremamente direto e sem saudações. Escreva APENAS a nota (1 a 3 sentenças).
+`;
+
+  try {
+    const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
+    const payload = {
+      systemInstruction: { parts: [{ text: summaryPrompt }] },
+      contents: [...session.history.map(h => ({
+        role: h.role === "model" ? "model" : "user",
+        parts: h.parts
+      }))],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 256 },
+    };
+
+    const data = await geminiRequest(url, payload);
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+  } catch (err) {
+    console.error("[LiveChat AI] Error generating note:", err);
+    return null;
   }
 }
 

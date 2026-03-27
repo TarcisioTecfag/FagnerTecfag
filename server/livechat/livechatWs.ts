@@ -15,7 +15,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
 import { lcStorage } from "./livechatStorage.js";
-import { processVisitorMessage, generateProactiveMessage, clearAISession } from "./livechatAI.js";
+import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote } from "./livechatAI.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 
 // ─── Connection maps ─────────────────────────────────────────────────────────
@@ -46,6 +46,7 @@ interface ChatMessageBuffer {
   content: string[];
 }
 const chatMessageBuffers = new Map<string, ChatMessageBuffer>();
+const chatCreationLocks = new Map<string, Promise<any>>();
 
 // ─── Broadcast to all agents ──────────────────────────────────────────────────
 
@@ -459,22 +460,37 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
           case "CHAT_MESSAGE": {
             if (!visitorId) break;
 
-            // Get or create chat
-            let chat = await lcStorage.getActiveChatByVisitor(visitorId);
-            if (!chat) {
-              chat = await lcStorage.createChat({
-                visitorId,
-                source: "widget",
-                visitorName: data.visitorName,
-              });
+            // Get or create chat with Mutex protection against race conditions
+            let chat: any = null;
+            if (chatCreationLocks.has(visitorId)) {
+                chat = await chatCreationLocks.get(visitorId);
+            } else {
+              chat = await lcStorage.getActiveChatByVisitor(visitorId);
+              if (!chat) {
+                const createPromise = (async () => {
+                  const newChat = await lcStorage.createChat({
+                    visitorId,
+                    source: "widget",
+                    visitorName: data.visitorName,
+                  });
 
-              // Engagement: +20 for starting chat
-              const v = await lcStorage.getVisitorById(visitorId);
-              if (v) {
-                await lcStorage.updateVisitor(visitorId, {
-                  engagementScore: Math.min((v.engagementScore ?? 0) + 20, 100),
-                });
-                await recalculateVisitorCategory(visitorId);
+                  // Engagement: +20 for starting chat
+                  const v = await lcStorage.getVisitorById(visitorId);
+                  if (v) {
+                    await lcStorage.updateVisitor(visitorId, {
+                      engagementScore: Math.min((v.engagementScore ?? 0) + 20, 100),
+                    });
+                    await recalculateVisitorCategory(visitorId);
+                  }
+                  return newChat;
+                })();
+                
+                chatCreationLocks.set(visitorId, createPromise);
+                try {
+                  chat = await createPromise;
+                } finally {
+                  chatCreationLocks.delete(visitorId);
+                }
               }
             }
 
@@ -537,38 +553,78 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   chat.id,
                   combinedContent,
                   visitor?.currentPage ?? undefined,
-                );
+                ) as any; // Allow isError
 
-                sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
+                if (aiResponse.isError) {
+                  sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
+                  return; // Silent fail, do not send message
+                }
 
-                // Strip outcome tags for visible content
-                const cleanReply = aiResponse.reply.replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "").trim();
+                // Extração de Score e Limpeza de Tags
+                const rawReply = aiResponse.reply;
+                let finalScore = visitor?.engagementScore ?? 0;
+                
+                const scoreMatch = rawReply.match(/\\[SCORE:(\\d+)\\]/i);
+                if (scoreMatch) {
+                  const botScore = parseInt(scoreMatch[1], 10);
+                  // O Fagner envia o score (qualificação baseada na intenção)
+                  // Combina o score do banco com a intenção gerada
+                  finalScore = Math.min(finalScore + Math.floor(botScore / 2), 100);
+                  try {
+                    await lcStorage.updateVisitor(currentVisitorId, { engagementScore: finalScore });
+                    await recalculateVisitorCategory(currentVisitorId);
+                  } catch {}
+                }
 
-                // Save AI response (clean, without tags)
-                await lcStorage.createMessage({
-                  chatId: chat.id,
-                  sender: "ai",
-                  content: cleanReply,
-                });
+                // Remover TODAS as tags invisíveis
+                const cleanReply = rawReply
+                  .replace(/\\[OUTCOME:(SALE|NO_SALE)\\]/gi, "")
+                  .replace(/\\[SCORE:\\d+\\]/gi, "")
+                  .trim();
 
-                // Send AI reply to visitor (clean)
-                sendToVisitor(currentVisitorId, {
-                  type: "CHAT_REPLY",
-                  chatId: chat.id,
-                  sender: "ai",
-                  content: cleanReply,
-                  timestamp: new Date().toISOString(),
-                });
+                // Fatiar parágrafos ou frases para o delay sequencial
+                const chunks = cleanReply.split(/(?<=[.?!])\\s+/).filter(Boolean);
+                
+                // Mestre de Marionete (Delay Natural)
+                for (let i = 0; i < chunks.length; i++) {
+                  const chunk = chunks[i].trim();
+                  if (!chunk) continue;
+                  
+                  // Se não for o primeiro chunk, exibe "Typing..." de novo e espera 2s a 3s dependendo do tamanho
+                  if (i > 0) {
+                     sendToVisitor(currentVisitorId, { type: "TYPING_START" });
+                     const delayForReading = Math.min(Math.max(chunk.length * 30, 1500), 4000);
+                     await new Promise(r => setTimeout(r, delayForReading));
+                  }
 
-                // Notify agents about AI reply (clean)
-                broadcastToAgents({
-                  type: "CHAT_MESSAGE",
-                  chatId: chat.id,
-                  visitorId: currentVisitorId,
-                  sender: "ai",
-                  content: cleanReply,
-                  timestamp: new Date().toISOString(),
-                });
+                  sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
+
+                  // Salvar sub-mensagem
+                  await lcStorage.createMessage({
+                    chatId: chat.id,
+                    sender: "ai",
+                    content: chunk,
+                  });
+
+                  // Enviar resposta AI (chunk) para o visitante
+                  sendToVisitor(currentVisitorId, {
+                    type: "CHAT_REPLY",
+                    chatId: chat.id,
+                    sender: "ai",
+                    content: chunk,
+                    timestamp: new Date().toISOString(),
+                  });
+
+                  // Notificar agentes do painel
+                  broadcastToAgents({
+                    type: "CHAT_MESSAGE",
+                    chatId: chat.id,
+                    visitorId: currentVisitorId,
+                    sender: "ai",
+                    content: chunk,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
 
                 // If AI needs human help
                 if (aiResponse.needsHuman) {
@@ -584,12 +640,16 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 // Detect pipeline outcome from AI response
                 if (aiResponse.reply.includes("[OUTCOME:SALE]")) {
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_com_venda");
+                  const note = await generateConversationNote(chat.id);
+                  if (note) await lcStorage.addVisitorNote(currentVisitorId, "Venda", note);
                   await lcStorage.closeChat(chat.id);
                   clearAISession(chat.id);
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_com_venda");
                   broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id });
                 } else if (aiResponse.reply.includes("[OUTCOME:NO_SALE]")) {
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_sem_venda");
+                  const note = await generateConversationNote(chat.id);
+                  if (note) await lcStorage.addVisitorNote(currentVisitorId, "S/ Venda", note);
                   await lcStorage.closeChat(chat.id);
                   clearAISession(chat.id);
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_sem_venda");
