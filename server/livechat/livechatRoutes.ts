@@ -56,6 +56,16 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json(visitor);
   });
 
+  router.get("/visitors/:id/chats", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const chats = await lcStorage.listChatsByVisitor(p(req.params.id));
+      return res.json(chats);
+    } catch (err: any) {
+      console.error("[LiveChat] GET /visitors/:id/chats error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
   router.get("/visitors/:id/pageviews", requireAuth, async (req: Request, res: Response) => {
     const pageviews = await lcStorage.listPageviewsByVisitor(p(req.params.id));
     return res.json(pageviews);

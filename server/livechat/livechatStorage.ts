@@ -95,11 +95,16 @@ export const lcStorage = {
         engagementScore: data.engagementScore ?? existing.engagementScore,
         isOnline: data.isOnline ?? existing.isOnline,
         pipelineStage: (data as any).pipelineStage ?? existing.pipelineStage,
+        name: (data as any).name ?? existing.name,
         lastSeenAt: new Date().toISOString(),
       })
       .where(eq(lcVisitors.id, id));
 
     return this.getVisitorById(id);
+  },
+
+  async setVisitorName(id: string, name: string): Promise<void> {
+    await db.execute(sql`UPDATE lc_visitors SET "name" = ${name}, "lastSeenAt" = ${new Date().toISOString()} WHERE "id" = ${id}`);
   },
 
   async listOnlineVisitors(): Promise<LcVisitor[]> {
@@ -307,6 +312,13 @@ export const lcStorage = {
         sql`status != 'closed'`
       ))
       .orderBy(desc(lcChats.startedAt));
+  },
+
+  async listChatsByVisitor(visitorId: string, limit = 50): Promise<LcChat[]> {
+    return db.select().from(lcChats)
+      .where(eq(lcChats.visitorId, visitorId))
+      .orderBy(desc(lcChats.startedAt))
+      .limit(limit);
   },
 
   // ── Messages ─────────────────────────────────────────────────────────

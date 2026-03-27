@@ -429,13 +429,16 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
           // ── VISITOR: Set name ─────────────────────────────────────
           case "SET_VISITOR_NAME": {
             if (!visitorId || !data.name) break;
-            
+
+            // Persistir nome no registro do visitante
+            try { await lcStorage.setVisitorName(visitorId, data.name); } catch {}
+
             const chat = await lcStorage.getActiveChatByVisitor(visitorId);
             if (chat) {
               await lcStorage.updateChat(chat.id, { visitorName: data.name });
               chat.visitorName = data.name;
               const visitor = await lcStorage.getVisitorById(visitorId);
-              
+
               broadcastToAgents({
                 type: "NEW_CHAT",
                 chat,
@@ -443,6 +446,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 proactive: false,
               });
             }
+
+            // Mover pipeline para Em Atendimento quando visitante fornece o nome
+            try {
+              await lcStorage.updateVisitorPipeline(visitorId, "em_atendimento");
+              broadcastPipelineUpdate(visitorId, "em_atendimento");
+            } catch {}
             break;
           }
 
@@ -459,10 +468,6 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 visitorName: data.visitorName,
               });
 
-              // Pipeline: move to "em_atendimento"
-              await lcStorage.updateVisitorPipeline(visitorId, "em_atendimento");
-              broadcastPipelineUpdate(visitorId, "em_atendimento");
-
               // Engagement: +20 for starting chat
               const v = await lcStorage.getVisitorById(visitorId);
               if (v) {
@@ -472,6 +477,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 await recalculateVisitorCategory(visitorId);
               }
             }
+
+            // SEMPRE mover para em_atendimento quando visitante envia mensagem
+            try {
+              await lcStorage.updateVisitorPipeline(visitorId, "em_atendimento");
+              broadcastPipelineUpdate(visitorId, "em_atendimento");
+            } catch {}
 
             const conn = visitorConnections.get(visitorId);
             if (conn) conn.chatId = chat.id;

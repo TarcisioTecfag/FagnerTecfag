@@ -155,6 +155,7 @@ export const lcVisitors = pgTable("lc_visitors", {
   // Valores: 'novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'
   firstSeenAt: text("firstSeenAt").notNull().default(sql`now()::text`),
   lastSeenAt: text("lastSeenAt").notNull().default(sql`now()::text`),
+  name: text("name"),   // Nome fornecido pelo visitante via widget
 });
 
 export const lcPageviews = pgTable("lc_pageviews", {

@@ -63,6 +63,7 @@ interface Visitor {
   pipelineStage: string;
   firstSeenAt: string;
   lastSeenAt: string;
+  name?: string;
 }
 
 interface Chat {
@@ -120,13 +121,13 @@ function statusBadge(status: string): { label: string; icon: string; color: stri
 
 function sourceLabel(src?: string): { label: string; icon: string } {
   switch (src) {
-    case "google_organic": return { label: "Google OrgÃ¢nico", icon: "ðŸ”" };
-    case "google_ads": return { label: "Google Ads", icon: "ðŸ“¢" };
-    case "instagram": return { label: "Instagram", icon: "ðŸ“¸" };
-    case "facebook": return { label: "Facebook", icon: "ðŸ“˜" };
-    case "youtube": return { label: "YouTube", icon: "â–¶ï¸" };
-    case "direct": return { label: "Direto", icon: "ðŸ”—" };
-    default: return { label: src ?? "Outro", icon: "ðŸŒ" };
+    case "google_organic": return { label: "Google Org\u00E2nico", icon: "\u{1F50D}" };
+    case "google_ads": return { label: "Google Ads", icon: "\u{1F4E2}" };
+    case "instagram": return { label: "Instagram", icon: "\u{1F4F8}" };
+    case "facebook": return { label: "Facebook", icon: "\u{1F4D8}" };
+    case "youtube": return { label: "YouTube", icon: "\u25B6\uFE0F" };
+    case "direct": return { label: "Direto", icon: "\u{1F517}" };
+    default: return { label: src ?? "Outro", icon: "\u{1F30E}" };
   }
 }
 
@@ -146,7 +147,7 @@ function scoreColor(score: number): string {
   return "from-emerald-500 to-teal-500";
 }
 
-// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Main Component —————————————————————————————————————————————————
 
 function LiveChat() {
   const [activeTab, setActiveTab] = useState<"chats" | "visitors" | "crm" | "arquivados" | "atencao" | "stats">("chats");
@@ -160,13 +161,14 @@ function LiveChat() {
   const [allVisitors, setAllVisitors] = useState<Visitor[]>([]);
   const [pipelineData, setPipelineData] = useState<Record<string, Visitor[]>>({});
   const [attentionOpen, setAttentionOpen] = useState(false);
-  const [attentionReason, setAttentionReason] = useState("Falta de informação");
+  const [attentionReason, setAttentionReason] = useState("Falta de informa\u00E7\u00E3o");
   const [attentionObs, setAttentionObs] = useState("");
+  const [visitorChats, setVisitorChats] = useState<Chat[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // â”€â”€ Fetch initial data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Fetch initial data —————————————————————————————————————————————————
   const fetchData = useCallback(async () => {
     try {
       const [chatsRes, statsRes, allVisitorsRes, pipelineRes] = await Promise.all([
@@ -324,7 +326,16 @@ function LiveChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  // â”€â”€ Load chat messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Fetch chat history when visitor selected in CRM
+  useEffect(() => {
+    if (!selectedVisitor) { setVisitorChats([]); return; }
+    fetch(`/api/livechat/visitors/${selectedVisitor.id}/chats`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then(setVisitorChats)
+      .catch(() => setVisitorChats([]));
+  }, [selectedVisitor]);
+
+  // ——— Load chat messages —————————————————————————————————————————————————
   const loadChatMessages = async (chat: Chat) => {
     setSelectedChat(chat);
     try {
@@ -333,7 +344,7 @@ function LiveChat() {
     } catch {}
   };
 
-  // â”€â”€ Agent send message (human takeover) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Agent send message (human takeover) —————————————————————————————————
   const handleAgentSend = () => {
     if (!agentInput.trim() || !selectedChat || !wsRef.current) return;
     wsRef.current.send(JSON.stringify({
@@ -353,7 +364,7 @@ function LiveChat() {
     setAgentInput("");
   };
 
-  // â”€â”€ Take over chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Take over chat —————————————————————————————————————————————————
   const handleTakeOver = async (chatId: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "TAKE_OVER", chatId, userId: "admin" }));
@@ -369,7 +380,7 @@ function LiveChat() {
     toast({ title: "Chat assumido", description: "Você agora está respondendo este chat." });
   };
 
-  // ── Close chat ───────────────────────────────────────────────────────────
+  // ——— Close chat —————————————————————————————————————————————————
   const handleCloseChat = async (chatId: string) => {
     // Notifica o visitante via WS (se disponível)
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -387,7 +398,7 @@ function LiveChat() {
     }
   };
 
-  // ── Attention Flag ───────────────────────────────────────────────────────
+  // ——— Attention Flag —————————————————————————————————————————————————
   const handleFlagAttention = () => {
     if (!selectedChat || !wsRef.current) return;
     
@@ -407,27 +418,30 @@ function LiveChat() {
     setAttentionObs("");
   };
 
-  // ─── Derived data ──────────────────────────────────────────────────────────
+  // ——— Derived data —————————————————————————————————————————————————
   const activeChats = chats.filter((c) => c.status !== "closed");
   const archivedChats = chats.filter((c) => c.status === "closed");
   // Atenção: apenas chats explicitamente marcados pelo admin (needsHuman === "attention")
   const attentionChats = chats.filter((c) => c.needsHuman === "attention");
   const needsHumanChats = chats.filter((c) => c.needsHuman === "true" && c.status !== "closed");
 
-  // ─── TABS ──────────────────────────────────────────────────────────────────
-  const tabs = [
+  // ——— TABS —————————————————————————————————————————————————
+  const mainTabs = [
     { id: "chats" as const, label: "Chats", icon: MessageCircle, count: activeChats.length },
     { id: "visitors" as const, label: "Visitantes", icon: Eye, count: visitors.length },
-    { id: "crm" as const, label: "CRM", icon: Users },
-    { id: "arquivados" as const, label: "Arquivados", icon: Layers, count: archivedChats.length },
-    { id: "atencao" as const, label: "Atenção 🚨", icon: AlertTriangle, count: attentionChats.length },
-    { id: "stats" as const, label: "Estatísticas", icon: BarChart3 },
+    { id: "crm" as const, label: "CRM", icon: Users, count: undefined as number | undefined },
   ];
+  const secondaryTabs = [
+    { id: "arquivados" as const, label: "Arquivados", icon: Layers, count: archivedChats.length },
+    { id: "atencao" as const, label: "Aten\u00E7\u00E3o", icon: AlertTriangle, count: attentionChats.length },
+    { id: "stats" as const, label: "Estat\u00EDsticas", icon: BarChart3, count: undefined as number | undefined },
+  ];
+  const tabs = [...mainTabs, ...secondaryTabs];
 
   return (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(0 0% 97%) 0%, hsl(0 5% 95%) 100%)" }}>
 
-      {/* â•â•â• COMPACT HEADER â•â•â• */}
+      {/* ——— COMPACT HEADER ——— */}
       <div className="flex-shrink-0 px-6 pt-5 pb-3">
         {/* Row 1: Title + Stats + Refresh */}
         <div className="flex items-center justify-between mb-3">
@@ -480,30 +494,46 @@ function LiveChat() {
 
         {/* Row 2: Tabs */}
         <div className="flex gap-1 bg-white/60 p-1 rounded-xl border border-zinc-200/60 shadow-sm backdrop-blur-sm">
-          {tabs.map((tab) => {
+          {mainTabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                  isActive
-                    ? "text-white shadow-md"
-                    : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100/60"
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 ${
+                  isActive ? "text-white shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100/60"
                 }`}
-                style={isActive ? {
-                  background: "linear-gradient(135deg, #7f1d1d, #dc2626)",
-                  boxShadow: "0 2px 8px rgba(220,38,38,0.3)",
-                } : {}}
+                style={isActive ? { background: "linear-gradient(135deg, #7f1d1d, #dc2626)", boxShadow: "0 2px 8px rgba(220,38,38,0.3)" } : {}}
               >
                 <tab.icon className="w-3.5 h-3.5" />
                 {tab.label}
                 {tab.count !== undefined && tab.count > 0 && (
                   <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none ${
                     isActive ? "bg-white/25 text-white" : "bg-zinc-200/80 text-zinc-600"
-                  }`}>
-                    {tab.count}
-                  </span>
+                  }`}>{tab.count}</span>
+                )}
+              </button>
+            );
+          })}
+          <div className="flex-1" />
+          <div className="w-px bg-zinc-200/60 mx-1 self-stretch rounded-full" />
+          {secondaryTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 ${
+                  isActive ? "text-white shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100/60"
+                }`}
+                style={isActive ? { background: "linear-gradient(135deg, #7f1d1d, #dc2626)", boxShadow: "0 2px 8px rgba(220,38,38,0.3)" } : {}}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                {tab.label}
+                {tab.count !== undefined && tab.count > 0 && (
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none ${
+                    isActive ? "bg-white/25 text-white" : "bg-zinc-200/80 text-zinc-600"
+                  }`}>{tab.count}</span>
                 )}
               </button>
             );
@@ -511,10 +541,10 @@ function LiveChat() {
         </div>
       </div>
 
-      {/* â•â•â• TAB CONTENT (flex-1, overflow-hidden) â•â•â• */}
+      {/* ——— TAB CONTENT (flex-1, overflow-hidden) ——— */}
       <div className="flex-1 overflow-hidden px-6 pb-5">
 
-        {/* ─── Tabs: Chats, Arquivados, Atenção ──────────────────────────────── */}
+        {/* ——— Tabs: Chats, Arquivados, Atenção ———————————————————————————————— */}
         {(activeTab === "chats" || activeTab === "arquivados" || activeTab === "atencao") && (() => {
           const currentList = activeTab === "chats" ? activeChats : activeTab === "arquivados" ? archivedChats : attentionChats;
           const currentTitle = activeTab === "chats" ? "Conversas" : activeTab === "arquivados" ? "Arquivados" : "Em Atenção";
@@ -643,6 +673,21 @@ function LiveChat() {
                             </Button>
                           )}
 
+                          {/* Botão Ver no CRM */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const v = allVisitors.find(x => x.id === selectedChat?.visitorId);
+                              if (v) setSelectedVisitor(v);
+                              setActiveTab("crm");
+                            }}
+                            className="h-8 text-xs gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300"
+                          >
+                            <Users className="w-3 h-3" />
+                            Ver no CRM
+                          </Button>
+
                           {/* Botão de Atenção */}
                           <Button
                             size="sm"
@@ -662,14 +707,14 @@ function LiveChat() {
                                 value={attentionReason}
                                 onChange={(e) => setAttentionReason(e.target.value)}
                               >
-                                <option value="Falta de informação">Falta de informação</option>
-                                <option value="Não respondeu">Não respondeu</option>
-                                <option value="Não entendeu o cliente">Não entendeu o cliente</option>
+                                <option value="Falta de informa\u00E7\u00E3o">Falta de informa\u00E7\u00E3o</option>
+                                <option value="N\u00E3o respondeu">N\u00E3o respondeu</option>
+                                <option value="N\u00E3o entendeu o cliente">N\u00E3o entendeu o cliente</option>
                                 <option value="Parou de responder">Parou de responder</option>
-                                <option value="Outro problema técnico">Outro problema técnico</option>
+                                <option value="Outro problema t\u00E9cnico">Outro problema t\u00E9cnico</option>
                               </select>
                               <Textarea
-                                placeholder="Observação (opcional)"
+                                placeholder="Observa\u00E7\u00E3o (opcional)"
                                 className="text-sm min-h-[60px] mb-3"
                                 value={attentionObs}
                                 onChange={(e) => setAttentionObs(e.target.value)}
@@ -695,7 +740,7 @@ function LiveChat() {
                       {/* Badge somente leitura — aba Atenção */}
                       {activeTab === "atencao" && (
                         <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
-                          👁 Visualização — somente leitura
+                          👁 Visualiza\u00E7\u00E3o — somente leitura
                         </span>
                       )}
 
@@ -762,7 +807,7 @@ function LiveChat() {
                       <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-zinc-50 border border-zinc-100">
                         <Layers className="w-4 h-4 text-zinc-400" />
                         <p className="text-[11px] text-zinc-500 font-medium">
-                          Conversa encerrada — histórico somente para leitura.
+                          Conversa encerrada — hist\u00F3rico somente para leitura.
                         </p>
                       </div>
                     ) : selectedChat.status === "human_active" ? (
@@ -789,7 +834,7 @@ function LiveChat() {
                       <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-emerald-50/60 border border-emerald-100">
                         <Bot className="w-4 h-4 text-emerald-500" />
                         <p className="text-[11px] text-emerald-700 font-medium">
-                          Fagner está conduzindo este atendimento. Clique em "Assumir" para intervir.
+                          Fagner est\u00E1 conduzindo este atendimento. Clique em "Assumir" para intervir.
                         </p>
                       </div>
                     )}
@@ -808,7 +853,7 @@ function LiveChat() {
           </div>
         )})()}
 
-        {/* ─── Tab: Visitantes ──────────────────────────────────────────── */}
+        {/* ——— Tab: Visitantes ———————————————————————————————————————— */}
         {activeTab === "visitors" && (
           <div className="h-full flex flex-col bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden animate-tab-enter">
             {/* Header */}
@@ -826,7 +871,7 @@ function LiveChat() {
                 <div className="flex flex-col items-center justify-center h-full text-zinc-400">
                   <Eye className="w-12 h-12 mb-3 opacity-20" />
                   <p className="text-sm font-medium">Nenhum visitante online</p>
-                  <p className="text-[11px]">Os visitantes aparecerão aqui em tempo real</p>
+                  <p className="text-[11px]">Os visitantes aparecer\u00E3o aqui em tempo real</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -852,7 +897,7 @@ function LiveChat() {
                             <div>
                               <p className="text-sm font-semibold text-zinc-800 flex items-center gap-1.5">
                                 <MapPin className="w-3 h-3 text-zinc-400" />
-                                {v.city || "â€”"}{v.country ? `, ${v.country}` : ""}
+                                {v.name || v.city || "\u2014"}{v.country ? `, ${v.country}` : ""}
                               </p>
                               <p className="text-[10px] text-zinc-400">{v.browser}</p>
                             </div>
@@ -914,7 +959,7 @@ function LiveChat() {
           </div>
         )}
 
-        {/* â”€â”€â”€ Tab: CRM Kanban â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ——— Tab: CRM Kanban ————————————————————————————————————————————————— */}
         {activeTab === "crm" && (
           <div className="h-full flex flex-col animate-tab-enter">
             {/* Kanban columns */}
@@ -924,7 +969,7 @@ function LiveChat() {
                 { stage: "em_atendimento", label: "Em Atendimento", color: "#3b82f6", bgLight: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.3)" },
                 { stage: "finalizado_com_venda", label: "Finalizou Com Venda", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
                 { stage: "finalizado_sem_venda", label: "Finalizou Sem Venda", color: "#ef4444", bgLight: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.3)" },
-                { stage: "sem_resposta", label: "Não Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
+                { stage: "sem_resposta", label: "N\u00E3o Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
               ].map((col) => {
                 const items = pipelineData[col.stage] || [];
                 return (
@@ -982,7 +1027,7 @@ function LiveChat() {
                                       className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold text-white"
                                       style={{ background: col.color }}
                                     >
-                                      {(v.city || "?")[0].toUpperCase()}
+                                      {(v.name || v.city || "?")[0].toUpperCase()}
                                     </div>
                                     {v.isOnline === "true" && (
                                       <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-white" />
@@ -990,7 +1035,7 @@ function LiveChat() {
                                   </div>
                                   <div>
                                     <p className="text-[11px] font-semibold text-zinc-800 leading-tight truncate max-w-[120px]">
-                                      {v.city || "Visitante"}
+                                      {v.name || v.city || "Visitante"}
                                     </p>
                                     <p className="text-[9px] text-zinc-400">{v.browser}</p>
                                   </div>
@@ -1010,9 +1055,9 @@ function LiveChat() {
                               </div>
 
                               {/* Meta info */}
-                              <div className="flex items-center gap-2 text-[9px] text-zinc-400">
+                               <div className="flex items-center gap-2 text-[9px] text-zinc-400">
                                 <span>{src.icon} {src.label}</span>
-                                <span>â€¢ {v.totalChats} chats</span>
+                                <span>{"\u2022"} {v.totalChats} chats</span>
                               </div>
                             </div>
                           );
@@ -1031,11 +1076,11 @@ function LiveChat() {
                   {/* Left: visitor info */}
                   <div className="flex-1 p-4 flex items-start gap-4 overflow-y-auto">
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center text-base font-bold text-white flex-shrink-0" style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}>
-                      {(selectedVisitor.city || "?")[0].toUpperCase()}
+                      {(selectedVisitor.name || selectedVisitor.city || "?")[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-sm font-bold text-zinc-800">{selectedVisitor.city || "Desconhecido"}</h3>
+                        <h3 className="text-sm font-bold text-zinc-800">{selectedVisitor.name || selectedVisitor.city || "Desconhecido"}</h3>
                         <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${categoryLabel(selectedVisitor.category).bg}`}>
                           {categoryLabel(selectedVisitor.category).emoji} {categoryLabel(selectedVisitor.category).label}
                         </span>
@@ -1044,15 +1089,15 @@ function LiveChat() {
                             ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
                             : "bg-zinc-50 text-zinc-500 border border-zinc-200"
                         }`}>
-                          {selectedVisitor.isOnline === "true" ? "ðŸŸ¢ Online" : "âš« Offline"}
+                          {selectedVisitor.isOnline === "true" ? "\u{1F7E2} Online" : "\u26AB Offline"}
                         </span>
                       </div>
-                      <p className="text-[11px] text-zinc-400 mb-2">{selectedVisitor.country} â€¢ {selectedVisitor.browser} â€¢ {sourceLabel(selectedVisitor.source).icon} {sourceLabel(selectedVisitor.source).label}</p>
+                      <p className="text-[11px] text-zinc-400 mb-2">{selectedVisitor.country}{" \u2022 "}{selectedVisitor.browser}{" \u2022 "}{sourceLabel(selectedVisitor.source).icon} {sourceLabel(selectedVisitor.source).label}</p>
 
                       <div className="flex items-center gap-4">
                         {[
                           { label: "Visitas", value: selectedVisitor.totalVisits },
-                          { label: "PÃ¡ginas", value: selectedVisitor.totalPages },
+                          { label: "P\u00E1ginas", value: selectedVisitor.totalPages },
                           { label: "Chats", value: selectedVisitor.totalChats },
                           { label: "Score", value: `${selectedVisitor.engagementScore}/100` },
                         ].map((m) => (
@@ -1075,14 +1120,14 @@ function LiveChat() {
 
                   {/* Right: activity timeline */}
                   <div className="w-[280px] flex-shrink-0 border-l border-zinc-100 p-4 overflow-y-auto">
-                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">ðŸ• Atividade</p>
+                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">{"\u{1F4CB}"} Atividade</p>
                     <div className="space-y-1.5 text-xs">
                       <div className="flex justify-between">
                         <span className="text-zinc-500">Primeiro acesso</span>
                         <span className="text-zinc-700 font-medium">{new Date(selectedVisitor.firstSeenAt).toLocaleDateString("pt-BR")}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-zinc-500">Ãšltima atividade</span>
+                        <span className="text-zinc-500">{"\u00DA"}ltima atividade</span>
                         <span className="text-zinc-700 font-medium">{timeAgo(selectedVisitor.lastSeenAt)}</span>
                       </div>
                       {selectedVisitor.currentPage && (
@@ -1098,11 +1143,26 @@ function LiveChat() {
                         </div>
                       )}
                     </div>
+                    {/* Histórico de conversas */}
+                    {visitorChats.length > 0 && (
+                      <div className="mt-3 pt-2 border-t border-zinc-100">
+                        <p className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-1.5">Hist\u00F3rico ({visitorChats.length})</p>
+                        <div className="space-y-1">
+                          {visitorChats.slice(0, 5).map(c => (
+                            <div key={c.id} className="flex items-center gap-1.5 px-1.5 py-1 rounded-md bg-zinc-50 text-[9px] text-zinc-500">
+                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.status === 'closed' ? 'bg-zinc-300' : 'bg-emerald-400'}`} />
+                              <span className="truncate flex-1">{c.visitorName || 'Chat'}</span>
+                              <span className="text-zinc-300 flex-shrink-0">{timeAgo(c.startedAt)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <button
                       onClick={() => setSelectedVisitor(null)}
                       className="mt-3 w-full text-[10px] text-zinc-400 hover:text-zinc-600 transition-colors py-1"
                     >
-                      âœ• Fechar
+                      {"\u2715"} Fechar
                     </button>
                   </div>
                 </div>
