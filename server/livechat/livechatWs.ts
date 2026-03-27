@@ -20,11 +20,10 @@ import { recalculateVisitorCategory } from "./livechatScoring.js";
 
 // ─── Connection maps ─────────────────────────────────────────────────────────
 
+// Cada aba aberta pelo mesmo visitante gera uma entrada na Set
 interface VisitorConnection {
   ws: WebSocket;
-  visitorId: string;
-  chatId?: string;
-  proactiveTimer?: NodeJS.Timeout;
+  connectionId: string;
 }
 
 interface AgentConnection {
@@ -32,7 +31,10 @@ interface AgentConnection {
   userId: string;
 }
 
-const visitorConnections = new Map<string, VisitorConnection>();
+// Map: visitorId → Set de conexões WebSocket (suporta múltiplas abas)
+const visitorConnections = new Map<string, Set<VisitorConnection>>();
+// Timers proativos separados (1 por visitante, independente do nº de abas)
+const proactiveTimers = new Map<string, NodeJS.Timeout>();
 const agentConnections = new Map<string, AgentConnection>();
 interface FollowUpTimers {
   t3m?: NodeJS.Timeout;
@@ -47,6 +49,17 @@ interface ChatMessageBuffer {
 }
 const chatMessageBuffers = new Map<string, ChatMessageBuffer>();
 const chatCreationLocks = new Map<string, Promise<any>>();
+
+// ─── Send to visitor (all open tabs) ──────────────────────────────────────
+
+function sendToVisitor(visitorId: string, payload: object): void {
+  const conns = visitorConnections.get(visitorId);
+  if (!conns) return;
+  const msg = JSON.stringify(payload);
+  Array.from(conns).forEach((c) => {
+    if (c.ws.readyState === WebSocket.OPEN) c.ws.send(msg);
+  });
+}
 
 // ─── Broadcast to all agents ──────────────────────────────────────────────────
 
@@ -131,14 +144,6 @@ function clearFollowUpTimers(visitorId: string): void {
   }
 }
 
-// ─── Send to visitor ──────────────────────────────────────────────────────────
-
-function sendToVisitor(visitorId: string, data: object): void {
-  const conn = visitorConnections.get(visitorId);
-  if (conn && conn.ws.readyState === WebSocket.OPEN) {
-    conn.ws.send(JSON.stringify(data));
-  }
-}
 
 // ─── Detect traffic source ───────────────────────────────────────────────────
 
@@ -187,11 +192,10 @@ async function geoLookup(ip: string): Promise<{ city?: string; country?: string 
 // ─── Proactive approach timer ─────────────────────────────────────────────────
 
 async function startProactiveTimer(visitorId: string): Promise<void> {
-  const conn = visitorConnections.get(visitorId);
-  if (!conn) return;
-
-  // Clear existing timer
-  if (conn.proactiveTimer) clearTimeout(conn.proactiveTimer);
+  // Se já há um timer ativo para este visitante, não cria outro
+  if (proactiveTimers.has(visitorId)) return;
+  // Visitante deve ter ao menos uma conexão ativa
+  if (!visitorConnections.has(visitorId)) return;
 
   // Get configured delay (default 60s)
   const delaySetting = await lcStorage.getSettingParsed<number>("proactive_delay_ms");
@@ -201,7 +205,8 @@ async function startProactiveTimer(visitorId: string): Promise<void> {
   const enabled = await lcStorage.getSettingParsed<boolean>("proactive_enabled");
   if (enabled === false) return;
 
-  conn.proactiveTimer = setTimeout(async () => {
+  const timer = setTimeout(async () => {
+    proactiveTimers.delete(visitorId);
     try {
       // Don't send if visitor already has an active chat
       const existingChat = await lcStorage.getActiveChatByVisitor(visitorId);
@@ -229,8 +234,8 @@ async function startProactiveTimer(visitorId: string): Promise<void> {
         content: message,
       });
 
-      // Update connection
-      conn.chatId = chat.id;
+      // Store chat reference (no conn object needed — use storage)
+      // sendToVisitor already handles all open tabs
 
       // Send to visitor widget
       sendToVisitor(visitorId, {
@@ -253,6 +258,7 @@ async function startProactiveTimer(visitorId: string): Promise<void> {
       console.error("[LiveChat] Erro na abordagem proativa:", err.message);
     }
   }, delay);
+  proactiveTimers.set(visitorId, timer);
 }
 
 // ─── Init WebSocket server ────────────────────────────────────────────────────
@@ -342,8 +348,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             // Ensure isOnline is always set to true on reconnect
             await lcStorage.setVisitorOnline(visitorId);
 
-            // Store connection
-            visitorConnections.set(visitorId, { ws, visitorId });
+            // Adicionar esta conexão à Set (suporta múltiplas abas do mesmo visitante)
+            if (!visitorConnections.has(visitorId)) {
+              visitorConnections.set(visitorId, new Set());
+            }
+            const myConn: VisitorConnection = { ws, connectionId };
+            visitorConnections.get(visitorId)!.add(myConn);
 
             // Send acknowledgement
             ws.send(JSON.stringify({
@@ -496,7 +506,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   chat = newChat;
                   resolveLock(chat); // libera quem estava esperando
                 } catch (err) {
-                  resolveLock(null);
+                  resolveLock(null as any);
                   throw err;
                 } finally {
                   // Só remove o lock após pequeno delay para garantir que leitores concorrentes recebam o chat
@@ -513,8 +523,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               broadcastPipelineUpdate(visitorId, "em_atendimento");
             } catch {}
 
-            const conn = visitorConnections.get(visitorId);
-            if (conn) conn.chatId = chat.id;
+            // chatId não precisa ser armazenado na conexão — é obtido via storage quando necessário
 
             // Save visitor message
             await lcStorage.createMessage({
@@ -866,22 +875,27 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
     // ── Disconnect ─────────────────────────────────────────────────────
     ws.on("close", async () => {
       if (role === "visitor" && visitorId) {
-        const conn = visitorConnections.get(visitorId);
-        if (conn?.proactiveTimer) clearTimeout(conn.proactiveTimer);
+        const conns = visitorConnections.get(visitorId);
+        if (conns) {
+          // Remove apenas esta conexão da Set
+          Array.from(conns).forEach((c) => { if (c.ws === ws) conns.delete(c); });
 
-        visitorConnections.delete(visitorId);
-        await lcStorage.setVisitorOffline(visitorId);
+          // Só marca offline quando NÃO há mais nenhuma aba aberta
+          if (conns.size === 0) {
+            visitorConnections.delete(visitorId);
+            // Limpar timer proativo
+            const pt = proactiveTimers.get(visitorId);
+            if (pt) { clearTimeout(pt); proactiveTimers.delete(visitorId); }
 
-        // If visitor had an active chat and disconnects, start follow up timeout
-        const activeChat = await lcStorage.getActiveChatByVisitor(visitorId);
-        if (activeChat) {
-          startFollowUpTimers(visitorId, activeChat.id);
+            await lcStorage.setVisitorOffline(visitorId);
+
+            // Se havia chat ativo, iniciar timers de follow-up
+            const activeChat = await lcStorage.getActiveChatByVisitor(visitorId);
+            if (activeChat) startFollowUpTimers(visitorId, activeChat.id);
+
+            broadcastToAgents({ type: "VISITOR_OFFLINE", visitorId });
+          }
         }
-
-        broadcastToAgents({
-          type: "VISITOR_OFFLINE",
-          visitorId,
-        });
       }
 
       if (role === "agent") {
