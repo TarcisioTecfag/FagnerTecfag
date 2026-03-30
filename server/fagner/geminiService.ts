@@ -96,10 +96,11 @@ export function splitHumanized(text: string): MessagePart[] {
     }
   }
 
-  // Une partes muito curtas com a próxima
+  // Une partes muito curtas com a próxima (exceto se contiverem links)
   const merged: string[] = [];
   for (let i = 0; i < parts.length; i++) {
-    if (parts[i].length < MIN_CHARS && i < parts.length - 1) {
+    const isUrl = parts[i].includes("http") || parts[i].includes("/uploads");
+    if (parts[i].length < MIN_CHARS && i < parts.length - 1 && !isUrl) {
       parts[i + 1] = `${parts[i]} ${parts[i + 1]}`;
     } else {
       merged.push(parts[i]);
@@ -220,6 +221,7 @@ interface RagDocument {
   name: string;
   content: string;
   embedding?: number[];
+  filePath?: string;
 }
 
 // Cache simples de embeddings por documento
@@ -278,7 +280,7 @@ export async function ragSearch(
     if (top.length === 0) return "";
 
     return top
-      .map((x) => `[${x.doc.name}]\n${x.doc.content.slice(0, 800)}`)
+      .map((x) => `[Documento: ${x.doc.name} | Link de Download: ${x.doc.filePath || ""}]\n${x.doc.content.slice(0, 800)}`)
       .join("\n\n---\n\n");
   } catch (e) {
     console.warn("[RAG] Busca semântica falhou (ignorando):", e);

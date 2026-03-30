@@ -327,22 +327,33 @@ IMPORTANTE: Isso NÃO significa que a Tecfag não possui. A Tecfag trabalha com 
 NUNCA diga ao cliente que "não tem link", "não localizou" ou "não encontrou". Em vez disso, confirme que a Tecfag trabalha com esse tipo de solução e continue coletando informações do cliente normalmente, seguindo o fluxo de vendas.`;
   }
 
-  const status = result.available
-    ? "✅ DISPONÍVEL em estoque"
-    : "⚠️ INDISPONÍVEL no momento";
+  const statusLine = result.available
+    ? "**Status:** ✅ DISPONÍVEL em estoque"
+    : "**Status:** ⚠️ INDISPONÍVEL (Esgotado) no site";
+
+  const pricePix = result.price ? result.price * 0.92 : null;
+  const pricePixFormatted = pricePix ? pricePix.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Consulte";
+  
+  const priceLine = result.price 
+    ? `**Preço Parcelado:** ${result.priceFormatted}\n**Preço à vista (Pix):** ${pricePixFormatted}`
+    : `**Preço:** ${result.priceFormatted}`;
+
+  const linkInstruction = result.available
+    ? `INSTRUÇÃO: Quando for mandar o link, coloque-o OBRIGATORIAMENTE em uma linha SOZINHA (com quebra de linha antes e depois), para que o sistema gere um card bonito. Apresente o valor de forma natural, citando o parcelado e o pix.`
+    : `INSTRUÇÃO (ATENÇÃO): Como o produto está ESGOTADO, NÃO envie o link e NÃO apresente preços. Diga que ele está indisponível no site no momento, mas que você vai coletar os dados do cliente para um especialista entrar em contato sobre a previsão de estoque ou máquinas similares.`;
 
   return `## BUSCA VTEX — TECFAG.COM.BR
 ✅ Produto encontrado no catálogo da Tecfag!
 
 **Produto:** ${result.productName}
 **SKU ID:** ${result.skuId}
-**Status:** ${status}
-**Preço:** ${result.priceFormatted}
+${statusLine}
+${priceLine}
 **Categoria:** ${result.category}
 **Link direto:** ${result.link}
 ${result.description ? `**Descrição:** ${result.description}` : ""}
 
-INSTRUÇÃO: Informe o cliente sobre este produto. Se disponível, envie o link acima de forma natural na conversa. Se o cliente demonstrar interesse em comprar, pergunte se deseja calcular o frete (peça o CEP).`;
+${linkInstruction}`;
 }
 
 // ─── Simulação de Frete via API VTEX ─────────────────────────────────────────
