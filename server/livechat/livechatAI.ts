@@ -265,10 +265,51 @@ export async function processVisitorMessage(
   // Build context
   const contextParts: string[] = [];
 
-  // RAG — busca na base de conhecimento
+  // ─── RAG — busca na base de conhecimento ──────────────────────────────────────
+  // Estratégia 1: busca por palavras-chave (não depende de embeddings, mais confiável)
+  // Estratégia 2: busca semântica via Gemini embeddings (fallback)
   try {
     const docs = await getRagDocuments();
-    const ragResult = await ragSearch(userMessage, docs, apiKey, 3);
+    console.log(`[LiveChat RAG] ${docs.length} docs carregados do banco.`);
+
+    let ragResult = "";
+
+    if (docs.length > 0) {
+      // Estratégia 1: match por keyword no nome do doc / conteúdo
+      const queryLower = userMessage.toLowerCase();
+      const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+      
+      const keywordMatches = docs
+        .map(doc => {
+          const nameLower = (doc.name || "").toLowerCase();
+          const contentLower = (doc.content || "").toLowerCase();
+          let score = 0;
+          for (const word of queryWords) {
+            if (nameLower.includes(word)) score += 3; // nome pesa mais
+            if (contentLower.includes(word)) score += 1;
+          }
+          return { doc, score };
+        })
+        .filter(x => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+
+      if (keywordMatches.length > 0) {
+        console.log(`[LiveChat RAG] Keyword match: ${keywordMatches.map(x => x.doc.name + ":" + x.score).join(", ")}`);
+        ragResult = keywordMatches
+          .map(x => `[Documento: ${x.doc.name} | Link de Download: ${x.doc.filePath || ""}]\n${x.doc.content.slice(0, 800)}`)
+          .join("\n\n---\n\n");
+      } else {
+        // Estratégia 2: semântica (Gemini embeddings) — só se keyword não achou nada
+        try {
+          ragResult = await ragSearch(userMessage, docs, apiKey, 3);
+          console.log(`[LiveChat RAG] Semantic result length: ${ragResult.length}`);
+        } catch (e) {
+          console.warn("[LiveChat RAG] Semantic failed:", e);
+        }
+      }
+    }
+
     if (ragResult) {
       contextParts.push(`## BASE DE CONHECIMENTO RELEVANTE\n${ragResult}`);
     }

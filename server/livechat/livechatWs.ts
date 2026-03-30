@@ -614,28 +614,45 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   .replace(/\[SCORE:\d+\]/gi, "")
                   .trim();
 
+                // ─── Pré-processa: garante que URLs fiquem em parágrafos próprios ─────────
+                const processedReply = cleanReply
+                  .replace(/(https?:\/\/[^\s)]+)/gi, "\n\n$1\n\n")
+                  .replace(/(\/uploads\/[^\s)]+)/gi, "\n\n$1\n\n")
+                  .replace(/\n{3,}/g, "\n\n")
+                  .trim();
+
                 // Separa emojis no final das frases e quebra por pontuação
-                // Sem lookbehind nem flag /u para manter compatibilidade TS
+                // Prioridade: parágrafos (\n\n) > pontuação (. ! ?)
                 function splitIntoChunks(text: string): string[] {
+                  // 1. Primeiro divide por parágrafos (\n\n) — URLs ficam sozinhas aqui
+                  const paragraphs = text.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+                  
                   const result: string[] = [];
-                  // Divide manualmente por . ! ? seguidos de espaço
-                  let remaining = text.trim();
-                  while (remaining.length > 0) {
-                    // Procura fim de frase
-                    const matchIdx = remaining.search(/[.!?]\s+/);
-                    if (matchIdx === -1) {
-                      result.push(remaining.trim());
-                      break;
+                  
+                  for (const para of paragraphs) {
+                    // Se for URL ou muito curto — manda como chunk avulso
+                    if (para.startsWith("http") || para.startsWith("/uploads/") || para.length < 60) {
+                      result.push(para);
+                      continue;
                     }
-                    // Inclui o ponto na frase
-                    const sentence = remaining.slice(0, matchIdx + 1).trim();
-                    if (sentence) result.push(sentence);
-                    remaining = remaining.slice(matchIdx + 1).trim();
+                    
+                    // 2. Para textos longos, divide por frases dentro do parágrafo
+                    let remaining = para.trim();
+                    while (remaining.length > 0) {
+                      const matchIdx = remaining.search(/[.!?]\s+/);
+                      if (matchIdx === -1) {
+                        result.push(remaining.trim());
+                        break;
+                      }
+                      const sentence = remaining.slice(0, matchIdx + 1).trim();
+                      if (sentence) result.push(sentence);
+                      remaining = remaining.slice(matchIdx + 1).trim();
+                    }
                   }
-                  // Para cada frase, verifica se tem emoji solto no final e separa
+                  
+                  // 3. Separa emojis soltos no final
                   const finalChunks: string[] = [];
                   for (const sentence of result) {
-                    // Detecta surrogates (emojis) no final: \uD800-\uDFFF
                     const surrogateAtEnd = /^([\s\S]*?)\s+([\uD800-\uDFFF][\s\S]*)$/.exec(sentence);
                     if (surrogateAtEnd) {
                       const textPart = surrogateAtEnd[1].trim();
@@ -649,7 +666,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   return finalChunks.filter(Boolean);
                 }
 
-                const chunks = splitIntoChunks(cleanReply);
+                const chunks = splitIntoChunks(processedReply);
 
                 // Envio sequencial com delay natural (simula digitação humana)
                 for (let i = 0; i < chunks.length; i++) {
