@@ -259,9 +259,15 @@ const MACHINE_INTENT_PATTERNS = [
 export function detectMachineIntent(message: string): string | null {
   const m = message.toLowerCase();
 
-  // Primeiro: modelos específicos (ex: ARLM-200A)
-  const modelMatch = m.match(/\b(?:arlm|arl)[- ]?\d+[a-z]*/i);
-  if (modelMatch) return modelMatch[0].trim();
+  // Primeiro: modelos específicos (ex: ARLM-200A, A03, A-02, DGF-H-2500, TLF600, VSF)
+  const modelPatterns = [
+    /\b(?:arlm|arl)[- ]?\d+[a-z]*/i,
+    /\b[a-z]{1,4}[- ]?\d{2,4}[a-z]?\b/i,  // A03, A-02, TLF600, DGF-H-2500
+  ];
+  for (const pat of modelPatterns) {
+    const match = m.match(pat);
+    if (match && match[0].length >= 2) return match[0].trim();
+  }
 
   // Segundo: palavras-chave de máquinas
   for (const kw of MACHINE_KEYWORDS) {
@@ -287,17 +293,28 @@ const SHIPPING_PATTERNS = [
   /frete\s+(?:para|pro|pra|do|da|até)/i,
   /(?:valor|preço|custo).*(?:frete|entrega|envio)/i,
   /(?:prazo|demora|tempo).*(?:entrega|chegar|receber)/i,
-  /\b(?:frete|entrega|envio)\b.*\b\d{5}[- ]?\d{3}\b/i,
-  /\b\d{5}[- ]?\d{3}\b.*\b(?:frete|entrega|envio)\b/i,
+  /\b(?:frete|entrega|envio)\b/i,
+  /calcula.*(?:pra|para|pro)\s+(?:mim|eu|meu|cep)/i,
+  /calcula.*\d{5}/i,
+  // Padrão: CEP + contexto de entrega
+  /\d{5}[- ]?\d{3}.*(?:frete|entrega|envio)/i,
+  /(?:frete|entrega|envio).*\d{5}[- ]?\d{3}/i,
 ];
 
-const CEP_REGEX = /\b(\d{5})[- ]?(\d{3})\b/;
+// CEP: 8 dígitos com ou sem hífen, pode vir colado no texto
+const CEP_REGEX = /(\d{5})[- ]?(\d{3})/;
 
 export function detectShippingIntent(message: string): { wantsFrete: boolean; cep: string | null } {
-  const wantsFrete = SHIPPING_PATTERNS.some((p) => p.test(message));
   const cepMatch = message.match(CEP_REGEX);
   const cep = cepMatch ? `${cepMatch[1]}${cepMatch[2]}` : null;
-  return { wantsFrete, cep };
+
+  // Se mencionou frete/entrega explicitamente
+  const wantsFrete = SHIPPING_PATTERNS.some((p) => p.test(message));
+
+  // Se mandou só um CEP (8 dígitos) — provavelmente respondendo à pergunta "qual seu CEP?"
+  const justCep = /^\s*\d{5}[- ]?\d{3}\s*$/.test(message.trim());
+
+  return { wantsFrete: wantsFrete || justCep, cep };
 }
 
 // ─── Formata resultado da busca para contexto do Gemini ───────────────────────
