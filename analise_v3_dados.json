@@ -1,0 +1,460 @@
+{
+  "resumo": {
+    "total_conversas": 5000,
+    "total_msgs_cliente": 14298,
+    "total_msgs_operador": 12540,
+    "total_outros": 11586,
+    "pct_outros": 81.03
+  },
+  "intencoes": [
+    [
+      "seladora",
+      1021
+    ],
+    [
+      "envasadora_dosadora",
+      490
+    ],
+    [
+      "preco_orcamento",
+      431
+    ],
+    [
+      "embaladora_empacotadora",
+      160
+    ],
+    [
+      "rotuladora",
+      149
+    ],
+    [
+      "cadastro_b2b",
+      111
+    ],
+    [
+      "maquina_vacuo",
+      98
+    ],
+    [
+      "esteira_rolete",
+      80
+    ],
+    [
+      "rastreamento_pedido",
+      72
+    ],
+    [
+      "devolucao_garantia",
+      68
+    ],
+    [
+      "pecas_insumos",
+      66
+    ],
+    [
+      "rosqueadora_tampadora",
+      55
+    ],
+    [
+      "suporte_tecnico_manual",
+      51
+    ],
+    [
+      "emprego_curriculo",
+      51
+    ],
+    [
+      "fechadora_caixa",
+      44
+    ],
+    [
+      "nota_fiscal",
+      41
+    ],
+    [
+      "balanca_dosadora",
+      41
+    ],
+    [
+      "forma_pagamento",
+      31
+    ],
+    [
+      "localizacao_horario",
+      29
+    ],
+    [
+      "contato_vendedor_whatsapp",
+      22
+    ],
+    [
+      "arqueadora_fita",
+      16
+    ],
+    [
+      "showroom_visita",
+      10
+    ],
+    [
+      "checkout_site",
+      5
+    ]
+  ],
+  "outros_subcats": [
+    [
+      "saudacao_abertura",
+      3889
+    ],
+    [
+      "mensagem_curta_contexto",
+      3703
+    ],
+    [
+      "outro_nao_classificado",
+      3066
+    ],
+    [
+      "dado_contato_lead",
+      720
+    ],
+    [
+      "continuidade_conversa",
+      208
+    ]
+  ],
+  "operadores": [
+    [
+      "Deborah",
+      4458
+    ],
+    [
+      "Agente 0",
+      542
+    ]
+  ],
+  "canais": [
+    [
+      "google_ads",
+      2168
+    ],
+    [
+      "seo_google",
+      1110
+    ],
+    [
+      "direct_visit",
+      609
+    ],
+    [
+      "seo_bing",
+      159
+    ],
+    [
+      "meta",
+      144
+    ],
+    [
+      "referral",
+      125
+    ],
+    [
+      "linktree",
+      104
+    ],
+    [
+      "seo_yahoo",
+      51
+    ],
+    [
+      "meta-sitelink",
+      30
+    ],
+    [
+      "seo_youtube",
+      28
+    ]
+  ],
+  "fontes": [
+    [
+      "google",
+      1695
+    ],
+    [
+      "Google",
+      1277
+    ],
+    [
+      "(direct)",
+      609
+    ],
+    [
+      "googleads",
+      298
+    ],
+    [
+      "Bing",
+      159
+    ],
+    [
+      "meta",
+      144
+    ],
+    [
+      "linktree",
+      104
+    ],
+    [
+      "Yahoo!",
+      51
+    ],
+    [
+      "tecfagpersonnalite.com.br",
+      45
+    ],
+    [
+      "tecfag.com.br",
+      32
+    ]
+  ],
+  "cidades": [
+    [
+      "São Paulo",
+      635
+    ],
+    [
+      "Rio de Janeiro",
+      85
+    ],
+    [
+      "Campinas",
+      72
+    ],
+    [
+      "Fortaleza",
+      68
+    ],
+    [
+      "Curitiba",
+      66
+    ],
+    [
+      "Bauru",
+      59
+    ],
+    [
+      "Belo Horizonte",
+      59
+    ],
+    [
+      "Brasília",
+      52
+    ],
+    [
+      "Diadema",
+      51
+    ],
+    [
+      "Taboão da Serra",
+      45
+    ],
+    [
+      "Goiânia",
+      44
+    ],
+    [
+      "Salvador",
+      42
+    ],
+    [
+      "Manaus",
+      41
+    ],
+    [
+      "Guarulhos",
+      40
+    ],
+    [
+      "Porto Alegre",
+      36
+    ]
+  ],
+  "regioes": [
+    [
+      "São Paulo",
+      1914
+    ],
+    [
+      "Minas Gerais",
+      398
+    ],
+    [
+      "Paraná",
+      351
+    ],
+    [
+      "Rio de Janeiro",
+      251
+    ],
+    [
+      "Santa Catarina",
+      241
+    ],
+    [
+      "Rio Grande do Sul",
+      214
+    ],
+    [
+      "Ceará",
+      160
+    ],
+    [
+      "Bahia",
+      160
+    ],
+    [
+      "Goiás",
+      125
+    ],
+    [
+      "Pernambuco",
+      103
+    ]
+  ],
+  "nav_top_paginas": [
+    [
+      "Equipamentos",
+      560
+    ],
+    [
+      "Seladoras | Tecfag",
+      382
+    ],
+    [
+      "Envasadora Manual A-03",
+      210
+    ],
+    [
+      "Envasadoras | Tecfag",
+      196
+    ],
+    [
+      "Home",
+      194
+    ],
+    [
+      "Seladora Portátil Pratic Seal TC 20 Bivolt",
+      166
+    ],
+    [
+      "Dosadoras | Tecfag",
+      100
+    ],
+    [
+      "Rotuladora Automática ARLM200B",
+      98
+    ],
+    [
+      "Envasadora Pneumática A-02",
+      95
+    ],
+    [
+      "Seladoras em L | Tecfag",
+      89
+    ],
+    [
+      "Tunel de Encolhimento Shrink BS4535LA | Tecfag",
+      88
+    ],
+    [
+      "Peças e Insumos | Tecfag",
+      83
+    ],
+    [
+      "Rotuladoras | Tecfag",
+      77
+    ],
+    [
+      "Fechadora de Caixas de Papelão - FXJ4030",
+      75
+    ],
+    [
+      "Empacotadora Automática para Pós - Exacta - 1328",
+      75
+    ],
+    [
+      "Datador manual Hot Stamping HP351 | Tecfag",
+      71
+    ],
+    [
+      "Rotuladora manual de Frascos Cilindricos RL30 | Tecfag",
+      69
+    ],
+    [
+      "Seladoras",
+      69
+    ],
+    [
+      "Tunel de Encolhimento BS-20",
+      62
+    ],
+    [
+      "Seladora em L Semiautomática",
+      59
+    ],
+    [
+      "Envasadora Manual - 5 a 50ml",
+      58
+    ],
+    [
+      "Você pesquisou por empacotadora",
+      57
+    ],
+    [
+      "Empacotadoras",
+      56
+    ],
+    [
+      "Esteira Motorizada com Lona em Inox BC15M200S | Tecfag",
+      55
+    ],
+    [
+      "Seladora em L Automática - BSF5640LG",
+      54
+    ],
+    [
+      "Envasadoras Tecfag",
+      52
+    ],
+    [
+      "Rosqueadora Elétrica Manual - EC80",
+      51
+    ],
+    [
+      "Contato",
+      50
+    ],
+    [
+      "Rosqueadeira Pneumática de Tampas PC90 | Tecfag",
+      47
+    ],
+    [
+      "Rotuladora Semiautomática com Datador MT50P",
+      46
+    ]
+  ],
+  "nav_total_logs": 7886,
+  "anomalias_fagner": [
+    {
+      "tipo": "prompt_leak_ingles",
+      "mensagem": "<p>I do not discuss security, internal architecture, or model settings. More info: https://www.jivochat.com/security/</p>"
+    },
+    {
+      "tipo": "prompt_leak_ingles",
+      "mensagem": "<p>I do not discuss security, internal architecture, or model settings. More info: https://www.jivochat.com/security/</p>"
+    },
+    {
+      "tipo": "prompt_leak_ingles",
+      "mensagem": "<p>I do not discuss security, internal architecture, or model settings. More info: https://www.jivochat.com/security/</p>"
+    }
+  ]
+}

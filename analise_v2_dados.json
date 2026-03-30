@@ -1,0 +1,238 @@
+{
+  "resumo": {
+    "total_conversas": 5000,
+    "total_msgs_clientes": 13818,
+    "total_msgs_operadores": 12520,
+    "duracao_media_min": 93.9,
+    "operadores_detectados": [
+      "deborah",
+      "agente",
+      "lucia",
+      "denise",
+      "fagner",
+      "joão",
+      "operador",
+      "joao",
+      "maria",
+      "vitor",
+      "carlos",
+      "luzia",
+      "agente 0",
+      "ana"
+    ]
+  },
+  "categorias": [
+    [
+      "outros",
+      11022
+    ],
+    [
+      "seladora",
+      1032
+    ],
+    [
+      "envasadora",
+      490
+    ],
+    [
+      "preco_orcamento",
+      445
+    ],
+    [
+      "embaladora_empacotadora",
+      170
+    ],
+    [
+      "rotuladora",
+      149
+    ],
+    [
+      "maquina_vacuo",
+      120
+    ],
+    [
+      "cadastro_conta",
+      111
+    ],
+    [
+      "devolucao_garantia",
+      109
+    ],
+    [
+      "rastreamento_pedido",
+      91
+    ],
+    [
+      "esteira",
+      85
+    ],
+    [
+      "rosqueadora",
+      67
+    ],
+    [
+      "suporte_tecnico_pecas",
+      57
+    ],
+    [
+      "emprego_curriculo",
+      51
+    ],
+    [
+      "fechadora_caixa",
+      44
+    ],
+    [
+      "embalagem_material",
+      43
+    ],
+    [
+      "nota_fiscal",
+      41
+    ],
+    [
+      "localizacao_horario",
+      40
+    ],
+    [
+      "balanca",
+      40
+    ],
+    [
+      "forma_pagamento",
+      33
+    ],
+    [
+      "contato_vendedor",
+      26
+    ],
+    [
+      "arqueadora_fita",
+      16
+    ],
+    [
+      "produto_nao_catalogo",
+      12
+    ],
+    [
+      "showroom_visita",
+      10
+    ],
+    [
+      "compra_no_site",
+      7
+    ]
+  ],
+  "operadores": [
+    [
+      "Deborah",
+      4458
+    ],
+    [
+      "Agente 0",
+      542
+    ]
+  ],
+  "primeiras_msgs": [
+    "Em qual cidade ?",
+    "Gostaria de dar os parabéns pelo atendimento.",
+    "SELADORA COM DATADOR É COM TINTA?",
+    "Fita Arquear Branca de 10mm",
+    "Olá",
+    "Tenho uma dúvida",
+    "Preciso de ajuda",
+    "Preciso de ajuda",
+    "Tudo bem",
+    "Olá!",
+    "bom dia",
+    "Olá!",
+    "Olá, me passa o WhatsApp de vocês, por favor!",
+    "Olá!",
+    "Boa tarde",
+    "olá",
+    "boa tarde",
+    "Olá",
+    "Boa noite",
+    "Boa tarde",
+    "Olá!",
+    "como posso compras peças acessorios de maquina emblistadora",
+    "Olá!",
+    "Motopolia para caixa de supermercado, vcs vendem?",
+    "Tenho uma dúvida",
+    "BOBINA BOPP TRANSPARENTE LISO 20 CM DE",
+    "Preciso de ajuda",
+    "Bom dia",
+    "Tenho uma dúvida",
+    "Tenho uma dúvida",
+    "Tenho uma dúvida",
+    "bom dia qual é a largura dessa lona da esteira",
+    "Bom dia !!!",
+    "Preciso de ajuda",
+    "Bom dia",
+    "Preciso de ajuda",
+    "Bom dia,",
+    "Olá bom dia",
+    "Bom dia !",
+    "Bom dia!",
+    "olá",
+    "Preciso de ajuda",
+    "Preciso de ajuda",
+    "Tenho uma dúvida",
+    "Celadora de naylon vc tem",
+    "olá boa tarde",
+    "Preciso de ajuda",
+    "Gostaria de um tampador de pressão pra tampa dosadora",
+    "Olá!",
+    "Boa tarde",
+    "Tenho uma dúvida",
+    "Boa tarde",
+    "Bom dia. Esse tubel pode ser utilizado para embalagem de linguiça, salame, etc...?",
+    "Preciso de ajuda",
+    "62981976680",
+    "olá bom dia",
+    "Preciso de ajuda",
+    "Tenho uma dúvida",
+    "Tenho uma dúvida",
+    "Preciso de ajuda",
+    "Bom dia!",
+    "Bom Dia",
+    "Tenho uma dúvida",
+    "Preciso de ajuda",
+    "Bom dia Fagner",
+    "Olá",
+    "Bom dia, combinado, aguado seu contato",
+    "Olá, boa tarde",
+    "Boa tarde",
+    "Boa tarde",
+    "Boa tarde,",
+    "Estou procurando uma seladora para rótulos sleeve",
+    "Boa tarde",
+    "PRECISO DA RESISTENCIA DA MANUAL DE 20 CM",
+    "Tenho uma dúvida",
+    "Boa tarde, Fagner, tudo bem, a Tecfag fica em que cidade?",
+    "Qual o valor dessa seladora",
+    "Tenho uma dúvida",
+    "Olá!",
+    "Ola",
+    "Olá!",
+    "bom dia, preciso saber o preço da bomba de vácuo XD20??",
+    "Bom dia",
+    "Olá",
+    "Boa tarde,",
+    "preciso de peça de reposição",
+    "bom dia tudo bem?",
+    "Maquina para embalar colchao a vácuo",
+    "Bom dia, qual canal de compras de suprimentos?",
+    "Olá!",
+    "91993852895.  Sérgio",
+    "Preciso de ajuda",
+    "Preciso de ajuda",
+    "Preciso de ajuda",
+    "Preciso de uma seladora  solde, pese e data",
+    "Boa tarde preciso de uma celadora para tampa de garrafa",
+    "Olá, boa tarde!",
+    "Tenho uma dúvida",
+    "Preciso de ajuda",
+    "Seladora a Vácuo de Dupla Câmara - DZ600/2SB 220V, qual o valor e tempo de entrega para o RS"
+  ]
+}

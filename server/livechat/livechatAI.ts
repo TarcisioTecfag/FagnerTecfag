@@ -99,6 +99,7 @@ Profissional, humano, prestativo e consultivo. Como um vendedor experiente de lo
 3. INSTRUÇÃO: Quando for mandar o link do pdf, coloque-o OBRIGATORIAMENTE em uma linha SOZINHA (com quebra de linha antes e depois), para que o sistema gere um card bonito.
 4. NUNCA diga "vou solicitar com a equipe técnica" para pedidos de manual. Você TEM acesso à base de manuais.
 5. Se não encontrar o manual específico na base, diga: "Esse manual específico não está em minha base no momento, mas posso te ajudar com as dúvidas sobre a máquina! Qual sua dúvida?"
+6. Se encontrar o manual na base, OBRIGATORIAMENTE envie o 'Link de Download' exato (/uploads/... ou http...) que consta no documento, de forma direta e sem colocar outras palavras junto ao link.
 
 ## REGRAS GERAIS
 1. Faça UMA pergunta por vez
@@ -184,7 +185,6 @@ ${moodDesc}
 
 async function getRagDocuments(): Promise<{ id: string; name: string; content: string; filePath?: string }[]> {
   try {
-    // Busca documentos ativos incluindo campo content (preenchido pela extração de PDF)
     const { pool } = await import("../db.js");
     const result = await pool.query(
       `SELECT id, name, "filePath", content FROM documents WHERE paused != 'true' ORDER BY "createdAt" DESC LIMIT 50`
@@ -198,10 +198,16 @@ async function getRagDocuments(): Promise<{ id: string; name: string; content: s
           if (doc.content && doc.content.trim().length > 50) {
             return { id: doc.id, name: doc.name, content: doc.content.slice(0, 5000), filePath: doc.filePath };
           }
-          // Prioridade 2: ler o arquivo do disco (documentos antigos / TXT / DOCX)
-          const abs = path.join(__dirname, "../..", doc.filePath.replace(/^\//, ""));
-          if (!fs.existsSync(abs)) return null;
-          return { id: doc.id, name: doc.name, content: fs.readFileSync(abs, "utf-8").slice(0, 5000), filePath: doc.filePath };
+          // Prioridade 2: ler o arquivo do disco (só funciona localmente)
+          try {
+            const abs = path.join(__dirname, "../..", doc.filePath.replace(/^\//, ""));
+            if (fs.existsSync(abs)) {
+              return { id: doc.id, name: doc.name, content: fs.readFileSync(abs, "utf-8").slice(0, 5000), filePath: doc.filePath };
+            }
+          } catch {}
+          // Fallback: retorna com o nome como conteúdo para que keyword search funcione
+          // Isso permite ao Fagner pelo menos saber que o manual existe e dar o link de download
+          return { id: doc.id, name: doc.name, content: `Documento: ${doc.name}`, filePath: doc.filePath };
         } catch { return null; }
       })
       .filter(Boolean) as { id: string; name: string; content: string; filePath?: string }[];

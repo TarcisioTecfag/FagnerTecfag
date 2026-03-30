@@ -1,0 +1,332 @@
+{
+  "resumo": {
+    "total_conversas": 5000,
+    "total_mensagens_clientes": 13840,
+    "duracao_media_minutos": 251.7,
+    "total_operadores": 2
+  },
+  "categorias_ordenadas": [
+    [
+      "outros",
+      7529
+    ],
+    [
+      "balança",
+      2033
+    ],
+    [
+      "seladora",
+      905
+    ],
+    [
+      "preco_orcamento",
+      600
+    ],
+    [
+      "envasadora",
+      456
+    ],
+    [
+      "produto_informacao",
+      314
+    ],
+    [
+      "rastreamento_pedido",
+      282
+    ],
+    [
+      "nota_fiscal",
+      247
+    ],
+    [
+      "produto_busca",
+      246
+    ],
+    [
+      "fita_arquear",
+      226
+    ],
+    [
+      "cadastro_conta",
+      219
+    ],
+    [
+      "embalagem",
+      208
+    ],
+    [
+      "suporte_tecnico",
+      175
+    ],
+    [
+      "contato_vendedor",
+      166
+    ],
+    [
+      "compra_site",
+      64
+    ],
+    [
+      "devolucao_troca",
+      64
+    ],
+    [
+      "localizacao_empresa",
+      47
+    ],
+    [
+      "forma_pagamento",
+      33
+    ],
+    [
+      "maquina_vácuo",
+      26
+    ]
+  ],
+  "operadores": [
+    [
+      "Deborah",
+      4458
+    ],
+    [
+      "Agente 0",
+      542
+    ]
+  ],
+  "respostas_padrao_operadores": [
+    "Bom dia, tudo bem? Ficamos em Bauru-Sp",
+    "Esta com a Atual Cargas",
+    "Qual seu email?",
+    "te enviei a nota no email, veja se chegou por gentileza?",
+    "A Denise não tem um contato próprio, mas você consegue pedir para falar com ela no  WhatsApp 14 991054116 e transferem o chat para ela, ou no fixo 0800 947 5000. Agora ela esta em almoço, mas retorna 13h00",
+    "Isso, é a seladora FRD1000 W?",
+    "Ficamos das 08h até 18h",
+    "Amanha não abrimos, só segunda a sexta",
+    "Não, sou humana",
+    "Bom dia! https://www.tecfag.com.br/fita-para-arquear--phoenix",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Quando for colocar os dados pessoais, em baixo vai estar \"incluir dados de pessoa jurídica\" só preencher com os dados.",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Em que posso te ajudar referente a seladora de bandeja?",
+    "Vou confirmar o wats, só um momentinho.",
+    "Você esta com uma máquina dessa para arrumar?",
+    "Estou pegando essa informação com a equipe técnica, só um momentinho. Quer me informar seu número? Assim que eu conseguir te mando uma mensagem no Whatsapp",
+    "Combinado, já te passo essas informações.",
+    "Resistencia de corte: 88 Watts (240,82)",
+    "Boa tarde, tudo bem? 14 99105-4116.",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Boa tarde, tudo bem? Me informa seu nome e número para contato por gentileza?",
+    "Boa tarde. tudo bem? Claro, qual seu número e nome para contato por favor?",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Perfeito! Qual seu nome e número para contato por gentileza?",
+    "E seu número por favor?",
+    "Consegue falar por ligação? Queria te ligar",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Vendemos somente para nossas rosqueadoras",
+    "Do cabeçote?",
+    "Bom dia, tudo bem? Entre em contato com a equipe de peças por gentileza através do 0800 947 5000 ou 14 99105-4116. Eles conseguem te passar certinho o modelo e valores.",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Entre em contato com o setor de peças por gentileza através do 0800 947 5000 ou 14 99105-4116",
+    "o final 4116 é Whatsapp",
+    "Boa tarde, tudo bem? Nossas peças e insumos são destinadas somente para equipamentos Tecfag.",
+    "Entre em contato com o setor de peças através do 0800 947 5000 ou 14 99105-4116 que eles conseguem te passar a lista de peças",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Com qual produto trabalha?",
+    "Boa tarde, tudo bem? Não vendemos.",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Não vendemos a bobina",
+    "Indicamos a Vicpack",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Entre em contato com a equipe técnica através do 0800 947 5000 ou 14 99105-4116",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Envia por favor, para: compras@tecfag.com.br",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia! • Largura da lona: 190mm",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Vou verificar",
+    "TJ470938775BR",
+    "O código de rastreio dos correios",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Poderia me informar seu número para contato por gentileza?",
+    "Olá! Como posso ajudar?",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Você busca envasadora com esteira, para linha?",
+    "Me informa seu número para contato por gentileza?",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Boa tarde. tudo bem? Claro, qual seu número e nome para contato por favor?",
+    "e seu numero para contato por favor?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Entre em contato com a equipe técnica através do 0800 947 5000 ou 14 99105-4116.",
+    "0800 947 5000 ligação",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Obrigada, vou entrar em contato",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Entre em contato com a equipe de peças através do 0800 947 5000 ou 14 99105-4116.",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Bom dia, tudo bem? Como posso ajudar?",
+    "Dosadora de balança?",
+    "Perfeito, qual sua dúvida?",
+    "Boa tarde, tudo bem? Poderia me informar seu número para contato por favor?",
+    "Obrigada, vou entrar em contato",
+    "Podemos combinar amanhã, 08h30? Por ligação se for possível para você.",
+    "Boa tarde, tudo bem? Como posso ajudar?",
+    "Pode ser o do setor financeiro?",
+    "financeiro@tecfag.com.br - Samara",
+    "Boa tarde, tudo bem? Poderia me informar seu número para contato por favor?",
+    "Boa tarde, tudo bem? Entre em contato com o setor de peças atraves do 0800 947 5000 ou 14 99105-4116",
+    "Boa tarde, tudo bem? Para rótulos sleeve é túnel de encolhimento",
+    "É que para encolher o rotulo sleeve no produto, é o túnel que faz esse processo.",
+    "Boa tarde, tudo bem? Isso, é ligado o aquecimento e a circulação de ar para que toda a câmara do túnel fique quente.",
+    "Fico a disposição!",
+    "Boa tarde, tudo bem? Entre em contato com o setor de peças atraves do 0800 947 5000 ou 14 99105-4116",
+    "Boa tarde, tudo bem? O indicado para papel grau cirúrgico é uma máquina própria https://www.tecfag.com.br/seladora-continua-para-grau-cirurgico"
+  ],
+  "clientes_mais_ativos": [
+    [
+      "Rodrigo",
+      19
+    ],
+    [
+      "Lucas",
+      16
+    ],
+    [
+      "Bruno",
+      15
+    ],
+    [
+      "Rafael",
+      13
+    ],
+    [
+      "Leandro",
+      13
+    ],
+    [
+      "Carlos",
+      13
+    ],
+    [
+      "Paulo",
+      13
+    ],
+    [
+      "Ricardo",
+      12
+    ],
+    [
+      "Marcelo",
+      11
+    ],
+    [
+      "Felipe",
+      11
+    ],
+    [
+      "Marcos",
+      11
+    ],
+    [
+      "Pedro",
+      10
+    ],
+    [
+      "Eduardo",
+      9
+    ],
+    [
+      "Fernando",
+      9
+    ],
+    [
+      "Gabriel",
+      9
+    ],
+    [
+      "Junior",
+      8
+    ],
+    [
+      "Alexandre",
+      8
+    ],
+    [
+      "Michel",
+      8
+    ],
+    [
+      "Cristina Botelho Silva",
+      8
+    ],
+    [
+      "Vinicius",
+      7
+    ]
+  ],
+  "primeiras_mensagens_sample": [
+    "Em qual cidade ?",
+    "Gostaria de dar os parabéns pelo atendimento.",
+    "SELADORA COM DATADOR É COM TINTA?",
+    "Fita Arquear Branca de 10mm",
+    "Rafae",
+    "Tenho uma dúvida",
+    "Preciso de ajuda",
+    "Preciso de ajuda",
+    "Tudo bem",
+    "Olá!",
+    "bom dia",
+    "Olá!",
+    "Olá, me passa o WhatsApp de vocês, por favor!",
+    "Olá!",
+    "Boa tarde",
+    "queria calcular um frete",
+    "boa tarde",
+    "Estou querendo comprar uma envasadora",
+    "Boa noite",
+    "Boa tarde",
+    "Olá!",
+    "como posso compras peças acessorios de maquina emblistadora",
+    "Olá!",
+    "Motopolia para caixa de supermercado, vcs vendem?",
+    "Tenho uma dúvida",
+    "BOBINA BOPP TRANSPARENTE LISO 20 CM DE",
+    "Preciso de ajuda",
+    "Bom dia",
+    "Tenho uma dúvida",
+    "Bom dia tudo bem",
+    "Tenho uma dúvida",
+    "Tenho uma dúvida",
+    "bom dia qual é a largura dessa lona da esteira",
+    "Bom dia !!!",
+    "Preciso de ajuda",
+    "Bom dia",
+    "Preciso de ajuda",
+    "Bom dia,",
+    "Olá bom dia",
+    "Bom dia !",
+    "Bom dia!",
+    "envasadora com automação",
+    "Preciso de ajuda",
+    "Preciso de ajuda",
+    "Tenho uma dúvida",
+    "Celadora de naylon vc tem",
+    "olá boa tarde",
+    "Preciso de ajuda",
+    "Gostaria de um tampador de pressão pra tampa dosadora",
+    "Olá!"
+  ]
+}
