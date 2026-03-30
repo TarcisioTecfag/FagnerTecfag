@@ -216,6 +216,9 @@ export default function KnowledgeBase() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadType, setUploadType] = useState<"knowledge" | "media">("knowledge");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [queueTotal, setQueueTotal] = useState(0);
+  const [queueCurrent, setQueueCurrent] = useState(0);
+  const [queueCurrentName, setQueueCurrentName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
@@ -269,7 +272,7 @@ export default function KnowledgeBase() {
   const getFolderName = (id: string | null | undefined) =>
     id ? folders.find((f) => f.id === id)?.name ?? null : null;
 
-  // ── Upload ─────────────────────────────────────────────────────────────────
+  // ── Upload (suporte a múltiplos arquivos em fila) ──────────────────────────
 
   const handleFileUpload = async (file: File) => {
     setIsUploading(true);
@@ -277,6 +280,7 @@ export default function KnowledgeBase() {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("type", uploadType);
+    if (selectedFolder && selectedFolder !== "__none__") formData.append("folderId", selectedFolder);
     const interval = setInterval(() => setUploadProgress((p) => Math.min(p + 7, 85)), 400);
     try {
       const res = await fetch("/api/documents", { method: "POST", body: formData });
@@ -298,10 +302,67 @@ export default function KnowledgeBase() {
     }
   };
 
+  const handleMultiFileUpload = async (fileList: FileList) => {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+
+    // Arquivo único: upload simples tradicional
+    if (files.length === 1) {
+      handleFileUpload(files[0]);
+      return;
+    }
+
+    // Múltiplos: upload em fila sequencial
+    setIsUploading(true);
+    setQueueTotal(files.length);
+    setQueueCurrent(0);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setQueueCurrent(i + 1);
+      setQueueCurrentName(file.name);
+      setUploadProgress(Math.round(((i) / files.length) * 100));
+
+      const formData = new FormData();
+      formData.append("files", file);
+      formData.append("type", uploadType);
+      if (selectedFolder && selectedFolder !== "__none__") formData.append("folderId", selectedFolder);
+
+      try {
+        const res = await fetch("/api/documents/upload-queue", { method: "POST", body: formData });
+        if (!res.ok) {
+          if (res.status === 401) { window.location.href = "/login"; return; }
+          errorCount++;
+        } else {
+          successCount++;
+        }
+      } catch {
+        errorCount++;
+      }
+    }
+
+    setUploadProgress(100);
+    setTimeout(() => {
+      setIsUploading(false);
+      setUploadProgress(0);
+      setQueueTotal(0);
+      setQueueCurrent(0);
+      setQueueCurrentName("");
+    }, 800);
+
+    toast({
+      title: `Upload concluído`,
+      description: `${successCount} arquivo${successCount !== 1 ? "s" : ""} processado${successCount !== 1 ? "s" : ""}${errorCount > 0 ? ` · ${errorCount} erro${errorCount !== 1 ? "s" : ""}` : ""}`,
+    });
+    refresh();
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFileUpload(file);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) handleMultiFileUpload(files);
   };
 
   // ── Document actions ───────────────────────────────────────────────────────
@@ -586,15 +647,19 @@ export default function KnowledgeBase() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-gray-800">
-                  {isUploading ? "Processando..." : isDragging ? "Solte o arquivo aqui" : "Arraste ou clique para selecionar"}
+                  {isUploading
+                    ? queueTotal > 1
+                      ? `Processando ${queueCurrent}/${queueTotal} — ${queueCurrentName}`
+                      : "Processando..."
+                    : isDragging ? "Solte os arquivos aqui" : "Arraste ou clique para selecionar (múltiplos)"}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {uploadType === "knowledge" ? "PDF, DOCX ou TXT — será vetorizado para a I.A." : "Imagens, vídeos ou PDFs para envio direto"}
+                  {uploadType === "knowledge" ? "PDF, DOCX ou TXT — será vetorizado para a I.A. (aceita múltiplos)" : "Imagens, vídeos ou PDFs para envio direto"}
                 </p>
                 {isUploading && (
-                  <div className="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full transition-all duration-300"
+                      className="h-full rounded-full transition-all duration-500"
                       style={{ width: `${uploadProgress}%`, background: "linear-gradient(90deg, #7f1d1d, #dc2626)" }}
                     />
                   </div>
@@ -608,8 +673,9 @@ export default function KnowledgeBase() {
               <input
                 ref={fileInputRef}
                 type="file"
+                multiple
                 className="hidden"
-                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                onChange={(e) => e.target.files && e.target.files.length > 0 && handleMultiFileUpload(e.target.files)}
                 disabled={isUploading}
               />
             </div>

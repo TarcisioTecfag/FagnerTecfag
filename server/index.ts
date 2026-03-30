@@ -198,6 +198,34 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// ─── Proxy Meta — extrai OG tags para Rich Cards no Widget (público) ──────────
+app.get("/api/proxy-meta", async (req, res) => {
+  const url = req.query.url as string;
+  if (!url || !url.startsWith("http")) {
+    return res.status(400).json({ message: "URL inválida" });
+  }
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "TecfagBot/1.0" },
+    });
+    clearTimeout(timeout);
+    const html = await response.text();
+
+    // Extrai OG tags com regex simples (sem dependência de parser HTML)
+    const ogTitle = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i)?.[1]
+                   || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]
+                   || "";
+    const ogImage = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] || "";
+
+    return res.json({ title: ogTitle, image: ogImage, url });
+  } catch {
+    return res.json({ title: "", image: "", url });
+  }
+});
+
 // ─── Health check (público — usado pelo Railway) ──────────────────────────────
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
@@ -613,6 +641,71 @@ app.delete("/api/documents/:id", requireAuth, async (req, res) => {
 
   await storage.deleteDocument(p(req.params.id));
   return res.json({ ok: true });
+});
+
+// POST /api/documents/upload-queue — Upload em fila (múltiplos arquivos)
+// Aceita múltiplos PDFs, extrai texto automaticamente e cria registro duplo:
+//   1) knowledge (texto extraído para RAG)
+//   2) O filePath original fica acessível via /uploads/ para download do cliente
+app.post("/api/documents/upload-queue", requireAuth, upload.array("files", 50), async (req, res) => {
+  const files = req.files as Express.Multer.File[] | undefined;
+  if (!files || files.length === 0) {
+    return res.status(400).json({ message: "Nenhum arquivo enviado" });
+  }
+
+  const folderId = req.body.folderId || null;
+  const results: { name: string; id: string; status: string; error?: string }[] = [];
+
+  for (const file of files) {
+    try {
+      const filePath = `/uploads/${file.filename}`;
+      let extractedText: string | null = null;
+
+      // Tenta extrair texto de PDF
+      if (file.mimetype === "application/pdf") {
+        try {
+          const pdfParseModule = await import("pdf-parse") as any;
+          const pdfParse = pdfParseModule.default ?? pdfParseModule;
+          const buffer = fs.readFileSync(path.join(UPLOADS_DIR, file.filename));
+          const data = await pdfParse(buffer);
+          extractedText = data.text?.trim() || null;
+        } catch (pdfErr: any) {
+          console.warn(`[Upload Queue] Falha ao extrair PDF ${file.originalname}:`, pdfErr.message);
+        }
+      }
+
+      // Cria documento do tipo "knowledge" (com texto extraído) ou "media" (sem texto)
+      const docType = extractedText ? "knowledge" : "media";
+      const doc = await storage.createDocument({
+        name: file.originalname,
+        type: docType,
+        mimeType: file.mimetype,
+        filePath,
+        folderId,
+      });
+
+      // Se extraiu texto do PDF, salva o conteúdo extraído em arquivo .txt separado para o RAG ler
+      if (extractedText) {
+        const txtFilename = `${file.filename}.extracted.txt`;
+        const txtPath = path.join(UPLOADS_DIR, txtFilename);
+        fs.writeFileSync(txtPath, extractedText, "utf-8");
+
+        // Atualiza o documento com o conteúdo extraído para o RAG
+        // O filePath original (PDF) continua acessível via /uploads/ para download
+        const { pool: dbPool } = await import("./db.js");
+        await dbPool.query(
+          `UPDATE documents SET content = $1 WHERE id = $2`,
+          [extractedText.slice(0, 50000), doc.id]
+        );
+      }
+
+      results.push({ name: file.originalname, id: doc.id, status: "ok" });
+    } catch (err: any) {
+      results.push({ name: file.originalname, id: "", status: "error", error: err.message });
+    }
+  }
+
+  return res.status(201).json({ processed: results.length, results });
 });
 
 // POST /api/documents/bulk
