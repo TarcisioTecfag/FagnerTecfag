@@ -274,8 +274,8 @@ export async function ragSearch(
 
     const top = scored
       .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
-      .filter((x) => x.score > 0.3);
+      .slice(0, Math.max(topK, 5))
+      .filter((x) => x.score > 0.15);
 
     if (top.length === 0) return "";
 
@@ -347,7 +347,13 @@ export async function callGemini(opts: GeminiCallOptions): Promise<string> {
   const data = await geminiRequest(url, payload);
 
   const raw: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "(sem resposta)";
-  const responseText = humanizeNumbers(raw);
+  
+  // Força quebras de linha duplas ao redor de URLs para garantir balões separados
+  const responseText = humanizeNumbers(raw)
+    .replace(/(https?:\/\/[^\s)]+)/gi, "\n\n$1\n\n")
+    .replace(/(\/uploads\/[^\s)]+)/gi, "\n\n$1\n\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
   const promptTokens: number    = data?.usageMetadata?.promptTokenCount ?? 0;
   const candidateTokens: number = data?.usageMetadata?.candidatesTokenCount ?? 0;
