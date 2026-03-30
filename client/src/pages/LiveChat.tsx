@@ -1279,9 +1279,15 @@ function LiveChat() {
                       </div>
                     )}
 
-                    <button
+                                        <button
+                      onClick={() => { openHistoryModal(selectedVisitor); setActiveTab("visitors"); }}
+                      className="mt-auto text-[10px] font-semibold text-red-600 hover:text-red-700 border border-red-100 hover:border-red-200 hover:bg-red-50 transition-colors py-1.5 w-full text-center rounded-lg"
+                    >
+                      🗺️ Histórico de Navegação
+                    </button>
+<button
                       onClick={() => setSelectedVisitor(null)}
-                      className="mt-auto text-[10px] text-zinc-400 hover:text-zinc-600 transition-colors py-1 w-full text-center"
+                      className="text-[10px] text-zinc-400 hover:text-zinc-600 transition-colors py-1 w-full text-center"
                     >
                       {"\u2715"} Fechar
                     </button>
