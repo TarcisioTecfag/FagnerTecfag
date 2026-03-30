@@ -262,24 +262,32 @@ export async function processVisitorMessage(
   }
 
   // VTEX — detecta se o cliente está perguntando sobre máquinas/produtos
+  // PROTEÇÃO: timeout global de 5s para evitar travar o pipeline inteiro
   const machineIntent = detectMachineIntent(userMessage);
   if (machineIntent) {
     try {
-      const vtexResult = await searchProduct(machineIntent);
-      contextParts.push(formatVtexContextForGemini(vtexResult));
+      const vtexPromise = searchProduct(machineIntent);
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000));
+      const vtexResult = await Promise.race([vtexPromise, timeoutPromise]);
 
-      // Salva SKU e nome do produto na sessão para uso futuro (frete)
-      if (vtexResult.found) {
-        session.lastSkuId = vtexResult.skuId;
-        session.lastProductName = vtexResult.productName;
+      if (vtexResult) {
+        contextParts.push(formatVtexContextForGemini(vtexResult));
+
+        // Salva SKU e nome do produto na sessão para uso futuro (frete)
+        if (vtexResult.found) {
+          session.lastSkuId = vtexResult.skuId;
+          session.lastProductName = vtexResult.productName;
+        }
+
+        storage.createVtexLog({
+          type: "search",
+          description: `[LiveChat] Busca: "${machineIntent}"`,
+          product: vtexResult.found ? vtexResult.productName : null,
+          autonomous: true,
+        }).catch(() => {});
+      } else {
+        console.warn("[LiveChat AI] VTEX search timeout (5s) — prosseguindo sem resultado");
       }
-
-      await storage.createVtexLog({
-        type: "search",
-        description: `[LiveChat] Busca: "${machineIntent}"`,
-        product: vtexResult.found ? vtexResult.productName : null,
-        autonomous: true,
-      });
     } catch (e) {
       console.warn("[LiveChat AI] VTEX search falhou:", e);
     }
@@ -289,9 +297,16 @@ export async function processVisitorMessage(
   const shippingIntent = detectShippingIntent(userMessage);
   if (shippingIntent.wantsFrete && shippingIntent.cep && session.lastSkuId) {
     try {
-      const freteResult = await simulateShipping(shippingIntent.cep, session.lastSkuId);
-      contextParts.push(formatShippingForGemini(freteResult));
-      console.log(`[LiveChat AI] Frete simulado: CEP ${shippingIntent.cep}, SKU ${session.lastSkuId}, ${freteResult.options.length} opções`);
+      const fretePromise = simulateShipping(shippingIntent.cep, session.lastSkuId);
+      const freteTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000));
+      const freteResult = await Promise.race([fretePromise, freteTimeout]);
+      if (freteResult) {
+        contextParts.push(formatShippingForGemini(freteResult));
+        console.log(`[LiveChat AI] Frete simulado: CEP ${shippingIntent.cep}, SKU ${session.lastSkuId}, ${freteResult.options.length} opções`);
+      } else {
+        console.warn("[LiveChat AI] Simulação de frete timeout (5s)");
+        contextParts.push(`## SIMULAÇÃO DE FRETE\n⚠️ O cálculo de frete demorou demais neste momento.\nINSTRUÇÃO: Informe ao cliente que o sistema de frete está temporariamente lento e peça para tentar novamente em instantes.`);
+      }
     } catch (e) {
       console.warn("[LiveChat AI] Simulação de frete falhou:", e);
     }

@@ -12,13 +12,40 @@ const VTEX_ACCOUNT = process.env.VTEX_ACCOUNT_NAME || "tecfag";
 const VTEX_API_BASE = `https://${VTEX_ACCOUNT}.vtexcommercestable.com.br`;
 const VTEX_STORE_URL = "https://www.tecfag.com.br";
 
-function vtexHeaders(): Record<string, string> {
+function vtexHeaders(rangeFrom = 0, rangeTo = 9): Record<string, string> {
   return {
     "Content-Type": "application/json",
     "Accept": "application/json",
+    "REST-Range": `resources=${rangeFrom}-${rangeTo}`,
     "X-VTEX-API-AppKey": process.env.VTEX_APP_KEY || "",
     "X-VTEX-API-AppToken": process.env.VTEX_APP_TOKEN || "",
   };
+}
+
+// ─── Fetch com retry automático ───────────────────────────────────────────────
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = 2,
+  timeoutMs: number = 4000
+): Promise<Response | null> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      // 200-299 e 206 (Partial Content, normal na VTEX para paginação)
+      if (res.ok || res.status === 206) return res;
+      console.warn(`[VTEX] Attempt ${attempt}/${maxRetries}: HTTP ${res.status} for ${url.split('?')[0]}`);
+    } catch (e: any) {
+      console.warn(`[VTEX] Attempt ${attempt}/${maxRetries} failed: ${e.message}`);
+    }
+    // Aguarda 500ms antes do retry
+    if (attempt < maxRetries) await new Promise(r => setTimeout(r, 500));
+  }
+  return null;
 }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -135,92 +162,69 @@ function parseProduct(p: any, normalizedQuery: string): VtexProduct | null {
   };
 }
 
-// ─── Busca principal — 3 estratégias de fallback ──────────────────────────────
+// ─── Busca principal — 2 estratégias com retry ───────────────────────────────
 
 export async function searchProduct(rawQuery: string): Promise<VtexResult> {
   const normalizedQuery = await applySynonyms(rawQuery.trim());
 
-  try {
-    await storage.createVtexLog({
-      type: "search",
-      description: `Buscou "${rawQuery}"${rawQuery !== normalizedQuery ? ` → normalizado: "${normalizedQuery}"` : ""}`,
-      autonomous: true,
-    });
-  } catch {}
+  storage.createVtexLog({
+    type: "search",
+    description: `Buscou "${rawQuery}"${rawQuery !== normalizedQuery ? ` → "${normalizedQuery}"` : ""}`,
+    autonomous: true,
+  }).catch(() => {});
 
-  // ── Estratégia 1: API autenticada com full-text search ──
-  try {
-    const url1 = `${VTEX_API_BASE}/api/catalog_system/pub/products/search?ft=${encodeURIComponent(normalizedQuery)}&_from=0&_to=9`;
-    const res1 = await fetch(url1, {
-      headers: vtexHeaders(),
-      signal: AbortSignal.timeout(10_000),
-    });
+  const encoded = encodeURIComponent(normalizedQuery);
 
-    if (res1.ok) {
+  // ── Estratégia 1: API autenticada (vtexcommercestable) ──
+  const url1 = `${VTEX_API_BASE}/api/catalog_system/pub/products/search?ft=${encoded}&_from=0&_to=9`;
+  const res1 = await fetchWithRetry(url1, { headers: vtexHeaders() });
+
+  if (res1) {
+    try {
       const products: any[] = await res1.json();
-      if (products.length > 0) {
-        // Tenta match exato no nome primeiro
+      if (Array.isArray(products) && products.length > 0) {
         const exactMatch = products.find((p: any) =>
           p.productName?.toLowerCase().includes(normalizedQuery.toLowerCase())
         );
         const product = parseProduct(exactMatch || products[0], normalizedQuery);
         if (product) {
-          await logFound(product);
+          logFound(product);
           return product;
         }
       }
+    } catch (e: any) {
+      console.warn("[VTEX] Parse estratégia 1 falhou:", e.message);
     }
-  } catch (e: any) {
-    console.warn("[VTEX] Estratégia 1 falhou:", e.message);
   }
 
-  // ── Estratégia 2: Busca por termo no catálogo (fq=ft:term) ──
-  try {
-    const url2 = `${VTEX_API_BASE}/api/catalog_system/pub/products/search?fq=ft:${encodeURIComponent(normalizedQuery)}&_from=0&_to=9`;
-    const res2 = await fetch(url2, {
-      headers: vtexHeaders(),
-      signal: AbortSignal.timeout(10_000),
-    });
+  // ── Estratégia 2: API pública do storefront (fallback) ──
+  const url2 = `${VTEX_STORE_URL}/api/catalog_system/pub/products/search?ft=${encoded}&_from=0&_to=9`;
+  const res2 = await fetchWithRetry(url2, {
+    headers: {
+      "Accept": "application/json",
+      "REST-Range": "resources=0-9",
+      "User-Agent": "TecfagBot/1.0",
+    },
+  });
 
-    if (res2.ok) {
+  if (res2) {
+    try {
       const products: any[] = await res2.json();
-      if (products.length > 0) {
+      if (Array.isArray(products) && products.length > 0) {
         const product = parseProduct(products[0], normalizedQuery);
         if (product) {
-          await logFound(product);
+          logFound(product);
           return product;
         }
       }
+    } catch (e: any) {
+      console.warn("[VTEX] Parse estratégia 2 falhou:", e.message);
     }
-  } catch (e: any) {
-    console.warn("[VTEX] Estratégia 2 falhou:", e.message);
-  }
-
-  // ── Estratégia 3: API pública do storefront (fallback sem auth) ──
-  try {
-    const url3 = `${VTEX_STORE_URL}/api/catalog_system/pub/products/search?ft=${encodeURIComponent(normalizedQuery)}&_from=0&_to=9`;
-    const res3 = await fetch(url3, {
-      headers: { "Accept": "application/json", "User-Agent": "TecfagBot/1.0" },
-      signal: AbortSignal.timeout(8_000),
-    });
-
-    if (res3.ok) {
-      const products: any[] = await res3.json();
-      if (products.length > 0) {
-        const product = parseProduct(products[0], normalizedQuery);
-        if (product) {
-          await logFound(product);
-          return product;
-        }
-      }
-    }
-  } catch (e: any) {
-    console.warn("[VTEX] Estratégia 3 (fallback) falhou:", e.message);
   }
 
   // Nenhuma estratégia encontrou
-  await storage.createVtexLog({ type: "not_found", description: "Produto não encontrado no catálogo" }).catch(() => {});
-  await storage.createVtexFailure({ query: rawQuery, reason: "Não encontrado em 3 estratégias" }).catch(() => {});
+  storage.createVtexLog({ type: "not_found", description: `Produto "${normalizedQuery}" não encontrado` }).catch(() => {});
+  storage.createVtexFailure({ query: rawQuery, reason: "Não encontrado" }).catch(() => {});
   return { found: false, query: rawQuery, normalizedQuery };
 }
 
@@ -352,20 +356,19 @@ export async function simulateShipping(
     country: "BRA",
   };
 
+  // Retry: até 2 tentativas com timeout de 5s
+  const res = await fetchWithRetry(url, {
+    method: "POST",
+    headers: vtexHeaders(),
+    body: JSON.stringify(body),
+  }, 2, 5000);
+
+  if (!res) {
+    console.error(`[VTEX Frete] Todas as tentativas falharam para CEP ${cleanCep}`);
+    return { success: false, cep: cleanCep, options: [], error: "API VTEX não respondeu" };
+  }
+
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: vtexHeaders(),
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => "");
-      console.error(`[VTEX Frete] HTTP ${res.status}: ${errBody.slice(0, 200)}`);
-      return { success: false, cep: cleanCep, options: [], error: `Erro HTTP ${res.status}` };
-    }
-
     const data = await res.json();
     const logisticsInfo = data?.logisticsInfo?.[0]?.slas ?? [];
 
@@ -384,7 +387,7 @@ export async function simulateShipping(
       }))
       .sort((a: ShippingOption, b: ShippingOption) => a.price - b.price);
 
-    await storage.createVtexLog({
+    storage.createVtexLog({
       type: "shipping_simulation",
       description: `Frete CEP ${cleanCep}: ${options.length} opções encontradas`,
       autonomous: true,
@@ -392,7 +395,7 @@ export async function simulateShipping(
 
     return { success: true, cep: cleanCep, options };
   } catch (err: any) {
-    console.error(`[VTEX Frete] Erro:`, err.message);
+    console.error(`[VTEX Frete] Erro ao parsear resposta:`, err.message);
     return { success: false, cep: cleanCep, options: [], error: err.message };
   }
 }
