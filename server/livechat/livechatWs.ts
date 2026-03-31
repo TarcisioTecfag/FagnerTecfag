@@ -653,6 +653,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 const cleanReply = rawReply
                   .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "")
                   .replace(/\[SCORE:\d+\]/gi, "")
+                  .replace(/\[PRODUTO_IDENTIFICADO:[^\]]+\]/gi, "")
                   .trim();
 
                 // ─── Pré-processa: garante que URLs fiquem em parágrafos próprios ─────────

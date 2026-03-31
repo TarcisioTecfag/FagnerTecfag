@@ -295,13 +295,13 @@ export function detectMachineIntent(message: string): string | null {
 // ─── Detecta intenção de cálculo de frete ────────────────────────────────────
 
 const SHIPPING_PATTERNS = [
-  /(?:quanto|calcul|simul|consult).*(?:frete|entrega|envio|fret)/i,
+  /(?:quanto|calcul|simul|consult|cota|cotar|saber|ver).*(?:frete|entrega|envio|fret|mandar)/i,
   /frete\s+(?:para|pro|pra|do|da|até)/i,
-  /(?:valor|preço|custo).*(?:frete|entrega|envio)/i,
+  /(?:valor|preço|custo).*(?:frete|entrega|envio|mandar)/i,
   /(?:prazo|demora|tempo).*(?:entrega|chegar|receber)/i,
   /\b(?:frete|entrega|envio)\b/i,
-  /calcula.*(?:pra|para|pro)\s+(?:mim|eu|meu|cep)/i,
-  /calcula.*\d{5}/i,
+  /(?:calcula|cota|cotar|simula).*(?:pra|para|pro)\s+(?:mim|eu|meu|cep)/i,
+  /(?:calcula|cota|cotar|simula).*\d{5}/i,
   // Padrão: CEP + contexto de entrega
   /\d{5}[- ]?\d{3}.*(?:frete|entrega|envio)/i,
   /(?:frete|entrega|envio).*\d{5}[- ]?\d{3}/i,
