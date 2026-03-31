@@ -256,7 +256,7 @@ function LiveChat() {
             });
             break;
           case "VISITOR_OFFLINE":
-            setVisitors((prev) => prev.filter((v) => v.id !== data.visitorId));
+            setVisitors((prev) => prev.map((v) => v.id === data.visitorId ? { ...v, isOnline: "false", lastSeenAt: new Date().toISOString() } : v));
             break;
           case "VISITOR_PAGE_UPDATE":
             setHistoryModal(prev => {
@@ -1011,7 +1011,6 @@ function LiveChat() {
                 </div>
               )}
             </div>
-          </div>
 
             {/* Offline Visitors Section */}
             <div className="px-5 py-3 border-t border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50 shadow-inner">

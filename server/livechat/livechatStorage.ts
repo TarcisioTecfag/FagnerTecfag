@@ -119,9 +119,11 @@ export const lcStorage = {
   },
 
   async listAllVisitors(limit = 100): Promise<LcVisitor[]> {
-    return db.select().from(lcVisitors)
+    const rows = await db.select().from(lcVisitors)
       .orderBy(desc(lcVisitors.lastSeenAt))
       .limit(limit);
+    const cutoff = Date.now() - 3 * 60 * 1000;
+    return rows.map(r => ({ ...r, isOnline: (r.isOnline === "true" && new Date(r.lastSeenAt).getTime() >= cutoff) ? "true" : "false" }));
   },
 
   async setVisitorOnline(id: string): Promise<void> {
