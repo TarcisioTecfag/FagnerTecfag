@@ -7,6 +7,7 @@
 
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { lcStorage } from "./livechatStorage.js";
+import { getDiagLog } from "./livechatAI.js";
 
 // ─── Auth middleware (mesma lógica do index.ts) ────────────────────────────────
 
@@ -162,12 +163,7 @@ export function registerLiveChatRoutes(app: any): void {
 
   // ── Diagnóstico temporário (REMOVER após debug) ──────────────────
   router.get("/diag", (_req: Request, res: Response) => {
-    try {
-      const { getDiagLog } = require("./livechatAI.js");
-      return res.json(getDiagLog());
-    } catch (err: any) {
-      return res.json({ error: err.message });
-    }
+    return res.json(getDiagLog());
   });
 
   // Mount all routes under /api/livechat
