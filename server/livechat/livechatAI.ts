@@ -463,6 +463,21 @@ export async function processVisitorMessage(
 
   // FRETE — detecta se o cliente quer calcular frete
   const shippingIntent = detectShippingIntent(userMessage);
+
+  // Se quer frete mas não temos o skuId ainda (ex: a máquina foi apenas identificada por imagem e não buscada na VTEX)
+  if (shippingIntent.wantsFrete && shippingIntent.cep && !session.lastSkuId && session.lastProductName) {
+    console.log(`[LiveChat AI] Resolvendo lastSkuId em tempo real para o produto: ${session.lastProductName}`);
+    try {
+      const vtexSearchFallback = await Promise.race([
+        searchProduct(session.lastProductName),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3_000))
+      ]);
+      if (vtexSearchFallback && vtexSearchFallback.found) {
+        session.lastSkuId = vtexSearchFallback.skuId;
+      }
+    } catch {}
+  }
+
   if (shippingIntent.wantsFrete && shippingIntent.cep && session.lastSkuId) {
     try {
       const fretePromise = simulateShipping(shippingIntent.cep, session.lastSkuId);
