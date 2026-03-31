@@ -465,10 +465,23 @@ export async function processVisitorMessage(
 
   // Build Gemini payload
   const userParts = [{ text: userMessage }];
+  const rawContents = [...session.history, { role: "user", parts: userParts }];
+
+  // Normaliza o histórico para o Gemini: garante que os roles (user/model) SEMPRE alternam
+  // Agrupa mensagens consecutivas do mesmo role em um único bloco.
+  const normalizedContents: { role: string; parts: any[] }[] = [];
+  for (const msg of rawContents) {
+    if (normalizedContents.length > 0 && normalizedContents[normalizedContents.length - 1].role === msg.role) {
+      normalizedContents[normalizedContents.length - 1].parts.push({ text: "\n\n" });
+      normalizedContents[normalizedContents.length - 1].parts.push(...msg.parts);
+    } else {
+      normalizedContents.push({ role: msg.role, parts: [...msg.parts] });
+    }
+  }
 
   const payload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [...session.history, { role: "user", parts: userParts }],
+    contents: normalizedContents,
     generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
   };
 
