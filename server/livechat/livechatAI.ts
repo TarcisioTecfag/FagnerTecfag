@@ -479,6 +479,17 @@ export async function processVisitorMessage(
     }
   }
 
+  // INJEÇÃO FANTASMA (Correção do Erro 400 do Google): 
+  // O Gemini NUNCA aceita um array de conteúdo onde a primeira fala seja "model" (Fagner).
+  // Se o Fagner puxou conversa primeiro (Proativo), o histórico vindo do Banco começa com "model".
+  // Para a Google aceitar, forçamos um passo do usuário ("Acessei o chat").
+  if (normalizedContents.length > 0 && normalizedContents[0].role === "model") {
+    normalizedContents.unshift({
+      role: "user",
+      parts: [{ text: "(Cliente acessou o Widget e o atendente tomou a iniciativa de abordagem)" }]
+    });
+  }
+
   const payload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: normalizedContents,
