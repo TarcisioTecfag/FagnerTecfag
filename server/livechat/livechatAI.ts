@@ -103,7 +103,7 @@ Profissional, humano, prestativo e consultivo. Como um vendedor experiente de lo
 
 ## REGRAS GERAIS
 1. Faça UMA pergunta por vez
-2. Use emojis com moderação (máx. 1-2 por mensagem)
+2. Use emojis com EXTREMA moderação: máximo 1 emoji em toda a resposta completa. Se já usou um emoji nessa resposta, PROIBIDO adicionar outro.
 3. Escreva de forma simples e natural
 4. NUNCA use asteriscos, bullets, negrito ou listas. Só texto corrido.
 5. NUNCA diga que "não encontrou" ou "não tem" um produto. A Tecfag trabalha com uma ampla linha — se não achou no catálogo online, diga que tem e prossiga.
@@ -113,6 +113,8 @@ Profissional, humano, prestativo e consultivo. Como um vendedor experiente de lo
 9. SEJA BREVE! Respostas curtas e diretas. Máximo 2-3 frases por mensagem. Quanto mais curto, melhor.
 10. NUNCA comece com frases longas de boas-vindas. Vá direto ao ponto.
 11. NUNCA diga "estou calculando" ou "vou verificar" se a informação JÁ ESTÁ no contexto. Apresente os dados diretamente.
+12. NUNCA envie uma mensagem que seja SOMENTE um emoji. O emoji deve sempre acompanhar texto.
+13. O emoji 😊 é PROIBIDO em respostas de atendimento. Prefira outros emojis ou nenhum.
 
 ## SAUDAÇÕES
 Quando o cliente mandar uma saudação simples (oi, olá, bom dia, boa tarde, etc):
@@ -214,22 +216,51 @@ async function getRagDocuments(): Promise<{ id: string; name: string; content: s
   } catch { return []; }
 }
 
-// ─── Gemini request (reutiliza retry do geminiService) ────────────────────────
+// ─── Gemini request com retry (anti-congelamento) ────────────────────────────
+// Tentativas: 1ª imediata (30s timeout), 2ª após 8s (30s timeout), 3ª após 20s (30s timeout)
+
+const LIVECHAT_RETRY_DELAYS = [8_000, 20_000];
 
 async function geminiRequest(url: string, payload: object): Promise<any> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(30_000),
-  });
+  let lastErr: any;
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Gemini HTTP ${res.status}: ${body.slice(0, 200)}`);
+  for (let attempt = 0; attempt <= LIVECHAT_RETRY_DELAYS.length; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(30_000),
+      });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        const err = new Error(`Gemini HTTP ${res.status}: ${body.slice(0, 200)}`);
+        // Erros 4xx não devem ser tentados novamente
+        if (/Gemini HTTP 4\d\d/.test(err.message)) throw err;
+        if (attempt < LIVECHAT_RETRY_DELAYS.length) {
+          console.warn(`[LiveChat AI] Tentativa ${attempt + 1} falhou (${res.status}), retry em ${LIVECHAT_RETRY_DELAYS[attempt] / 1000}s...`);
+          await new Promise((r) => setTimeout(r, LIVECHAT_RETRY_DELAYS[attempt]));
+          lastErr = err;
+          continue;
+        }
+        throw err;
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      lastErr = err;
+      const isRetryable = /AbortError|fetch failed|ETIMEDOUT|ECONNRESET|503|overloaded/i.test(err?.message ?? "");
+      if (isRetryable && attempt < LIVECHAT_RETRY_DELAYS.length) {
+        console.warn(`[LiveChat AI] Erro retryable (tentativa ${attempt + 1}): ${err.message}`);
+        await new Promise((r) => setTimeout(r, LIVECHAT_RETRY_DELAYS[attempt]));
+        continue;
+      }
+      break;
+    }
   }
 
-  return res.json();
+  throw lastErr;
 }
 
 // ─── Processar mensagem do visitante ──────────────────────────────────────────
@@ -258,6 +289,7 @@ export async function processVisitorMessage(
   }
 
   // Get or create AI session
+  // Se a sessão não existir em memória (ex: reinício do servidor), reconstruir histórico do banco
   let session = aiSessions.get(chatId);
   if (!session) {
     session = {
@@ -265,6 +297,31 @@ export async function processVisitorMessage(
       mood: pickMood(),
       history: [],
     };
+
+    // Reconstrução do histórico a partir do banco de dados (anti-reinício de memória)
+    try {
+      const pastMessages = await lcStorage.listMessagesByChat(chatId);
+      if (pastMessages && pastMessages.length > 0) {
+        // Usa as últimas 20 mensagens (10 turnos) para não explodir o contexto
+        const recent = pastMessages.slice(-20);
+        for (const msg of recent) {
+          if (msg.sender === "visitor") {
+            session.history.push({ role: "user", parts: [{ text: msg.content }] });
+          } else if (msg.sender === "ai" || msg.sender === "agent") {
+            // Remove tags internas antes de colocar no histórico
+            const clean = msg.content
+              .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "")
+              .replace(/\[SCORE:\d+\]/gi, "")
+              .trim();
+            if (clean) session.history.push({ role: "model", parts: [{ text: clean }] });
+          }
+        }
+        console.log(`[LiveChat AI] Sessão ${chatId} reconstruída com ${session.history.length} entradas do banco.`);
+      }
+    } catch (e) {
+      console.warn("[LiveChat AI] Não foi possível reconstruir histórico do banco:", e);
+    }
+
     aiSessions.set(chatId, session);
   }
 
@@ -399,8 +456,14 @@ export async function processVisitorMessage(
 
   const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
 
+  // Timeout global do pipeline completo (RAG + VTEX + Gemini) — 50s
+  const GLOBAL_TIMEOUT_MS = 50_000;
+  const globalTimeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("GLOBAL_PIPELINE_TIMEOUT")), GLOBAL_TIMEOUT_MS)
+  );
+
   try {
-    const data = await geminiRequest(url, payload);
+    const data = await Promise.race([geminiRequest(url, payload), globalTimeoutPromise]);
 
     const raw: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "(sem resposta)";
     const promptTokens: number = data?.usageMetadata?.promptTokenCount ?? 0;
@@ -438,12 +501,17 @@ export async function processVisitorMessage(
     // Return raw (with outcome tags) so livechatWs can detect outcome, but clean reply for the visitor message
     return { reply: raw, needsHuman, tokens: totalTokens };
   } catch (err: any) {
-    console.error("[LiveChat AI] Gemini error:", err.message);
+    const isTimeout = err.message === "GLOBAL_PIPELINE_TIMEOUT";
+    console.error(`[LiveChat AI] Gemini ${isTimeout ? "timeout global" : "error"}:`, err.message);
+
+    // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
+    // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou
+    const fallbackReply = "Ops, tive uma instabilidade aqui! 😅 Me manda de novo o que você precisava?";
     return {
-      reply: "",
+      reply: fallbackReply,
       needsHuman: false,
       tokens: 0,
-      isError: true,
+      isError: false, // não é erro — envia a mensagem de fallback
     };
   }
 }

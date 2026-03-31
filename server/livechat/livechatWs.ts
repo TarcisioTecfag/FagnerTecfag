@@ -510,7 +510,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   throw err;
                 } finally {
                   // Só remove o lock após pequeno delay para garantir que leitores concorrentes recebam o chat
-                  setTimeout(() => chatCreationLocks.delete(visitorId), 500);
+                  setTimeout(() => chatCreationLocks.delete(visitorId!), 500);
                 }
               }
             }
@@ -623,15 +623,37 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                 // Separa emojis no final das frases e quebra por pontuação
                 // Prioridade: parágrafos (\n\n) > pontuação (. ! ?)
+                // REGRA: emojis NUNCA ficam em balões solo — ficam na última frase de texto
                 function splitIntoChunks(text: string): string[] {
-                  // 1. Primeiro divide por parágrafos (\n\n) — URLs ficam sozinhas aqui
+                  // Regex de emoji: detecta blocos contendo só emojis (pares surrogate + faixa BMP de emojis)
+                  // Cobre: emojis SMP (pares surrogate \uD800-\uDFFF), símbolos \u2600-\u27BF,
+                  //        estrelas \u2B50\u2B55, fe0f (variation selector), combining enclosing keycap
+                  const EMOJI_ONLY_RE = /^[\uD800-\uDFFF\u2600-\u27BF\u2B50\u2B55\uFE0F\u20E3\s]+$/;
+                  const TRAILING_EMOJI_RE = /\s+([\uD800-\uDFFF\u2600-\u27BF\uFE0F\u20E3]+)$/;
+
+                  // 1. Divide por parágrafos (\n\n) — URLs ficam sozinhas aqui
                   const paragraphs = text.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
                   
                   const result: string[] = [];
                   
                   for (const para of paragraphs) {
-                    // Se for URL ou muito curto — manda como chunk avulso
-                    if (para.startsWith("http") || para.startsWith("/uploads/") || para.length < 60) {
+                    // Se for URL ou caminho de arquivo — manda como chunk avulso
+                    if (para.startsWith("http") || para.startsWith("/uploads/")) {
+                      result.push(para);
+                      continue;
+                    }
+
+                    // Se for SOMENTE emoji(s) — funde com o último chunk em vez de criar novo balão
+                    if (EMOJI_ONLY_RE.test(para)) {
+                      if (result.length > 0) {
+                        result[result.length - 1] = result[result.length - 1] + " " + para.trim();
+                      }
+                      // Se não há chunk anterior, descarta — evita balão de emoji social no início
+                      continue;
+                    }
+                    
+                    // Parágrafo curto (< 60 chars) — manda direto
+                    if (para.length < 60) {
                       result.push(para);
                       continue;
                     }
@@ -649,21 +671,18 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                       remaining = remaining.slice(matchIdx + 1).trim();
                     }
                   }
-                  
-                  // 3. Separa emojis soltos no final
-                  const finalChunks: string[] = [];
-                  for (const sentence of result) {
-                    const surrogateAtEnd = /^([\s\S]*?)\s+([\uD800-\uDFFF][\s\S]*)$/.exec(sentence);
-                    if (surrogateAtEnd) {
-                      const textPart = surrogateAtEnd[1].trim();
-                      const emojiPart = surrogateAtEnd[2].trim();
-                      if (textPart) finalChunks.push(textPart);
-                      if (emojiPart) finalChunks.push(emojiPart);
+
+                  // 3. Pós-processamento: se algum chunk ficou apenas com emoji(s), funde com o anterior
+                  const final: string[] = [];
+                  for (const chunk of result) {
+                    if (EMOJI_ONLY_RE.test(chunk) && final.length > 0) {
+                      final[final.length - 1] = final[final.length - 1] + " " + chunk.trim();
                     } else {
-                      finalChunks.push(sentence);
+                      final.push(chunk);
                     }
                   }
-                  return finalChunks.filter(Boolean);
+
+                  return final.filter(Boolean);
                 }
 
                 const chunks = splitIntoChunks(processedReply);
@@ -676,9 +695,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   // A partir do 2º chunk: ativa Typing e aguarda
                   if (i > 0) {
                     sendToVisitor(currentVisitorId, { type: "TYPING_START" });
-                    // Emojis/surrogates são curtos — delay mínimo de 800ms
-                    const isEmoji = /^[\uD800-\uDFFF\s]+$/.test(chunk);
-                    const delayMs = isEmoji ? 800 : Math.min(Math.max(chunk.length * 35, 1200), 3500);
+                    // Calcula delay pelo tamanho do texto (mínimo 800ms)
+                    const delayMs = Math.min(Math.max(chunk.length * 35, 800), 3500);
                     await new Promise(r => setTimeout(r, delayMs));
                   }
 
