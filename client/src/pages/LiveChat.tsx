@@ -130,13 +130,13 @@ function statusBadge(status: string): { label: string; icon: string; color: stri
 
 function sourceLabel(src?: string): { label: string; icon: string } {
   switch (src) {
-    case "google_organic": return { label: "Google Org\u00E2nico", icon: "\u{1F50D}" };
+    case "google_organic": return { label: "Google Orgânico", icon: "\u{1F50D}" };
     case "google_ads": return { label: "Google Ads", icon: "\u{1F4E2}" };
     case "instagram": return { label: "Instagram", icon: "\u{1F4F8}" };
     case "facebook": return { label: "Facebook", icon: "\u{1F4D8}" };
     case "youtube": return { label: "YouTube", icon: "\u25B6\uFE0F" };
     case "direct": return { label: "Direto", icon: "\u{1F517}" };
-    case "referral": return { label: "Indica\u00E7\u00E3o", icon: "\u{1F91D}" };
+    case "referral": return { label: "Indicação", icon: "\u{1F91D}" };
     case "whatsapp": return { label: "WhatsApp", icon: "\u{1F4AC}" };
     default: return { label: src ?? "Outro", icon: "\u{1F30E}" };
   }
@@ -172,7 +172,7 @@ function LiveChat() {
   const [allVisitors, setAllVisitors] = useState<Visitor[]>([]);
   const [pipelineData, setPipelineData] = useState<Record<string, Visitor[]>>({});
   const [attentionOpen, setAttentionOpen] = useState(false);
-  const [attentionReason, setAttentionReason] = useState("Falta de informa\u00E7\u00E3o");
+  const [attentionReason, setAttentionReason] = useState("Falta de informação");
   const [attentionObs, setAttentionObs] = useState("");
   const [visitorChats, setVisitorChats] = useState<Chat[]>([]);
   const [historyModal, setHistoryModal] = useState<{ visitor: Visitor; pageviews: Pageview[] } | null>(null);
@@ -479,8 +479,8 @@ function LiveChat() {
   ];
   const secondaryTabs = [
     { id: "arquivados" as const, label: "Arquivados", icon: Layers, count: archivedChats.length },
-    { id: "atencao" as const, label: "Aten\u00E7\u00E3o", icon: AlertTriangle, count: attentionChats.length },
-    { id: "stats" as const, label: "Estat\u00EDsticas", icon: BarChart3, count: undefined as number | undefined },
+    { id: "atencao" as const, label: "Atenção", icon: AlertTriangle, count: attentionChats.length },
+    { id: "stats" as const, label: "Estatísticas", icon: BarChart3, count: undefined as number | undefined },
   ];
   const tabs = [...mainTabs, ...secondaryTabs];
 
@@ -753,14 +753,14 @@ function LiveChat() {
                                 value={attentionReason}
                                 onChange={(e) => setAttentionReason(e.target.value)}
                               >
-                                <option value="Falta de informa\u00E7\u00E3o">Falta de informa\u00E7\u00E3o</option>
-                                <option value="N\u00E3o respondeu">N\u00E3o respondeu</option>
-                                <option value="N\u00E3o entendeu o cliente">N\u00E3o entendeu o cliente</option>
+                                <option value="Falta de informação">Falta de informação</option>
+                                <option value="Não respondeu">Não respondeu</option>
+                                <option value="Não entendeu o cliente">Não entendeu o cliente</option>
                                 <option value="Parou de responder">Parou de responder</option>
-                                <option value="Outro problema t\u00E9cnico">Outro problema t\u00E9cnico</option>
+                                <option value="Outro problema técnico">Outro problema técnico</option>
                               </select>
                               <Textarea
-                                placeholder="Observa\u00E7\u00E3o (opcional)"
+                                placeholder="Observação (opcional)"
                                 className="text-sm min-h-[60px] mb-3"
                                 value={attentionObs}
                                 onChange={(e) => setAttentionObs(e.target.value)}
@@ -786,7 +786,7 @@ function LiveChat() {
                       {/* Badge somente leitura — aba Atenção */}
                       {activeTab === "atencao" && (
                         <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
-                          👁 Visualiza\u00E7\u00E3o — somente leitura
+                          👁 Visualização — somente leitura
                         </span>
                       )}
 
@@ -880,7 +880,7 @@ function LiveChat() {
                       <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-emerald-50/60 border border-emerald-100">
                         <Bot className="w-4 h-4 text-emerald-500" />
                         <p className="text-[11px] text-emerald-700 font-medium">
-                          Fagner est\u00E1 conduzindo este atendimento. Clique em "Assumir" para intervir.
+                          Fagner está conduzindo este atendimento. Clique em "Assumir" para intervir.
                         </p>
                       </div>
                     )}
@@ -917,7 +917,7 @@ function LiveChat() {
                 <div className="flex flex-col items-center justify-center h-full text-zinc-400">
                   <Eye className="w-12 h-12 mb-3 opacity-20" />
                   <p className="text-sm font-medium">Nenhum visitante online</p>
-                  <p className="text-[11px]">Os visitantes aparecer\u00E3o aqui em tempo real</p>
+                  <p className="text-[11px]">Os visitantes aparecerão aqui em tempo real</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -1202,7 +1202,7 @@ function LiveChat() {
                 { stage: "em_atendimento", label: "Em Atendimento", color: "#3b82f6", bgLight: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.3)" },
                 { stage: "finalizado_com_venda", label: "Finalizou Com Venda", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
                 { stage: "finalizado_sem_venda", label: "Finalizou Sem Venda", color: "#ef4444", bgLight: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.3)" },
-                { stage: "sem_resposta", label: "N\u00E3o Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
+                { stage: "sem_resposta", label: "Não Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
               ].map((col) => {
                 const items = pipelineData[col.stage] || [];
                 return (
@@ -1449,7 +1449,7 @@ function LiveChat() {
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
                           <Bot className="w-8 h-8 mb-2 opacity-30" />
-                          <p className="text-[10px] text-center max-w-[160px]">O Fagner gerar\u00E1 notas automaticamente ao encerrar uma conversa.</p>
+                          <p className="text-[10px] text-center max-w-[160px]">O Fagner gerará notas automaticamente ao encerrar uma conversa.</p>
                         </div>
                       )}
                     </div>
