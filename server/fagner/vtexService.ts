@@ -243,17 +243,23 @@ const MACHINE_KEYWORDS = [
   "tampadora", "dosadora", "encapsuladora", "embaladora", "ensacadora",
   "etiquetadora", "labeladora", "datadora", "inkjet", "fechadora",
   "recravadeira", "roscadora", "injetora", "extrusora", "misturador",
-  "arlm", "arl-", "sleeve", "shrink",
+  "arlm", "arl-", "sleeve", "shrink", "-a0", "a0", "tlf", "dgf", "vsf",
+  // Adição de peças comuns e acessórios
+  "kit de vedação", "resistência", "borracha", "datador", "teflon", "silicone",
+  "tinta para datador", "fita datadora", "correia", "bico", "pedal",
 ];
 
 const MACHINE_INTENT_PATTERNS = [
-  /(?:preciso|quero|busco|procuro|tenho interesse|gostaria)\s+(?:de\s+)?(?:uma?|comprar)?\s*(?:máquina|envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora|datadora|fechadora|recravadeira)/i,
-  /(?:tem|vende[m]?|possui|trabalha[m]?\s+com|catálogo|catalogo).*?(?:envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora|datadora|fechadora|recravadeira|máquina)/i,
-  /(?:envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora|datadora|fechadora|recravadeira)/i,
+  /(?:preciso|quero|busco|procuro|tenho interesse|gostaria)\s+(?:de\s+)?(?:uma?|comprar)?\s*(?:máquina|envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora|datadora|fechadora|recravadeira|kit\s+de\s+vedação|resistência|peça|parte|acessório)/i,
+  /(?:tem|vende[m]?|possui|trabalha[m]?\s+com|catálogo|catalogo).*?(?:envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora|datadora|fechadora|recravadeira|máquina|kit\s+de\s+vedação|resistência|peça|acessório)/i,
+  /(?:envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora|datadora|fechadora|recravadeira|kit\s+de\s+vedação|resistência)/i,
   /máquina\s+(?:de\s+)?(?:embalar|selar|envasar|rotular|tampas?|dose?|encapsular|ensacar)/i,
   /equipamento\s+(?:de|para)\s+(?:envase?|selagem|rotulagem)/i,
+  // Pedidos diretos de produto atual na sessão ("link dele/dela")
+  /(?:link|valor|preço|comprar).*?(?:dele|dela|da\s+peça|desse|dessa|do\s+kit|da\s+máquina)/i,
   // Modelos específicos: ARLM-200, ARL-200A, etc
   /\b(?:arlm|arl)[- ]?\d+[a-z]*/i,
+  /\bkir de veda[cç][aã]o\b/i,
 ];
 
 export function detectMachineIntent(message: string): string | null {

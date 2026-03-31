@@ -108,6 +108,7 @@ Profissional, humano, prestativo e consultivo. Como um vendedor experiente de lo
 4. Se o cliente pedir o link ou informações de um produto e não houver link no contexto VTEX, NÃO se desculpe de forma robótica. Diga APENAS: "Ainda não localizei o equipamento exato no catálogo online." e retome o atendimento consultivo perguntando sobre a demanda de produção dele.
 5. NUNCA misture "Neste exato momento o sistema não me retornou o link..." na mesma resposta em que você diz ter achado o produto. Seja coerente com o contexto atual.
 6. Links inventados levam o cliente a páginas inexistentes e destroem a confiança. NUNCA faça isso.
+7. SE VOCÊ IDENTIFICAR UM PRODUTO POR IMAGEM (anexo), escreva OBRIGATORIAMENTE a tag oculta [PRODUTO_IDENTIFICADO: Nome do Produto] em qualquer lugar da sua resposta. Exemplo: [PRODUTO_IDENTIFICADO: Kit de Vedação A03]. Isso forçará o sistema a buscar o produto no banco.
 
 ## MANUTENÇÃO DE CONTEXTO (PROIBIDO RODAR EM CÍRCULOS)
 1. Se o cliente e você já definiram exatamente a máquina ou kit (ex: você já enviou o link e calculou o frete), NÃO volte atrás fazendo perguntas de triagem básica como "Qual kit você se refere?" ou "Me dê detalhes sobre o que você produz".
@@ -423,7 +424,14 @@ export async function processVisitorMessage(
 
   // VTEX — detecta se o cliente está perguntando sobre máquinas/produtos
   // PROTEÇÃO: timeout global de 5s para evitar travar o pipeline inteiro
-  const machineIntent = detectMachineIntent(userMessage);
+  let machineIntent = detectMachineIntent(userMessage);
+
+  // Fallback: se o cliente pedir link de algo previamente identificado na sessão
+  if (machineIntent && /(?:link|valor|preço|comprar).*?(?:dele|dela|da\s+peça|desse|dessa|do\s+kit|da\s+máquina)/i.test(userMessage) && session.lastProductName) {
+    machineIntent = session.lastProductName;
+    console.log(`[LiveChat AI] Usando lastProductName da sessão como machineIntent: ${machineIntent}`);
+  }
+
   if (machineIntent) {
     try {
       const vtexPromise = searchProduct(machineIntent);
@@ -586,7 +594,16 @@ export async function processVisitorMessage(
     if (diagLog.length > 20) diagLog.shift();
 
     // Strip outcome tags from visible reply (keep raw for detection in livechatWs)
-    const cleanReply = raw.replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "").trim();
+    let cleanReply = raw.replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "");
+
+    // Parse [PRODUTO_IDENTIFICADO: xxx] to update session context
+    const prodRegex = /\[PRODUTO_IDENTIFICADO:\s*([^\]]+)\]/gi;
+    let prodMatch;
+    while ((prodMatch = prodRegex.exec(cleanReply)) !== null) {
+      session.lastProductName = prodMatch[1].trim();
+      console.log(`[LiveChat AI] Gemini identificou o produto pela imagem e setou na sessão: ${session.lastProductName}`);
+    }
+    cleanReply = cleanReply.replace(prodRegex, "").trim();
 
     // Update history (use clean reply in history too)
     session.history.push({ role: "user", parts: userParts });

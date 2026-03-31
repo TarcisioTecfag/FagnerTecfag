@@ -667,10 +667,17 @@ app.post("/api/documents", requireAuth, upload.single("file"), async (req, res) 
   try {
     const fileBuffer = fs.readFileSync(path.join(UPLOADS_DIR, req.file.filename));
     const fileDataBase64 = fileBuffer.toString("base64");
+    
+    // Garantir que a coluna fileData existe (idempotente)
+    await pool.query(
+      `ALTER TABLE documents ADD COLUMN IF NOT EXISTS "fileData" TEXT`
+    ).catch(() => {});
+    
     await pool.query(
       `UPDATE documents SET "fileData" = $1 WHERE id = $2`,
       [fileDataBase64, doc.id]
     );
+    console.log(`[Upload Single] Salvo na DB PostgreSQL (${Math.round(fileBuffer.length / 1024)}KB)`);
   } catch (err: any) {
     console.warn(`[Upload Single] Falha ao salvar fileData:`, err.message);
   }
