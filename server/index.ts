@@ -187,8 +187,35 @@ app.use(
   })
 );
 
-// Serve uploaded files
-app.use("/uploads", express.static(UPLOADS_DIR));
+// Serve uploaded files — lê do PostgreSQL (fileData base64) para persistência no Railway.
+// Fallback para disco local em ambiente de desenvolvimento.
+app.get("/uploads/:filename", async (req: Request, res: Response) => {
+  const filename = p(req.params.filename);
+  try {
+    // 1. Tentar servir do banco (campo fileData — base64 do arquivo original)
+    const dbResult = await pool.query(
+      `SELECT "fileData", "mimeType", name FROM documents WHERE "filePath" = $1 LIMIT 1`,
+      [`/uploads/${filename}`]
+    );
+    if (dbResult.rows.length > 0 && dbResult.rows[0].fileData) {
+      const { fileData, mimeType, name } = dbResult.rows[0];
+      const buffer = Buffer.from(fileData, "base64");
+      res.setHeader("Content-Type", mimeType || "application/octet-stream");
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(name)}"`);
+      res.setHeader("Content-Length", buffer.length.toString());
+      return res.send(buffer);
+    }
+    // 2. Fallback: servir do disco (dev local)
+    const diskPath = path.join(UPLOADS_DIR, filename);
+    if (fs.existsSync(diskPath)) {
+      return res.sendFile(diskPath);
+    }
+    return res.status(404).json({ message: "Arquivo não encontrado. Faça novo upload para persistir no banco." });
+  } catch (err: any) {
+    console.error("[/uploads] Erro ao servir arquivo:", err.message);
+    return res.status(500).json({ message: "Erro interno ao servir arquivo" });
+  }
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -684,14 +711,27 @@ app.post("/api/documents/upload-queue", requireAuth, upload.array("files", 50), 
         folderId,
       });
 
-      // Se extraiu texto do PDF, salva o conteúdo extraído em arquivo .txt separado para o RAG ler
-      if (extractedText) {
-        const txtFilename = `${file.filename}.extracted.txt`;
-        const txtPath = path.join(UPLOADS_DIR, txtFilename);
-        fs.writeFileSync(txtPath, extractedText, "utf-8");
+      // Salvar arquivo binário no banco (base64) — garante persistência no Railway
+      // O disco do Railway é efêmero e é zerado a cada redeploy
+      try {
+        const fileBuffer = fs.readFileSync(path.join(UPLOADS_DIR, file.filename));
+        const fileDataBase64 = fileBuffer.toString("base64");
+        const { pool: dbPool2 } = await import("./db.js");
+        // Garantir que a coluna fileData existe (idempotente)
+        await dbPool2.query(
+          `ALTER TABLE documents ADD COLUMN IF NOT EXISTS "fileData" TEXT`
+        ).catch(() => {});
+        await dbPool2.query(
+          `UPDATE documents SET "fileData" = $1 WHERE id = $2`,
+          [fileDataBase64, doc.id]
+        );
+        console.log(`[Upload] Arquivo ${file.originalname} salvo no PostgreSQL (${Math.round(fileBuffer.length / 1024)}KB)`);
+      } catch (dbErr: any) {
+        console.warn(`[Upload] Aviso: falha ao salvar fileData no banco para ${file.originalname}:`, dbErr.message);
+      }
 
-        // Atualiza o documento com o conteúdo extraído para o RAG
-        // O filePath original (PDF) continua acessível via /uploads/ para download
+      // Se extraiu texto do PDF, salva o conteúdo extraído para o RAG
+      if (extractedText) {
         const { pool: dbPool } = await import("./db.js");
         await dbPool.query(
           `UPDATE documents SET content = $1 WHERE id = $2`,

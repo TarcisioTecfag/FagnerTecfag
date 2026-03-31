@@ -1,4 +1,4 @@
-/**
+﻿/**
  * client/src/pages/LiveChat.tsx
  *
  * Painel de monitoramento do Live Chat â€” REFATORADO
@@ -425,6 +425,14 @@ function LiveChat() {
     setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, status: "human_active" } : c));
     toast({ title: "Chat assumido", description: "Você agora está respondendo este chat." });
   };
+  // ——— Return chat to AI (Fagner) —————————————————————————————————————
+  const handleReturnToAI = (chatId: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "RETURN_TO_AI", chatId }));
+    }
+    setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, status: "ai_active", agentId: null } : c));
+    toast({ title: "Fagner reativado", description: "O Fagner voltará a responder quando o cliente mandar mensagem." });
+  };
 
   // ——— Close chat —————————————————————————————————————————————————
   const handleCloseChat = async (chatId: string) => {
@@ -707,7 +715,7 @@ function LiveChat() {
                       {/* Botões de ação: ocultos na aba Atenção e Arquivados */}
                       {activeTab !== "atencao" && activeTab !== "arquivados" && (
                         <>
-                          {selectedChat.status === "ai_active" && (
+                          {selectedChat.status === "ai_active" ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -717,7 +725,17 @@ function LiveChat() {
                               <User className="w-3 h-3" />
                               Assumir
                             </Button>
-                          )}
+                          ) : selectedChat.status === "human_active" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleReturnToAI(selectedChat.id)}
+                              className="h-8 text-xs gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300"
+                            >
+                              <Bot className="w-3 h-3" />
+                              Ativar Fagner
+                            </Button>
+                          ) : null}
 
                           {/* Botão Ver no CRM */}
                           <Button

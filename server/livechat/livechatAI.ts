@@ -59,6 +59,7 @@ interface DiagEntry {
 }
 const diagLog: DiagEntry[] = [];
 export function getDiagLog() { return diagLog; }
+export function hasAISession(chatId: string): boolean { return aiSessions.has(chatId); }
 
 // ─── System Prompt para o Site (sem fluxo de triagem) ─────────────────────────
 
@@ -203,7 +204,7 @@ async function getRagDocuments(): Promise<{ id: string; name: string; content: s
   try {
     const { pool } = await import("../db.js");
     const result = await pool.query(
-      `SELECT id, name, "filePath", content FROM documents WHERE paused != 'true' ORDER BY "createdAt" DESC LIMIT 50`
+      `SELECT id, name, "filePath", content FROM documents WHERE paused != 'true' ORDER BY "createdAt" DESC LIMIT 200`
     );
     const docs = result.rows as { id: string; name: string; filePath: string; content: string | null }[];
     
@@ -290,6 +291,7 @@ export async function processVisitorMessage(
   chatId: string,
   userMessage: string,
   visitorPage?: string,
+  visitorName?: string,
 ): Promise<LiveChatAIResponse> {
   const apiKey = (await storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "";
 
@@ -468,6 +470,11 @@ export async function processVisitorMessage(
   } else if (shippingIntent.wantsFrete && shippingIntent.cep && !session.lastSkuId) {
     // Tem CEP mas não tem produto
     contextParts.push(`## INTENÇÃO DE FRETE DETECTADA\nO cliente quer frete para CEP ${shippingIntent.cep}, mas nenhum produto foi selecionado ainda.\nINSTRUÇÃO: Pergunte qual produto o cliente tem interesse para calcular o frete.`);
+  }
+
+  // Add visitor name context (so Fagner knows who he's talking to)
+  if (visitorName) {
+    contextParts.unshift(`## DADOS DO CLIENTE\nNome: ${visitorName}\nINSTRUÇÃO: Você JÁ SABE o nome do cliente. Use-o naturalmente quando fizer sentido, mas não force em toda frase.`);
   }
 
   // Add visitor page context

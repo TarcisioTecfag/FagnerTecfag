@@ -317,6 +317,21 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               });
               visitorId = visitor!.id;
               await recalculateVisitorCategory(visitorId);
+
+              // — Problema 4 (F5): Se há chat ativo mas não há sessão AI em memória,
+              // significa que o cliente deu F5 (reconexão limpa). Fechamos o chat antigo
+              // para que o próximo CHAT_MESSAGE crie um chat novo e fresco.
+              try {
+                const { hasAISession } = await import("./livechatAI.js");
+                const existingChat = await lcStorage.getActiveChatByVisitor(visitorId);
+                if (existingChat && !hasAISession(existingChat.id)) {
+                  await lcStorage.closeChat(existingChat.id);
+                  console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI (F5) — chat ${existingChat.id} fechado, novo será criado.`);
+                  broadcastToAgents({ type: "CHAT_STATUS", chatId: existingChat.id, status: "closed" });
+                }
+              } catch (e) {
+                console.warn("[LiveChat] F5 check falhou:", e);
+              }
             } else {
               // New visitor
               const geo = await geoLookup(ip);
@@ -525,7 +540,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   resolveLock(null as any);
                   throw err;
                 } finally {
-                  // Só remove o lock após pequeno delay para garantir que leitores concorrentes recebam o chat
+                  // Remove lock após pequeno delay para que leitores concorrentes recebam o chat
                   setTimeout(() => chatCreationLocks.delete(visitorId!), 500);
                 }
               }
@@ -603,6 +618,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   chat.id,
                   combinedContent,
                   visitor?.currentPage ?? undefined,
+                  visitor?.name ?? undefined,
                 ) as any;
 
                 if (aiResponse.isError) {
@@ -915,6 +931,26 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               chatId: chatToTake.id,
               agentId: data.userId,
             });
+            break;
+          }
+
+          // ── AGENT: Return chat to AI (devolve para o Fagner) ─────────
+          case "RETURN_TO_AI": {
+            const chatToReturn = await lcStorage.getChatById(data.chatId);
+            if (!chatToReturn) break;
+
+            await lcStorage.updateChat(chatToReturn.id, {
+              status: "ai_active",
+              agentId: null as any,
+              needsHuman: "false",
+            });
+
+            broadcastToAgents({
+              type: "CHAT_RETURNED_TO_AI",
+              chatId: chatToReturn.id,
+            });
+
+            console.log(`[LiveChat] Chat ${chatToReturn.id} devolvido ao Fagner pelo agente.`);
             break;
           }
         }
