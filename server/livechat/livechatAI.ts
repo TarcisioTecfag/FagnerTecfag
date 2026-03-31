@@ -46,6 +46,20 @@ interface ChatAISession {
 
 const aiSessions = new Map<string, ChatAISession>();
 
+// ─── Buffer de diagnóstico em memória (últimas 20 interações) ─────────────────
+interface DiagEntry {
+  ts: string;
+  chatId: string;
+  roles: string[];
+  firstRole: string;
+  userMsg: string;
+  ok: boolean;
+  error?: string;
+  reply?: string;
+}
+const diagLog: DiagEntry[] = [];
+export function getDiagLog() { return diagLog; }
+
 // ─── System Prompt para o Site (sem fluxo de triagem) ─────────────────────────
 
 function buildSiteSystemPrompt(mood: string, extraContext?: string): string {
@@ -524,6 +538,8 @@ export async function processVisitorMessage(
     const totalTokens = promptTokens + candidateTokens;
 
     console.log(`[LiveChat AI][DIAG] Chat ${chatId} — Gemini respondeu OK (${totalTokens} tokens). Preview: "${raw.slice(0, 100)}"`);
+    diagLog.push({ ts: new Date().toISOString(), chatId, roles: normalizedContents.map(c => c.role), firstRole: normalizedContents[0]?.role ?? 'EMPTY', userMsg: userMessage.slice(0, 100), ok: true, reply: raw.slice(0, 200) });
+    if (diagLog.length > 20) diagLog.shift();
 
     // Strip outcome tags from visible reply (keep raw for detection in livechatWs)
     const cleanReply = raw.replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "").trim();
@@ -560,6 +576,8 @@ export async function processVisitorMessage(
     console.error(`[LiveChat AI][DIAG]   Erro: ${err.message}`);
     console.error(`[LiveChat AI][DIAG]   Stack: ${err.stack?.slice(0, 500)}`);
     console.error(`[LiveChat AI][DIAG]   Roles enviados: ${normalizedContents.map(c => c.role).join(' -> ')}`);
+    diagLog.push({ ts: new Date().toISOString(), chatId, roles: normalizedContents.map(c => c.role), firstRole: normalizedContents[0]?.role ?? 'EMPTY', userMsg: userMessage.slice(0, 100), ok: false, error: err.message?.slice(0, 500) });
+    if (diagLog.length > 20) diagLog.shift();
 
     // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
     // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou

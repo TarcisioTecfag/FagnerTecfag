@@ -160,6 +160,16 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
+  // ── Diagnóstico temporário (REMOVER após debug) ──────────────────
+  router.get("/diag", (_req: Request, res: Response) => {
+    try {
+      const { getDiagLog } = require("./livechatAI.js");
+      return res.json(getDiagLog());
+    } catch (err: any) {
+      return res.json({ error: err.message });
+    }
+  });
+
   // Mount all routes under /api/livechat
   app.use("/api/livechat", router);
 
