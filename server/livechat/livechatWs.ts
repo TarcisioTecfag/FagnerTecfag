@@ -466,6 +466,22 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             break;
           }
 
+          // ── VISITOR: Restart chat ─────────────────────────────────
+          case "RESTART_CHAT": {
+            if (!visitorId) break;
+            const chatToClose = await lcStorage.getActiveChatByVisitor(visitorId);
+            if (chatToClose) {
+              await lcStorage.closeChat(chatToClose.id);
+              clearAISession(chatToClose.id);
+              broadcastToAgents({
+                type: "CHAT_STATUS",
+                chatId: chatToClose.id,
+                status: "closed",
+              });
+            }
+            break;
+          }
+
           // ── VISITOR: Chat message ─────────────────────────────────
           case "CHAT_MESSAGE": {
             if (!visitorId) break;

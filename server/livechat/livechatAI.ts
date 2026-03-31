@@ -316,8 +316,8 @@ export async function processVisitorMessage(
     try {
       const pastMessages = await lcStorage.listMessagesByChat(chatId);
       if (pastMessages && pastMessages.length > 0) {
-        // Usa as últimas 20 mensagens (10 turnos) para não explodir o contexto
-        const recent = pastMessages.slice(-20);
+        // Usa as últimas 6 mensagens (3 turnos) para priorizar velocidade brutal e não explodir o contexto do Gemini
+        const recent = pastMessages.slice(-6);
         for (const msg of recent) {
           if (msg.sender === "visitor") {
             session.history.push({ role: "user", parts: [{ text: msg.content }] });
@@ -349,10 +349,11 @@ export async function processVisitorMessage(
   // FILTRO CONVERSACIONAL: Mensagens puramente conversacionais (saudações, respostas curtas)
   // NÃO devem disparar busca RAG pois isso injeta contexto de produtos/manuais irrelevante.
   const CONVERSATIONAL_PATTERNS = [
-    /^(olá|boa\s+tarde|boa\s+noite|bom\s+dia|oi|hey|alô|alou|hello|hi)\s*[!?.]?$/i,
+    /^(olá|boa\s+tarde|boa\s+noite|bom\s+dia|oi|hey|alô|alou|hello|hi|opa)\s*[!?.]?$/i,
     /^(ok|sim|não|nao|tudo\s+bem|obrigad[ao]|valeu|até\s+mais|tchau|até|flw|vlw)\s*[!?.]?$/i,
+    /^(como vai|tudo bem com voc[êe]|tudo joia|tranquilo|preciso de ajuda|como posso ajudar)\s*[!?.]?$/i,
     /^(\?+|!+|\.+)$/,
-    /^.{1,6}$/, // Menos de 6 chars — curto demais para ter intenção de produto
+    /^.{1,15}$/, // Menos de 15 chars — curto demais para intenção complexa, trata como conversacional
   ];
   const isConversational = CONVERSATIONAL_PATTERNS.some(p => p.test(userMessage.trim()));
 
@@ -418,7 +419,7 @@ export async function processVisitorMessage(
   if (machineIntent) {
     try {
       const vtexPromise = searchProduct(machineIntent);
-      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000));
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_500));
       const vtexResult = await Promise.race([vtexPromise, timeoutPromise]);
 
       if (vtexResult) {

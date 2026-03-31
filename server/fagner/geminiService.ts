@@ -264,13 +264,25 @@ export async function ragSearch(
   try {
     const queryVec = await getEmbedding(query, apiKey);
 
-    const scored = await Promise.all(
-      docs.map(async (doc) => {
-        const vec = await getEmbedding(doc.content.slice(0, 2000), apiKey);
-        const score = cosineSimilarity(queryVec, vec);
-        return { doc, score };
-      })
-    );
+    const scored: { doc: RagDocument; score: number }[] = [];
+    
+    // Batch processing to avoid 429 Rate Limit (max 5 concurrent reqs)
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      const batch = docs.slice(i, i + BATCH_SIZE);
+      const batchScored = await Promise.all(
+        batch.map(async (doc) => {
+          const vec = await getEmbedding(doc.content.slice(0, 2000), apiKey);
+          const score = cosineSimilarity(queryVec, vec);
+          return { doc, score };
+        })
+      );
+      scored.push(...batchScored);
+      // Small pause if more batches remain to respect quotas
+      if (i + BATCH_SIZE < docs.length) {
+        await new Promise(res => setTimeout(res, 300));
+      }
+    }
 
     const top = scored
       .sort((a, b) => b.score - a.score)
