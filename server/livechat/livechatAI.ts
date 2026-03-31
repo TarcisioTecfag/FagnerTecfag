@@ -331,50 +331,68 @@ export async function processVisitorMessage(
   // ─── RAG — busca na base de conhecimento ──────────────────────────────────────
   // Estratégia 1: busca por palavras-chave (não depende de embeddings, mais confiável)
   // Estratégia 2: busca semântica via Gemini embeddings (fallback)
+  //
+  // FILTRO CONVERSACIONAL: Mensagens puramente conversacionais (saudações, respostas curtas)
+  // NÃO devem disparar busca RAG pois isso injeta contexto de produtos/manuais irrelevante.
+  const CONVERSATIONAL_PATTERNS = [
+    /^(olá|boa\s+tarde|boa\s+noite|bom\s+dia|oi|hey|alô|alou|hello|hi)\s*[!?.]?$/i,
+    /^(ok|sim|não|nao|tudo\s+bem|obrigad[ao]|valeu|até\s+mais|tchau|até|flw|vlw)\s*[!?.]?$/i,
+    /^(\?+|!+|\.+)$/,
+    /^.{1,6}$/, // Menos de 6 chars — curto demais para ter intenção de produto
+  ];
+  const isConversational = CONVERSATIONAL_PATTERNS.some(p => p.test(userMessage.trim()));
+
   try {
-    const docs = await getRagDocuments();
-    console.log(`[LiveChat RAG] ${docs.length} docs carregados do banco.`);
+    if (isConversational) {
+      console.log(`[LiveChat RAG] Mensagem conversacional — pulando RAG: "${userMessage}"`);
+    } else {
+      const docs = await getRagDocuments();
+      console.log(`[LiveChat RAG] ${docs.length} docs carregados do banco.`);
 
-    let ragResult = "";
+      let ragResult = "";
 
-    if (docs.length > 0) {
-      // Estratégia 1: match por keyword no nome do doc / conteúdo
-      const queryLower = userMessage.toLowerCase();
-      const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
-      
-      const keywordMatches = docs
-        .map(doc => {
-          const nameLower = (doc.name || "").toLowerCase();
-          const contentLower = (doc.content || "").toLowerCase();
-          let score = 0;
-          for (const word of queryWords) {
-            if (nameLower.includes(word)) score += 3; // nome pesa mais
-            if (contentLower.includes(word)) score += 1;
+      if (docs.length > 0) {
+        // Estratégia 1: match por keyword no nome do doc / conteúdo
+        // Filtra palavras com mais de 3 chars para evitar stopwords como "boa", "dei", "pra"
+        const queryLower = userMessage.toLowerCase();
+        const queryWords = queryLower.split(/\s+/).filter(w => w.length > 3);
+
+        if (queryWords.length > 0) {
+          const keywordMatches = docs
+            .map(doc => {
+              const nameLower = (doc.name || "").toLowerCase();
+              const contentLower = (doc.content || "").toLowerCase();
+              let score = 0;
+              for (const word of queryWords) {
+                if (nameLower.includes(word)) score += 3; // nome pesa mais
+                if (contentLower.includes(word)) score += 1;
+              }
+              return { doc, score };
+            })
+            .filter(x => x.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 3);
+
+          if (keywordMatches.length > 0) {
+            console.log(`[LiveChat RAG] Keyword match: ${keywordMatches.map(x => x.doc.name + ":" + x.score).join(", ")}`);
+            ragResult = keywordMatches
+              .map(x => `[Documento: ${x.doc.name} | Link de Download: ${x.doc.filePath || ""}]\n${x.doc.content.slice(0, 800)}`)
+              .join("\n\n---\n\n");
+          } else {
+            // Estratégia 2: semântica (Gemini embeddings) — só se keyword não achou nada
+            try {
+              ragResult = await ragSearch(userMessage, docs, apiKey, 3);
+              console.log(`[LiveChat RAG] Semantic result length: ${ragResult.length}`);
+            } catch (e) {
+              console.warn("[LiveChat RAG] Semantic failed:", e);
+            }
           }
-          return { doc, score };
-        })
-        .filter(x => x.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3);
-
-      if (keywordMatches.length > 0) {
-        console.log(`[LiveChat RAG] Keyword match: ${keywordMatches.map(x => x.doc.name + ":" + x.score).join(", ")}`);
-        ragResult = keywordMatches
-          .map(x => `[Documento: ${x.doc.name} | Link de Download: ${x.doc.filePath || ""}]\n${x.doc.content.slice(0, 800)}`)
-          .join("\n\n---\n\n");
-      } else {
-        // Estratégia 2: semântica (Gemini embeddings) — só se keyword não achou nada
-        try {
-          ragResult = await ragSearch(userMessage, docs, apiKey, 3);
-          console.log(`[LiveChat RAG] Semantic result length: ${ragResult.length}`);
-        } catch (e) {
-          console.warn("[LiveChat RAG] Semantic failed:", e);
         }
       }
-    }
 
-    if (ragResult) {
-      contextParts.push(`## BASE DE CONHECIMENTO RELEVANTE\n${ragResult}`);
+      if (ragResult) {
+        contextParts.push(`## BASE DE CONHECIMENTO RELEVANTE\n${ragResult}`);
+      }
     }
   } catch (e) {
     console.warn("[LiveChat AI] RAG falhou:", e);
@@ -506,7 +524,8 @@ export async function processVisitorMessage(
 
     // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
     // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou
-    const fallbackReply = "Ops, tive uma instabilidade aqui! 😅 Me manda de novo o que você precisava?";
+    // ATENÇÃO: Sem emoji na mensagem de fallback para evitar balão solo de emoji
+    const fallbackReply = "Ops, tive uma instabilidade aqui! Me manda de novo o que você precisava?";
     return {
       reply: fallbackReply,
       needsHuman: false,
