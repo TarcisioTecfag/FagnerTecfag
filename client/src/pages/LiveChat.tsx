@@ -103,7 +103,7 @@ interface Pageview {
   visitorId: string;
   url: string;
   pageTitle?: string;
-  viewedAt: string;
+  visitedAt: string;
 }
 
 // ——— Helpers —————————————————————————————————————————————————
@@ -266,7 +266,7 @@ function LiveChat() {
                    visitorId: data.visitorId,
                    url: data.url,
                    pageTitle: data.pageTitle || data.url,
-                   viewedAt: new Date().toISOString()
+                   visitedAt: new Date().toISOString()
                 };
                 return { ...prev, pageviews: [newPv, ...prev.pageviews] };
               }
@@ -1181,7 +1181,7 @@ function LiveChat() {
                           <p className="text-[10px] text-zinc-400 truncate mt-0.5">{pv.url}</p>
                         </div>
                         <span className="text-[10px] text-zinc-300 flex-shrink-0 flex items-center gap-0.5">
-                          <Clock className="w-3 h-3" /> {timeAgo(pv.viewedAt)}
+                          <Clock className="w-3 h-3" /> {timeAgo(pv.visitedAt)}
                         </span>
                       </div>
                     ))}
