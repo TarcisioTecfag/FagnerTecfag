@@ -506,7 +506,8 @@ export async function processVisitorMessage(
       else if (fileUrl.toLowerCase().endsWith(".pdf")) mimeType = "application/pdf";
 
       // Ler o arquivo estático do disco para codificar em Base64 nativo pro Gemini
-      const absPath = path.join(__dirname, "../..", fileUrl.replace(/^\//, ""));
+      const filename = fileUrl.split("/").pop() || "";
+      const absPath = path.join(__dirname, "../../data/uploads", filename);
       if (fs.existsSync(absPath)) {
         const fileBase64 = fs.readFileSync(absPath).toString("base64");
         userParts.push({
