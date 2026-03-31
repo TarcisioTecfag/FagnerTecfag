@@ -474,14 +474,8 @@ export async function processVisitorMessage(
 
   const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
 
-  // Timeout global do pipeline completo (RAG + VTEX + Gemini) — 50s
-  const GLOBAL_TIMEOUT_MS = 50_000;
-  const globalTimeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("GLOBAL_PIPELINE_TIMEOUT")), GLOBAL_TIMEOUT_MS)
-  );
-
   try {
-    const data = await Promise.race([geminiRequest(url, payload), globalTimeoutPromise]);
+    const data = await geminiRequest(url, payload);
 
     const raw: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "(sem resposta)";
     const promptTokens: number = data?.usageMetadata?.promptTokenCount ?? 0;
@@ -519,8 +513,7 @@ export async function processVisitorMessage(
     // Return raw (with outcome tags) so livechatWs can detect outcome, but clean reply for the visitor message
     return { reply: raw, needsHuman, tokens: totalTokens };
   } catch (err: any) {
-    const isTimeout = err.message === "GLOBAL_PIPELINE_TIMEOUT";
-    console.error(`[LiveChat AI] Gemini ${isTimeout ? "timeout global" : "error"}:`, err.message);
+    console.error(`[LiveChat AI] Gemini error:`, err.message);
 
     // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
     // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou
