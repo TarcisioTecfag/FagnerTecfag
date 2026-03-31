@@ -244,7 +244,7 @@ async function geminiRequest(url: string, payload: object): Promise<any> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(60_000), // Aumentado para 60s (gemini-3.1-pro-preview demora mais pra raciocinar limites pesados de prompt)
+        signal: AbortSignal.timeout(120_000), // Limite extremo de 2 MINUTOS (gemini-3.1-pro com RAG VTEX/Manuais gigante)
       });
 
       if (!res.ok) {
