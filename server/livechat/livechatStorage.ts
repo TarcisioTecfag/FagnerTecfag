@@ -270,6 +270,14 @@ export const lcStorage = {
     return rows[0] ?? null;
   },
 
+  async getLastChatByVisitor(visitorId: string): Promise<LcChat | null> {
+    const rows = await db.select().from(lcChats)
+      .where(eq(lcChats.visitorId, visitorId))
+      .orderBy(desc(lcChats.startedAt))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
   async createChat(data: {
     visitorId: string;
     source?: string;
@@ -501,3 +509,4 @@ export async function ensureLiveChatSchema(): Promise<void> {
 }
 
 export default lcStorage;
+

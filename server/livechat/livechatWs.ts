@@ -212,6 +212,15 @@ async function startProactiveTimer(visitorId: string): Promise<void> {
       const existingChat = await lcStorage.getActiveChatByVisitor(visitorId);
       if (existingChat) return;
 
+      // Don't send if visitor had ANY chat in the last 24 hours
+      const lastChat = await lcStorage.getLastChatByVisitor(visitorId);
+      if (lastChat) {
+        const hoursAgo24 = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        if (new Date(lastChat.startedAt) > hoursAgo24) {
+          return;
+        }
+      }
+
       const visitor = await lcStorage.getVisitorById(visitorId);
       if (!visitor || visitor.isOnline !== "true") return;
 

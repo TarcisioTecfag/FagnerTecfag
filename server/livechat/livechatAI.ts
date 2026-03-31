@@ -630,19 +630,28 @@ export async function generateConversationNote(chatId: string): Promise<string |
     return null;
   }
 
-  const summaryPrompt = `Você é um analista de CRM. Abaixo está o histórico de um chat entre o Cliente e Fagner (Representante IA da Tecfag).
-Escreva UMA nota de CRM em terceira pessoa, extremamente direta (1 a 3 frases):
-- O que o cliente queria.
-- Quais produtos foram mencionados.
-- Resultado final da conversa.
-Sem saudações, sem jargões, apenas a nota objetiva.`.trim();
+  const summaryPrompt = `Você é um analista de CRM.
+Sua missão é gerar um resumo técnico e direto do histórico de uma conversa entre o cliente e o bot Fagner.
+
+REGRAS:
+1. NUNCA corte uma frase no meio. NUNCA. Escreva frases completas.
+2. Use OBRIGATORIAMENTE este formato exato, mantendo os traços iniciais:
+- **Intenção**: (o que o cliente queria)
+- **Produtos**: (nome dos produtos procurados)
+- **Desfecho**: (qual foi a etapa final)
+
+Exemplo:
+- **Intenção**: Queria comprar peças de reposição.
+- **Produtos**: Kit de Vedação para Seladora Manual A03.
+- **Desfecho**: O cliente fechou pedido com frete para Sedex.
+`.trim();
 
   try {
     const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
     const payload = {
       systemInstruction: { parts: [{ text: summaryPrompt }] },
       contents: [{ role: "user", parts: [{ text: historyText }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 256 },
+      generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
     };
 
     const data = await geminiRequest(url, payload);
@@ -665,18 +674,18 @@ export async function generateProactiveMessage(pageUrl: string, pageTitle?: stri
   }
 
   const prompt = `
-Você é Fagner, representante comercial da Tecfag. Um visitante está no site há 1 minuto olhando esta página:
+Você é Fagner, especialista em automações da Tecfag. Um visitante está agora navegando na página:
 URL: ${pageUrl}
 ${pageTitle ? `Título: ${pageTitle}` : ""}
 
-Aja exatamente como solicitado e cumpra TODAS estas regras:
-1. Comece com uma saudação dependendo da hora atual (bom dia, boa tarde ou boa noite).
-2. Comente brevemente sobre o dia da semana ("Que segunda perfeita", "Nessa bela quinta-feira", etc) de forma alegre.
-3. Se apresente: "meu nome é Fagner".
-4. Pergunte como pode ajudar.
-Exemplo de estilo desejado: "Boa tarde! Que segunda perfeita, meu nome é Fagner, como posso te ajudar hoje?"
+Cumpra rigorosamente estas regras ao gerar a primeira mensagem de contato (proativa):
+1. Dê BOAS VINDAS de forma direta ("Olá!", "Tudo bem?").
+2. É PROIBIDO SAUDAR COM BOM DIA, BOA TARDE OU BOA NOITE.
+3. É PROIBIDO FALAR O DIA DA SEMANA.
+4. Apresente-se amigavelmente ("Sou o Fagner da Tecfag") e pergunte consultivamente se a pessoa tem dúvidas sobre o que está vendo na página ou se precisa de indicação técnica.
+Exemplo: "Olá! Tudo bem? Sou o Fagner aqui da Tecfag. Vi que você está na página desta máquina. Ficou com alguma dúvida específica para sua produção?"
 
-NÃO USE asteriscos, bullets ou formatação. Apenas o texto direto. Responda SOMENTE com a mensagem.
+Apenas responda como a mensagem direta, sem asteriscos, sem bullets. Sem formatações grossas. Use apenas 1 emoji se quiser.
 `.trim();
 
   try {
