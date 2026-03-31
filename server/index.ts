@@ -193,26 +193,31 @@ app.get("/uploads/:filename", async (req: Request, res: Response) => {
   const filename = p(req.params.filename);
   try {
     // 1. Tentar servir do banco (campo fileData — base64 do arquivo original)
-    const dbResult = await pool.query(
-      `SELECT "fileData", "mimeType", name FROM documents WHERE "filePath" = $1 LIMIT 1`,
-      [`/uploads/${filename}`]
-    );
-    if (dbResult.rows.length > 0 && dbResult.rows[0].fileData) {
-      const { fileData, mimeType, name } = dbResult.rows[0];
-      const buffer = Buffer.from(fileData, "base64");
-      res.setHeader("Content-Type", mimeType || "application/octet-stream");
-      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(name)}"`);
-      res.setHeader("Content-Length", buffer.length.toString());
-      return res.send(buffer);
+    try {
+      const dbResult = await pool.query(
+        `SELECT "fileData", "mimeType", name FROM documents WHERE "filePath" = $1 LIMIT 1`,
+        [`/uploads/${filename}`]
+      );
+      if (dbResult.rows.length > 0 && dbResult.rows[0].fileData) {
+        const { fileData, mimeType, name } = dbResult.rows[0];
+        const buffer = Buffer.from(fileData, "base64");
+        res.setHeader("Content-Type", mimeType || "application/octet-stream");
+        res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(name)}"`);
+        res.setHeader("Content-Length", buffer.length.toString());
+        return res.send(buffer);
+      }
+    } catch (dbErr: any) {
+      console.warn(`[/uploads] Falha ao consultar banco para ${filename}, tentando fallback do disco. Erro:`, dbErr.message);
     }
+
     // 2. Fallback: servir do disco (dev local)
     const diskPath = path.join(UPLOADS_DIR, filename);
     if (fs.existsSync(diskPath)) {
       return res.sendFile(diskPath);
     }
-    return res.status(404).json({ message: "Arquivo não encontrado. Faça novo upload para persistir no banco." });
+    return res.status(404).json({ message: "Arquivo não encontrado no banco nem no disco." });
   } catch (err: any) {
-    console.error("[/uploads] Erro ao servir arquivo:", err.message);
+    console.error(`[/uploads] Erro crítico ao servir arquivo ${filename}:`, err.message);
     return res.status(500).json({ message: "Erro interno ao servir arquivo" });
   }
 });
@@ -637,6 +642,17 @@ app.post("/api/documents", requireAuth, upload.single("file"), async (req, res) 
     filePath: `/uploads/${req.file.filename}`,
     folderId: folderId || null,
   });
+
+  try {
+    const fileBuffer = fs.readFileSync(path.join(UPLOADS_DIR, req.file.filename));
+    const fileDataBase64 = fileBuffer.toString("base64");
+    await pool.query(
+      `UPDATE documents SET "fileData" = $1 WHERE id = $2`,
+      [fileDataBase64, doc.id]
+    );
+  } catch (err: any) {
+    console.warn(`[Upload Single] Falha ao salvar fileData:`, err.message);
+  }
 
   return res.status(201).json(doc);
 });

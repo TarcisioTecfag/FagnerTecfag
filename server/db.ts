@@ -103,6 +103,7 @@ export async function bootstrapSchema(): Promise<void> {
         "filePath"  TEXT NOT NULL,
         "folderId"  TEXT,
         paused    TEXT NOT NULL DEFAULT 'false',
+        "fileData"  TEXT,
         "createdAt" TEXT NOT NULL DEFAULT now()::text
       );
 
