@@ -87,6 +87,10 @@ const multerStorage = multer.diskStorage({
   filename: (_req, file, cb) => cb(null, `${uuidv4()}-${file.originalname}`),
 });
 const upload = multer({ storage: multerStorage });
+const chatUpload = multer({ 
+  storage: multerStorage,
+  limits: { fileSize: 5 * 1024 * 1024 } // Limite rígido API Chat Client: 5MB
+});
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 const app = express();
@@ -266,6 +270,23 @@ app.get("/api/health", (_req, res) => {
 // ─── Ping (ultra-leve, sem DB, sem session — diagnóstico de 502) ──────────────
 app.get("/api/ping", (_req, res) => {
   res.json({ pong: true, ts: Date.now(), uptime: process.uptime() });
+});
+
+// ─── Chat Público — Endpoint para Upload de Imagens no Chat Widget ────────
+app.post("/api/chat-upload", (req, res, next) => {
+  const handler = chatUpload.single("file");
+  handler(req, res, (err: any) => {
+    if (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: "A imagem excedeu o limite máximo de 5MB. Por favor, compacte e tente novamente." });
+      }
+      return res.status(500).json({ message: "Falha ao processar arquivo: " + err.message });
+    }
+    next();
+  });
+}, (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "Nenhum arquivo enviado." });
+  return res.status(201).json({ url: `/uploads/${req.file.filename}`, mimeType: req.file.mimetype });
 });
 
 // ─── Auth routes ─────────────────────────────────────────────────────────────

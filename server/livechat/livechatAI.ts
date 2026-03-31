@@ -492,7 +492,36 @@ export async function processVisitorMessage(
   const systemPrompt = buildSiteSystemPrompt(session.mood, extraContext);
 
   // Build Gemini payload
-  const userParts = [{ text: userMessage }];
+  const userParts: any[] = [{ text: userMessage }];
+
+  // Extrair anexos invisíveis (ex: [Anexo_Cliente: /uploads/abc.jpg]) injetados via WS
+  const attachmentRegex = /\[Anexo_Cliente:\s*(\/uploads\/[^\]]+)\]/g;
+  let match;
+  while ((match = attachmentRegex.exec(userMessage)) !== null) {
+    const fileUrl = match[1];
+    try {
+      let mimeType = "image/jpeg";
+      if (fileUrl.toLowerCase().endsWith(".png")) mimeType = "image/png";
+      else if (fileUrl.toLowerCase().endsWith(".webp")) mimeType = "image/webp";
+      else if (fileUrl.toLowerCase().endsWith(".pdf")) mimeType = "application/pdf";
+
+      // Ler o arquivo estático do disco para codificar em Base64 nativo pro Gemini
+      const absPath = path.join(__dirname, "../..", fileUrl.replace(/^\//, ""));
+      if (fs.existsSync(absPath)) {
+        const fileBase64 = fs.readFileSync(absPath).toString("base64");
+        userParts.push({
+          inlineData: {
+            mimeType,
+            data: fileBase64,
+          }
+        });
+        console.log(`[LiveChat AI] Imagem anexada encontrada e injetada no payload via inlineData (${fileUrl})`);
+      }
+    } catch (err: any) {
+      console.warn(`[LiveChat AI] Falha ao injetar anexo ${fileUrl}:`, err.message);
+    }
+  }
+
   const rawContents = [...session.history, { role: "user", parts: userParts }];
 
   // Normaliza o histórico para o Gemini: garante que os roles (user/model) SEMPRE alternam
