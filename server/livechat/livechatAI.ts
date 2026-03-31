@@ -498,6 +498,23 @@ export async function processVisitorMessage(
 
   const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
 
+  // ── DIAGNÓSTICO: log detalhado do payload que será enviado ao Gemini ──
+  console.log(`[LiveChat AI][DIAG] Chat ${chatId} — Enviando payload ao Gemini:`);
+  console.log(`[LiveChat AI][DIAG]   Model: ${GEMINI_CHAT_MODEL}`);
+  console.log(`[LiveChat AI][DIAG]   Contents length: ${normalizedContents.length}`);
+  console.log(`[LiveChat AI][DIAG]   Roles: ${normalizedContents.map(c => c.role).join(' -> ')}`);
+  console.log(`[LiveChat AI][DIAG]   First role: ${normalizedContents[0]?.role ?? 'EMPTY'}`);
+  console.log(`[LiveChat AI][DIAG]   Last role: ${normalizedContents[normalizedContents.length - 1]?.role ?? 'EMPTY'}`);
+  console.log(`[LiveChat AI][DIAG]   System prompt length: ${systemPrompt.length} chars`);
+  if (normalizedContents.length <= 6) {
+    // Log completo se o histórico é curto (primeiras interações)
+    for (let i = 0; i < normalizedContents.length; i++) {
+      const c = normalizedContents[i];
+      const preview = c.parts.map((p: any) => p.text?.slice(0, 80) ?? '').join(' | ');
+      console.log(`[LiveChat AI][DIAG]   [${i}] ${c.role}: "${preview}"`);
+    }
+  }
+
   try {
     const data = await geminiRequest(url, payload);
 
@@ -505,6 +522,8 @@ export async function processVisitorMessage(
     const promptTokens: number = data?.usageMetadata?.promptTokenCount ?? 0;
     const candidateTokens: number = data?.usageMetadata?.candidatesTokenCount ?? 0;
     const totalTokens = promptTokens + candidateTokens;
+
+    console.log(`[LiveChat AI][DIAG] Chat ${chatId} — Gemini respondeu OK (${totalTokens} tokens). Preview: "${raw.slice(0, 100)}"`);
 
     // Strip outcome tags from visible reply (keep raw for detection in livechatWs)
     const cleanReply = raw.replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "").trim();
@@ -537,7 +556,10 @@ export async function processVisitorMessage(
     // Return raw (with outcome tags) so livechatWs can detect outcome, but clean reply for the visitor message
     return { reply: raw, needsHuman, tokens: totalTokens };
   } catch (err: any) {
-    console.error(`[LiveChat AI] Gemini error:`, err.message);
+    console.error(`[LiveChat AI][DIAG] ❌ GEMINI FALHOU para chat ${chatId}:`);
+    console.error(`[LiveChat AI][DIAG]   Erro: ${err.message}`);
+    console.error(`[LiveChat AI][DIAG]   Stack: ${err.stack?.slice(0, 500)}`);
+    console.error(`[LiveChat AI][DIAG]   Roles enviados: ${normalizedContents.map(c => c.role).join(' -> ')}`);
 
     // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
     // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou
