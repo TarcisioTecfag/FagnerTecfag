@@ -390,10 +390,15 @@ export async function simulateShipping(
     country: "BRA",
   };
 
-  // Retry: até 2 tentativas com timeout de 5s
+  // Para cálculo de frete idêntico ao site (sem interferência de descontos B2B/Manager),
+  // fazemos a requisição sem as chaves da API restrita, imitando um usuário comum.
   const res = await fetchWithRetry(url, {
     method: "POST",
-    headers: vtexHeaders(),
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "User-Agent": "TecfagBot/1.0",
+    },
     body: JSON.stringify(body),
   }, 2, 5000);
 
