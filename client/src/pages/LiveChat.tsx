@@ -184,7 +184,7 @@ function LiveChat() {
     try {
       const res = await fetch(`/api/livechat/visitors/${v.id}/pageviews`, { credentials: "include" });
       const pageviews: Pageview[] = res.ok ? await res.json() : [];
-      setHistoryModal({ visitor: v, pageviews });
+      setHistoryModal({ visitor: v, pageviews: pageviews.reverse() });
     } catch {
       setHistoryModal({ visitor: v, pageviews: [] });
     }
@@ -259,6 +259,19 @@ function LiveChat() {
             setVisitors((prev) => prev.filter((v) => v.id !== data.visitorId));
             break;
           case "VISITOR_PAGE_UPDATE":
+            setHistoryModal(prev => {
+              if (prev && prev.visitor.id === data.visitorId) {
+                const newPv = {
+                   id: `live-${Date.now()}`,
+                   visitorId: data.visitorId,
+                   url: data.url,
+                   pageTitle: data.pageTitle || data.url,
+                   viewedAt: new Date().toISOString()
+                };
+                return { ...prev, pageviews: [newPv, ...prev.pageviews] };
+              }
+              return prev;
+            });
             setVisitors((prev) => prev.map((v) =>
               v.id === data.visitorId ? { ...v, currentPage: data.url, currentPageTitle: data.pageTitle } : v
             ));
@@ -894,13 +907,13 @@ function LiveChat() {
               <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 Visitantes Online
-                <span className="text-zinc-400 font-normal">({visitors.length})</span>
+                <span className="text-zinc-400 font-normal">({visitors.filter(v => v.isOnline === "true").length})</span>
               </h3>
             </div>
 
             {/* Visitor cards list */}
             <div className="flex-1 overflow-y-auto p-4">
-              {visitors.length === 0 ? (
+              {visitors.filter(v => v.isOnline === "true").length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-zinc-400">
                   <Eye className="w-12 h-12 mb-3 opacity-20" />
                   <p className="text-sm font-medium">Nenhum visitante online</p>
@@ -908,7 +921,7 @@ function LiveChat() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {visitors.map((v, idx) => {
+                  {visitors.filter(v => v.isOnline === "true").map((v, idx) => {
                     const cat = categoryLabel(v.category);
                     const src = sourceLabel(v.source);
 
@@ -954,7 +967,9 @@ function LiveChat() {
                           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100 mb-2 group-hover:bg-red-50/30 group-hover:border-red-100/50 transition-colors">
                             <ExternalLink className="w-3 h-3 text-zinc-400 flex-shrink-0" />
                             <p className="text-[11px] text-zinc-600 truncate font-medium">
-                              {v.currentPageTitle || v.currentPage}
+                              {v.currentPage && v.currentPage !== '/' && v.currentPage !== v.currentPageTitle 
+                                ? v.currentPage 
+                                : v.currentPageTitle || v.currentPage || "Página inativa"}
                             </p>
                           </div>
                         )}
@@ -997,6 +1012,98 @@ function LiveChat() {
               )}
             </div>
           </div>
+
+            {/* Offline Visitors Section */}
+            <div className="px-5 py-3 border-t border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50 shadow-inner">
+              <h3 className="text-sm font-bold text-zinc-500 flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-zinc-300" />
+                Visitantes Offline
+                <span className="text-zinc-400 font-normal">({visitors.filter(v => v.isOnline !== "true").length} recentes)</span>
+              </h3>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 bg-zinc-50/30">
+              {visitors.filter(v => v.isOnline !== "true").length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-zinc-400">
+                  <User className="w-8 h-8 mb-2 opacity-20" />
+                  <p className="text-xs font-medium">Nenhum visitante offline recente</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 opacity-80 hover:opacity-100 transition-opacity">
+                  {visitors.filter(v => v.isOnline !== "true").map((v, idx) => {
+                    const cat = categoryLabel(v.category);
+                    const src = sourceLabel(v.source);
+                    const displayUrl = v.currentPage && v.currentPage !== '/' && v.currentPage !== v.currentPageTitle 
+                        ? v.currentPage 
+                        : v.currentPageTitle || v.currentPage || "Página inativa";
+
+                    return (
+                      <div
+                        key={v.id}
+                        onClick={() => openHistoryModal(v)}
+                        className="p-4 rounded-xl border border-zinc-200 hover:border-zinc-300 transition-all duration-200 bg-white group cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="relative">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-zinc-50 to-zinc-100 flex items-center justify-center">
+                                <User className="w-5 h-5 text-zinc-300" />
+                              </div>
+                              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white bg-zinc-300" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-zinc-500">
+                                {v.name || "NÃO IDENTIFICADO"}
+                              </p>
+                              <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
+                                <span className="flex items-center gap-0.5">
+                                  <MapPin className="w-3 h-3" />
+                                  {v.city ? `${v.city}${v.country ? `, ${v.country}` : ""}` : "Localização desconhecida"}
+                                </span>
+                                <span className="text-zinc-200">·</span>
+                                <span className="flex items-center gap-0.5">
+                                  <Hash className="w-3 h-3" /> {v.totalVisits} vis
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${cat.bg} grayscale opacity-70`}>
+                            {cat.emoji} {cat.label}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100 mb-2">
+                          <ExternalLink className="w-3 h-3 text-zinc-300 flex-shrink-0" />
+                          <p className="text-[11px] text-zinc-500 truncate font-medium" title={v.currentPage || ""}>
+                            {displayUrl}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 text-[10px] text-zinc-400">
+                            <span className="flex items-center gap-0.5">
+                              {src.icon} {src.label}
+                            </span>
+                            <span className="flex items-center gap-0.5">
+                              <Layers className="w-3 h-3" /> {v.totalPages} pgs
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-[10px] text-zinc-300">{v.browser}</span>
+                          <span className="text-[10px] text-zinc-400 font-medium flex items-center gap-0.5">
+                            <Clock className="w-3 h-3" />
+                            Inativo há {timeAgo(v.lastSeenAt)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* ——— MODAL: Histórico de Navegação do Visitante ——— */}
@@ -1007,7 +1114,7 @@ function LiveChat() {
             onClick={() => setHistoryModal(null)}
           >
             <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
