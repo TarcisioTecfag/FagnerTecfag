@@ -1500,32 +1500,71 @@ function LiveChat() {
                     </button>
                   </div>
 
-                  {/* Col 2: Histórico de Chats */}
-                  <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden">
+                  {/* Col 2: Chat Atual (Conversas Ativas) */}
+                  <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden bg-white">
                     <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2 flex-shrink-0">
-                      {"\u{1F4AC}"} Conversas ({visitorChats.length})
+                      {"\u{1F4AC}"} Atendimento Atual
                     </p>
                     <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-                      {visitorChats.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
-                          <MessageCircle className="w-6 h-6 mb-1 opacity-40" />
-                          <p className="text-[10px] text-center">Sem conversas anteriores</p>
-                        </div>
-                      ) : (
-                        visitorChats.map(c => (
+                      {(() => {
+                        const ativos = visitorChats.filter(c => c.status !== "closed");
+                        if (ativos.length === 0) {
+                          return (
+                            <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
+                              <MessageCircle className="w-6 h-6 mb-1 opacity-40" />
+                              <p className="text-[10px] text-center">Nenhum chat em andamento</p>
+                            </div>
+                          );
+                        }
+                        return ativos.map(c => (
                           <div
                             key={c.id}
                             onClick={() => openVisitorChat(c.id)}
-                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100 cursor-pointer hover:bg-red-50 hover:border-red-200 transition-all group"
+                            className="flex items-center gap-1.5 px-2 py-2 rounded-lg bg-red-50/50 border border-red-100 cursor-pointer hover:bg-red-50 hover:border-red-300 transition-all group shadow-sm"
                           >
-                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.status === "closed" ? "bg-zinc-300" : "bg-emerald-400"}`} />
-                            <span className="truncate flex-1 text-[10px] text-zinc-600 group-hover:text-red-600 font-medium transition-colors">
-                              {c.visitorName || "Chat sem nome"}
-                            </span>
-                            <span className="text-[9px] text-zinc-300 flex-shrink-0">{timeAgo(c.startedAt)}</span>
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-500 animate-pulse" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[11px] font-bold text-red-700 leading-tight">
+                                {c.visitorName || "Visitante"}
+                              </p>
+                              <span className="text-[9px] text-red-500/70 font-medium">{timeAgo(c.startedAt)}</span>
+                            </div>
+                            <span className="text-[10px] text-red-600 font-bold ml-1 flex-shrink-0">→</span >
                           </div>
-                        ))
-                      )}
+                        ));
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Col 3: Histórico de Negociações (Chats Fechados) */}
+                  <div className="w-[200px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden bg-zinc-50/30">
+                    <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2 flex-shrink-0">
+                      {"\u{1F4C2}"} Negociações Anteriores
+                    </p>
+                    <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                      {(() => {
+                        const passados = visitorChats.filter(c => c.status === "closed");
+                        if (passados.length === 0) {
+                          return (
+                            <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
+                              <Layers className="w-6 h-6 mb-1 opacity-40" />
+                              <p className="text-[10px] text-center">Nenhum histórico</p>
+                            </div>
+                          );
+                        }
+                        return passados.map(c => (
+                          <div
+                            key={c.id}
+                            onClick={() => openVisitorChat(c.id)}
+                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white border border-zinc-200 cursor-pointer hover:border-zinc-300 hover:shadow-sm transition-all group"
+                          >
+                            <span className="truncate flex-1 text-[10px] text-zinc-600 group-hover:text-zinc-900 transition-colors">
+                              {new Date(c.startedAt).toLocaleDateString("pt-BR", { day: '2-digit', month: 'short' })} • {c.visitorName ? c.visitorName.split(" ")[0] : "Vis."}
+                            </span>
+                            <span className="text-[8px] bg-zinc-100 text-zinc-400 px-1 py-0.5 rounded flex-shrink-0">Ler</span>
+                          </div>
+                        ));
+                      })()}
                     </div>
                   </div>
 
