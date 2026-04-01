@@ -244,6 +244,7 @@ const MACHINE_KEYWORDS = [
   "etiquetadora", "labeladora", "datadora", "inkjet", "fechadora",
   "recravadeira", "roscadora", "injetora", "extrusora", "misturador",
   "arlm", "arl-", "sleeve", "shrink", "-a0", "a0", "tlf", "dgf", "vsf",
+  "union plus", "jet stamp", "c1040", "reiner",
   // Adição de peças comuns e acessórios
   "kit de vedação", "resistência", "borracha", "datador", "teflon", "silicone",
   "tinta para datador", "fita datadora", "correia", "bico", "pedal",
@@ -255,11 +256,13 @@ const MACHINE_INTENT_PATTERNS = [
   /(?:envasadora|seladora|rotuladora|empacotadora|rosqueadeira|tampadora|dosadora|encapsuladora|embaladora|ensacadora|etiquetadora|labeladora|datadora|fechadora|recravadeira|kit\s+de\s+vedação|resistência)/i,
   /máquina\s+(?:de\s+)?(?:embalar|selar|envasar|rotular|tampas?|dose?|encapsular|ensacar)/i,
   /equipamento\s+(?:de|para)\s+(?:envase?|selagem|rotulagem)/i,
+  // User asking for line or product link directly
+  /(?:link|valor|preço|comprar).*?(?:da|do|de)\s+([a-zA-Z0-9\s\-]+)/i,
   // Pedidos diretos de produto atual na sessão ("link dele/dela")
-  /(?:link|valor|preço|comprar).*?(?:dele|dela|da\s+peça|desse|dessa|do\s+kit|da\s+máquina)/i,
+  /(?:link|valor|preço|comprar).*?(?:dele|dela|dessa|desse|da\s+peça|do\s+kit|da\s+máquina|dela\s+no\s+site|dela\s+aqui|desse\s+aqui\s+no\s+site)/i,
   // Modelos específicos: ARLM-200, ARL-200A, etc
   /\b(?:arlm|arl)[- ]?\d+[a-z]*/i,
-  /\bkir de veda[cç][aã]o\b/i,
+  /\bki[rt] de veda[cç][aã]o\b/i,
 ];
 
 export function detectMachineIntent(message: string): string | null {
