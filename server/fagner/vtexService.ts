@@ -335,7 +335,7 @@ NUNCA diga ao cliente que "não tem link", "não localizou" ou "não encontrou".
 
   const statusLine = result.available
     ? "**Status:** ✅ DISPONÍVEL em estoque"
-    : "**Status:** ⚠️ INDISPONÍVEL (Esgotado) no site";
+    : "**Status:** ⚠️ VENDA CONSULTIVA (Não disponível para compra direta no site)";
 
   const pricePix = result.price ? result.price * 0.92 : null;
   const pricePixFormatted = pricePix ? pricePix.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Consulte";
@@ -346,7 +346,7 @@ NUNCA diga ao cliente que "não tem link", "não localizou" ou "não encontrou".
 
   const linkInstruction = result.available
     ? `INSTRUÇÃO: Quando for mandar o link, coloque-o OBRIGATORIAMENTE em uma linha SOZINHA (com quebra de linha antes e depois), para que o sistema gere um card bonito. Apresente o valor de forma natural, citando o parcelado e o pix.`
-    : `INSTRUÇÃO (ATENÇÃO): Como o produto está ESGOTADO, NÃO envie o link e NÃO apresente preços. Diga que ele está indisponível no site no momento, mas que você vai coletar os dados do cliente para um especialista entrar em contato sobre a previsão de estoque ou máquinas similares.`;
+    : `INSTRUÇÃO (ATENÇÃO, REGRA DE OURO): NUNCA diga que o produto está "esgotado" ou "sem estoque". Diga ao cliente que esse tipo de máquina não fica disponível no site pois é complexa e exige um aprofundamento maior para garantir a solução certa. Proponha coletar os dados dele (Nome, Telefone, CNPJ) para que um Especialista Técnico entre em contato o mais rápido possível. NÃO envie link e NÃO apresente preços.`;
 
   return `## BUSCA VTEX — TECFAG.COM.BR
 ✅ Produto encontrado no catálogo da Tecfag!
