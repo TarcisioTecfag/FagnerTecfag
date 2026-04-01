@@ -15,7 +15,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
 import { lcStorage } from "./livechatStorage.js";
-import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote } from "./livechatAI.js";
+import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, isObviousNoise } from "./livechatAI.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 
 // ─── Connection maps ─────────────────────────────────────────────────────────
@@ -607,6 +607,19 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 const combinedContent = chatMessageBuffers.get(chat.id)?.content.join("\n\n") || data.content;
                 chatMessageBuffers.delete(chat.id);
 
+                // Melhoria 3: verifica ruído ANTES de chamar IA — resposta instantânea, sem tokens
+                const noiseCheck = isObviousNoise(combinedContent);
+                if (noiseCheck.isNoise) {
+                  console.log(`[LiveChat Noise] Ruído interceptado: "${combinedContent.slice(0, 50)}"`);
+                  sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
+                  await lcStorage.createMessage({ chatId: chat.id, sender: "ai", content: noiseCheck.reply });
+                  lcStorage.incrementChatNoiseFiltered(chat.id).catch(() => {});
+                  sendToVisitor(currentVisitorId, { type: "CHAT_REPLY", chatId: chat.id, sender: "ai", content: noiseCheck.reply, timestamp: new Date().toISOString() });
+                  broadcastToAgents({ type: "CHAT_MESSAGE", chatId: chat.id, visitorId: currentVisitorId, sender: "ai", content: noiseCheck.reply, timestamp: new Date().toISOString() });
+                  startFollowUpTimers(currentVisitorId, chat.id);
+                  return;
+                }
+
                 // Só AGORA mostra o indicador de digitação
                 sendToVisitor(currentVisitorId, { type: "TYPING_START" });
 
@@ -645,6 +658,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   finalScore = Math.min(botScore, 100);
                   try {
                     await lcStorage.updateVisitor(currentVisitorId, { engagementScore: finalScore });
+                    // Melhoria 1: salva score também no chat para o painel
+                    await lcStorage.updateChatEngagement(chat.id, finalScore);
                     await recalculateVisitorCategory(currentVisitorId);
                   } catch {}
                 }

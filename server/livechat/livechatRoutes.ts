@@ -149,6 +149,17 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json(stats);
   });
 
+  // ── Melhoria 4: Estatísticas enriquecidas (engagement, VTEX, ruído) ─────────
+  router.get("/enhanced-stats", requireAuth, async (_req: Request, res: Response) => {
+    try {
+      const stats = await lcStorage.getEnhancedStats();
+      return res.json(stats);
+    } catch (err: any) {
+      console.error("[LiveChat] GET /enhanced-stats error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
   // ── Reset Completo (Admin only) ─────────────────────────────────────────────
   router.delete("/reset-all", requireAuth, async (_req: Request, res: Response) => {
     try {

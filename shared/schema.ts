@@ -56,6 +56,8 @@ export const folders = pgTable("folders", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   parentId: text("parentId"),
+  color: text("color").default(""),
+  sortOrder: integer("sortOrder").default(0),
   createdAt: text("createdAt").notNull().default(sql`now()`),
 });
 

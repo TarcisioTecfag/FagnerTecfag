@@ -25,6 +25,8 @@ interface FolderItem {
   id: string;
   name: string;
   parentId?: string | null;
+  color?: string;
+  sortOrder?: number;
   createdAt: string;
 }
 
@@ -41,6 +43,25 @@ const getFileIcon = (mimeType: string, size = 16) => {
 const fmt = (d: string) =>
   new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 
+// ─── Paleta de cores para pastas ──────────────────────────────────────────────
+
+const FOLDER_COLORS = [
+  { key: "",        label: "Padrão",    icon: "#f59e0b" },
+  { key: "red",     label: "Vermelho",   icon: "#dc2626" },
+  { key: "blue",    label: "Azul",       icon: "#2563eb" },
+  { key: "green",   label: "Verde",      icon: "#16a34a" },
+  { key: "purple",  label: "Roxo",       icon: "#9333ea" },
+  { key: "orange",  label: "Laranja",    icon: "#ea580c" },
+  { key: "pink",    label: "Rosa",       icon: "#db2777" },
+  { key: "cyan",    label: "Ciano",      icon: "#0891b2" },
+  { key: "gray",    label: "Cinza",      icon: "#6b7280" },
+];
+
+const getFolderIconColor = (color?: string) => {
+  const found = FOLDER_COLORS.find((c) => c.key === color);
+  return found?.icon ?? "#f59e0b";
+};
+
 // ─── FolderTree ───────────────────────────────────────────────────────────────
 
 function FolderTreeNode({
@@ -52,7 +73,15 @@ function FolderTreeNode({
   onRename,
   onDelete,
   onNewSubfolder,
+  onColorChange,
   docCounts,
+  draggingId,
+  dragOverId,
+  dropSide,
+  onDragStart,
+  onDragOverNode,
+  onDropOnNode,
+  onDragEnd,
 }: {
   folder: FolderItem;
   allFolders: FolderItem[];
@@ -62,21 +91,47 @@ function FolderTreeNode({
   onRename: (folder: FolderItem) => void;
   onDelete: (id: string) => void;
   onNewSubfolder: (parentId: string) => void;
+  onColorChange: (folder: FolderItem, color: string) => void;
   docCounts: Record<string, number>;
+  draggingId: string | null;
+  dragOverId: string | null;
+  dropSide: "before" | "after" | "inside" | null;
+  onDragStart: (folder: FolderItem) => void;
+  onDragOverNode: (e: React.DragEvent, folder: FolderItem) => void;
+  onDropOnNode: (target: FolderItem) => void;
+  onDragEnd: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [colorMenuOpen, setColorMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState(true);
-  const children = allFolders.filter((f) => f.parentId === folder.id);
+  const children = allFolders
+    .filter((f) => f.parentId === folder.id && f.id !== draggingId)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   const isSelected = selectedId === folder.id;
   const count = docCounts[folder.id] ?? 0;
   const hasChildren = children.length > 0;
+  const isDraggingThis = draggingId === folder.id;
+  const isDropTarget = dragOverId === folder.id;
+  const folderIconColor = getFolderIconColor(folder.color);
 
   return (
-    <div>
+    <div style={{ opacity: isDraggingThis ? 0.4 : 1, transition: "opacity 0.15s" }}>
+      {/* Drop-indicator: BEFORE */}
+      {isDropTarget && dropSide === "before" && (
+        <div className="h-0.5 rounded-full mx-2 my-0.5" style={{ background: "#dc2626" }} />
+      )}
+
       <div
-        className={`group flex items-center gap-1.5 py-1.5 pr-1.5 rounded-lg cursor-pointer transition-all duration-150 text-sm select-none ${
+        draggable
+        onDragStart={(e) => { e.stopPropagation(); onDragStart(folder); }}
+        onDragOver={(e) => { e.stopPropagation(); onDragOverNode(e, folder); }}
+        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropOnNode(folder); }}
+        onDragEnd={onDragEnd}
+        className={`group flex items-center gap-1.5 py-1.5 pr-1.5 rounded-lg cursor-grab active:cursor-grabbing transition-all duration-150 text-sm select-none ${
           isSelected
             ? "text-white"
+            : isDropTarget && dropSide === "inside"
+            ? "ring-2 ring-red-400 text-gray-900 bg-red-50"
             : "text-gray-600 hover:bg-red-50 hover:text-gray-900"
         }`}
         style={isSelected
@@ -101,8 +156,8 @@ function FolderTreeNode({
         {/* Folder icon + name */}
         <div className="flex items-center gap-1.5 flex-1 min-w-0" onClick={() => onSelect(folder.id)}>
           {isSelected
-            ? <FolderOpen size={13} className="flex-shrink-0" />
-            : <Folder size={13} className="flex-shrink-0 text-amber-500" />
+            ? <FolderOpen size={13} className="flex-shrink-0" style={{ color: folderIconColor }} />
+            : <Folder size={13} className="flex-shrink-0" style={{ color: folderIconColor }} />
           }
           <span className="truncate font-medium text-xs">{folder.name}</span>
         </div>
@@ -119,7 +174,7 @@ function FolderTreeNode({
         {/* ⋯ menu */}
         <div className="relative flex-shrink-0">
           <button
-            onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+            onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); setColorMenuOpen(false); }}
             className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-all ${
               isSelected ? "text-white/60 hover:text-white hover:bg-white/10" : "text-gray-400 hover:text-gray-700 hover:bg-gray-200"
             }`}
@@ -128,9 +183,9 @@ function FolderTreeNode({
           </button>
           {menuOpen && (
             <div
-              className="absolute right-0 top-7 z-[60] bg-white border border-gray-200 rounded-xl shadow-xl py-1 w-40"
+              className="absolute right-0 top-7 z-[60] bg-white border border-gray-200 rounded-xl shadow-xl py-1 w-44"
               onClick={(e) => e.stopPropagation()}
-              onMouseLeave={() => setMenuOpen(false)}
+              onMouseLeave={() => { setMenuOpen(false); setColorMenuOpen(false); }}
             >
               <button
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
@@ -144,6 +199,31 @@ function FolderTreeNode({
               >
                 <Pencil size={12} className="text-gray-500" /> Renomear
               </button>
+              {/* Cor da pasta */}
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                onClick={() => setColorMenuOpen((v) => !v)}
+              >
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: folderIconColor }} />
+                Cor da pasta
+              </button>
+              {colorMenuOpen && (
+                <div className="px-3 pb-2">
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {FOLDER_COLORS.map((c) => (
+                      <button
+                        key={c.key}
+                        title={c.label}
+                        onClick={() => { onColorChange(folder, c.key); setMenuOpen(false); setColorMenuOpen(false); }}
+                        className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 ${
+                          folder.color === c.key ? "border-gray-900 scale-110" : "border-transparent"
+                        }`}
+                        style={{ background: c.icon }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="h-px bg-gray-100 my-1" />
               <button
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50"
@@ -155,6 +235,11 @@ function FolderTreeNode({
           )}
         </div>
       </div>
+
+      {/* Drop-indicator: AFTER */}
+      {isDropTarget && dropSide === "after" && (
+        <div className="h-0.5 rounded-full mx-2 my-0.5" style={{ background: "#dc2626" }} />
+      )}
 
       {/* Children */}
       {expanded && hasChildren && (
@@ -170,7 +255,15 @@ function FolderTreeNode({
               onRename={onRename}
               onDelete={onDelete}
               onNewSubfolder={onNewSubfolder}
+              onColorChange={onColorChange}
               docCounts={docCounts}
+              draggingId={draggingId}
+              dragOverId={dragOverId}
+              dropSide={dropSide}
+              onDragStart={onDragStart}
+              onDragOverNode={onDragOverNode}
+              onDropOnNode={onDropOnNode}
+              onDragEnd={onDragEnd}
             />
           ))}
         </div>
@@ -211,6 +304,11 @@ export default function KnowledgeBase() {
 
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
+
+  // ─── Folder DnD state ─────────────────────────────────────────────────────
+  const [draggingFolder, setDraggingFolder] = useState<FolderItem | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [dropSide, setDropSide] = useState<"before" | "after" | "inside" | null>(null);
 
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -441,7 +539,84 @@ export default function KnowledgeBase() {
     toast({ title: "Movidos", description: `${ids.length} documentos movidos.` });
   };
 
-  // ── Folders ────────────────────────────────────────────────────────────────
+  const handleColorChange = async (folder: FolderItem, color: string) => {
+    await fetch(`/api/folders/${folder.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ color }),
+    });
+    setFolders((prev) => prev.map((f) => f.id === folder.id ? { ...f, color } : f));
+  };
+
+  // ─── Folder DnD handlers (HTML5 native) ──────────────────────────────────────
+
+  const handleFolderDragStart = (folder: FolderItem) => {
+    setDraggingFolder(folder);
+  };
+
+  const handleFolderDragOverNode = (e: React.DragEvent, target: FolderItem) => {
+    e.preventDefault();
+    if (!draggingFolder || target.id === draggingFolder.id) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect?.() ?? (e.target as HTMLElement).getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const h = rect.height;
+    setDragOverFolderId(target.id);
+    if (y < h * 0.25) setDropSide("before");
+    else if (y > h * 0.75) setDropSide("after");
+    else setDropSide("inside");
+  };
+
+  const handleFolderDropOnNode = async (target: FolderItem) => {
+    if (!draggingFolder || target.id === draggingFolder.id) {
+      setDraggingFolder(null); setDragOverFolderId(null); setDropSide(null);
+      return;
+    }
+    if (dropSide === "inside") {
+      // Move draggedFolder into target (change parentId)
+      await fetch(`/api/folders/${draggingFolder.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parentId: target.id }),
+      });
+    } else {
+      // Re-order: insert before/after target at same parent level
+      const sameLevel = folders
+        .filter((f) => f.parentId === target.parentId && f.id !== draggingFolder.id)
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+      const targetIdx = sameLevel.findIndex((f) => f.id === target.id);
+      const insertAt = dropSide === "before" ? targetIdx : targetIdx + 1;
+      sameLevel.splice(insertAt, 0, { ...draggingFolder, parentId: target.parentId });
+      const orders = sameLevel.map((f, i) => ({ id: f.id, sortOrder: i }));
+      await fetch(`/api/folders/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orders }),
+      });
+      // Also update parentId if different
+      if (draggingFolder.parentId !== target.parentId) {
+        await fetch(`/api/folders/${draggingFolder.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parentId: target.parentId }),
+        });
+      }
+    }
+    setDraggingFolder(null); setDragOverFolderId(null); setDropSide(null);
+    refresh();
+    toast({ title: "Pasta reorganizada" });
+  };
+
+  const handleFolderDragEnd = () => {
+    setDraggingFolder(null); setDragOverFolderId(null); setDropSide(null);
+  };
+
+  const rootFolders = folders
+    .filter((f) => !f.parentId)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+
+
+  // ── Folders ──────────────────────────────────────────────────────────────
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
@@ -478,8 +653,6 @@ export default function KnowledgeBase() {
   const toggleAll = () => {
     setSelected(selected.size === filteredDocs.length ? new Set() : new Set(filteredDocs.map((d) => d.id)));
   };
-
-  const rootFolders = folders.filter((f) => !f.parentId);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -575,7 +748,15 @@ export default function KnowledgeBase() {
                 onRename={(ff) => { setRenamingFolder(ff); setRenameFolderName(ff.name); }}
                 onDelete={handleDeleteFolder}
                 onNewSubfolder={(parentId) => { setNewFolderParentId(parentId); setNewFolderName(""); }}
+                onColorChange={handleColorChange}
                 docCounts={docCounts}
+                draggingId={draggingFolder?.id ?? null}
+                dragOverId={dragOverFolderId}
+                dropSide={dropSide}
+                onDragStart={handleFolderDragStart}
+                onDragOverNode={handleFolderDragOverNode}
+                onDropOnNode={handleFolderDropOnNode}
+                onDragEnd={handleFolderDragEnd}
               />
             ))}
 

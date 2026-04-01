@@ -436,6 +436,79 @@ export const lcStorage = {
       totalVisitorsToday: Number(visitorsToday?.c ?? 0),
     };
   },
+
+  // ── Melhoria 1: Salva engagement score no chat ───────────────────────────────
+  async updateChatEngagement(chatId: string, score: number): Promise<void> {
+    await db.execute(
+      sql`UPDATE lc_chats SET "engagementScore" = ${score} WHERE "id" = ${chatId}`
+    );
+  },
+
+  // ── Melhoria 2: Registra produto VTEX detectado no chat ─────────────────────
+  async updateChatVtexProduct(chatId: string, productName: string): Promise<void> {
+    await db.execute(
+      sql`UPDATE lc_chats SET "vtexProduct" = ${productName} WHERE "id" = ${chatId}`
+    );
+  },
+
+  // ── Melhoria 3: Incrementa contador de mensagens filtradas como ruído ────────
+  async incrementChatNoiseFiltered(chatId: string): Promise<void> {
+    await db.execute(
+      sql`UPDATE lc_chats SET "noiseFiltered" = COALESCE("noiseFiltered", 0) + 1 WHERE "id" = ${chatId}`
+    );
+  },
+
+  // ── Melhoria 4: Estatísticas enriquecidas para o dashboard ──────────────────
+  async getEnhancedStats(): Promise<{
+    avgEngagementScore: number;
+    hotLeads: number;
+    warmLeads: number;
+    coldLeads: number;
+    vtexHits: number;
+    noiseTotal: number;
+    topVtexProducts: { name: string; count: number }[];
+    totalChats: number;
+    closedWithSale: number;
+    closedWithoutSale: number;
+  }> {
+    const avgResult = await db.execute(
+      sql`SELECT COALESCE(AVG("engagementScore"), 0)::int AS avg FROM lc_chats`
+    ) as any;
+    const avgEngagementScore = Number(avgResult?.rows?.[0]?.avg ?? avgResult?.[0]?.avg ?? 0);
+
+    const hotResult  = await db.execute(sql`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "engagementScore" >= 70`) as any;
+    const warmResult = await db.execute(sql`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "engagementScore" >= 40 AND "engagementScore" < 70`) as any;
+    const coldResult = await db.execute(sql`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "engagementScore" < 40`) as any;
+    const vtexResult = await db.execute(sql`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "vtexProduct" IS NOT NULL`) as any;
+    const noiseResult = await db.execute(sql`SELECT COALESCE(SUM("noiseFiltered"), 0)::int AS c FROM lc_chats`) as any;
+    const totalResult = await db.execute(sql`SELECT COUNT(*)::int AS c FROM lc_chats`) as any;
+
+    const g = (r: any, key = 'c') => Number(r?.rows?.[0]?.[key] ?? r?.[0]?.[key] ?? 0);
+
+    const topResult = await db.execute(
+      sql`SELECT "vtexProduct" AS name, COUNT(*)::int AS count FROM lc_chats WHERE "vtexProduct" IS NOT NULL GROUP BY "vtexProduct" ORDER BY count DESC LIMIT 5`
+    ) as any;
+    const rows = topResult?.rows ?? topResult ?? [];
+    const topVtexProducts = Array.isArray(rows)
+      ? rows.map((r: any) => ({ name: r.name, count: Number(r.count) }))
+      : [];
+
+    const visitorStats = await this.getPipelineStats();
+
+    return {
+      avgEngagementScore,
+      hotLeads: g(hotResult),
+      warmLeads: g(warmResult),
+      coldLeads: g(coldResult),
+      vtexHits: g(vtexResult),
+      noiseTotal: g(noiseResult),
+      topVtexProducts,
+      totalChats: g(totalResult),
+      closedWithSale: visitorStats['finalizado_com_venda'] ?? 0,
+      closedWithoutSale: visitorStats['finalizado_sem_venda'] ?? 0,
+    };
+  },
+
 };
 
 /**
@@ -478,6 +551,12 @@ export async function ensureLiveChatSchema(): Promise<void> {
     ['lc_chats', '"needsHuman" TEXT NOT NULL DEFAULT \'false\''],
     ['lc_chats', '"proactiveApproach" TEXT NOT NULL DEFAULT \'false\''],
     ['lc_chats', '"aiHandled" TEXT NOT NULL DEFAULT \'true\''],
+    // Melhoria 1: Score de engajamento do chat (extraído do [SCORE:xx] do Gemini)
+    ['lc_chats', '"engagementScore" INTEGER NOT NULL DEFAULT 0'],
+    // Melhoria 2: Produto VTEX detectado nesta conversa
+    ['lc_chats', '"vtexProduct" TEXT'],
+    // Melhoria 3: Contador de mensagens interceptadas pelo filtro de ruído
+    ['lc_chats', '"noiseFiltered" INTEGER NOT NULL DEFAULT 0'],
     // lc_messages
     ['lc_messages', '"read" TEXT NOT NULL DEFAULT \'false\''],
   ];

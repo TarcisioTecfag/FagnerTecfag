@@ -410,15 +410,28 @@ export const storage = {
     return (rows[0] as Folder) ?? null;
   },
 
-  async createFolder(data: { name: string; parentId?: string | null }): Promise<Folder> {
+  async createFolder(data: { name: string; parentId?: string | null; color?: string }): Promise<Folder> {
     const id = uuidv4();
-    await db.insert(folders).values({ id, name: data.name, parentId: data.parentId ?? null });
+    await db.insert(folders).values({ id, name: data.name, parentId: data.parentId ?? null, color: data.color ?? "" });
     return (await storage.getFolderById(id))!;
   },
 
-  async updateFolder(id: string, name: string): Promise<Folder | null> {
-    await db.update(folders).set({ name }).where(eq(folders.id, id));
+  async updateFolder(id: string, data: { name?: string; color?: string; sortOrder?: number; parentId?: string | null }): Promise<Folder | null> {
+    const patch: Record<string, unknown> = {};
+    if (data.name !== undefined) patch.name = data.name;
+    if (data.color !== undefined) patch.color = data.color;
+    if (data.sortOrder !== undefined) patch.sortOrder = data.sortOrder;
+    if ('parentId' in data) patch.parentId = data.parentId;
+    if (Object.keys(patch).length > 0) {
+      await db.update(folders).set(patch).where(eq(folders.id, id));
+    }
     return storage.getFolderById(id);
+  },
+
+  async bulkReorderFolders(orders: { id: string; sortOrder: number }[]): Promise<void> {
+    for (const item of orders) {
+      await db.update(folders).set({ sortOrder: item.sortOrder }).where(eq(folders.id, item.id));
+    }
   },
 
   async deleteFolder(id: string): Promise<void> {

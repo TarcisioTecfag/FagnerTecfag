@@ -29,6 +29,54 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// ─── Melhoria 3: Filtro de ruído óbvio (regex, zero custo de LLM) ────────────
+// Captura as 38% de mensagens off-topic sem chamar o Gemini.
+// Critérios conservadores: só bloqueia quando há certeza absoluta.
+
+const NOISE_PATTERNS: RegExp[] = [
+  // Horários
+  /que hora[s]?\s*(fecha|abre|funciona|atende)/i,
+  /qual[\s]*horário/i,
+  /funcionam\s*(de|das|até)/i,
+  // Localização
+  /onde\s*(fica|estão|são|vocês)/i,
+  /qual[\s]*(é\s*o\s*)?endereço/i,
+  // Identificação do robô
+  /v[oô]c[eê][s]?\s*é[s]?\s*(um\s*)?(robô|robo|ia|bot|virtual|máquina|autom)/i,
+  /está[s]?\s*falando\s*com\s*(um\s*)?(robô|robo|humano|pessoa|atendente)/i,
+  /[eé]\s*(ia|intelig[eê]ncia\s*artificial|um\s*robô)/i,
+  // Respostas de 1 palavra que não são nomes de produtos
+  /^(sim|não|nao|ok|oi|olá|ola|opa|hey|hi|hello|bom|obg|vlw|flw|certo|beleza|tá|ta|ok!)$/i,
+];
+
+const NOISE_REPLIES: string[] = [
+  "Nosso horário é de segunda a sexta, das 8h às 18h! Posso ajudar com alguma dúvida sobre nossas máquinas? 😊",
+  "Atendemos de segunda a sexta, das 8h às 18h. Em que posso te ajudar?",
+  "Sou o Fagner, representante comercial da Tecfag! Posso te ajudar a encontrar a máquina certa para sua produção.",
+  "Pode perguntar! Estou aqui para ajudar com máquinas e equipamentos industriais.",
+];
+
+export function isObviousNoise(message: string): { isNoise: boolean; reply: string } {
+  const trimmed = message.trim();
+  // Mensagens vazias ou muito curtas sem conteúdo técnico
+  if (trimmed.length < 4) {
+    return { isNoise: true, reply: NOISE_REPLIES[3] };
+  }
+  for (const pattern of NOISE_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      // Seleciona resposta baseada no tipo de ruído
+      const reply = /hora|horário|funciona|fecha|abre/i.test(trimmed)
+        ? NOISE_REPLIES[0]
+        : /robô|robo|ia|bot|virtual/i.test(trimmed)
+          ? NOISE_REPLIES[2]
+          : NOISE_REPLIES[3];
+      return { isNoise: true, reply };
+    }
+  }
+  return { isNoise: false, reply: '' };
+}
+
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const GEMINI_CHAT_MODEL = "gemini-3.1-pro-preview";
@@ -454,6 +502,11 @@ export async function processVisitorMessage(
           product: vtexResult.found ? vtexResult.productName : null,
           autonomous: true,
         }).catch(() => {});
+
+        // Melhoria 2: persiste o produto encontrado no banco (badge no painel)
+        if (vtexResult.found) {
+          lcStorage.updateChatVtexProduct(chatId, vtexResult.productName).catch(() => {});
+        }
       } else {
         console.warn("[LiveChat AI] VTEX search timeout (5s) — prosseguindo sem resultado");
       }

@@ -10,7 +10,8 @@
     "check": "tsc",
     "server": "tsx server/index.ts",
     "dev:server": "tsx watch server/index.ts",
-    "seed": "tsx server/seed.ts"
+    "seed": "tsx server/seed.ts",
+    "sanitize": "tsx server/scripts/sanitize-manuals.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

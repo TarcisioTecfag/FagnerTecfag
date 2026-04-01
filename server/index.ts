@@ -84,7 +84,11 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const multerStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-  filename: (_req, file, cb) => cb(null, `${uuidv4()}-${file.originalname}`),
+  filename: (_req, file, cb) => {
+    // Substitui espaços por hífen para evitar crash no front-end do widget (quebra de URLs)
+    const cleanName = file.originalname.replace(/\s+/g, '-');
+    cb(null, `${uuidv4()}-${cleanName}`);
+  },
 });
 const upload = multer({ storage: multerStorage });
 const chatUpload = multer({ 
@@ -831,11 +835,20 @@ app.post("/api/folders", requireAuth, async (req, res) => {
   return res.status(201).json(await storage.createFolder({ name, parentId }));
 });
 
-// PATCH /api/folders/:id
+// PATCH /api/folders/:id  — Renomear, mudar cor, mudar parentId, mudar ordem
 app.patch("/api/folders/:id", requireAuth, async (req, res) => {
   const folder = await storage.getFolderById(p(req.params.id));
   if (!folder) return res.status(404).json({ message: "Pasta não encontrada" });
-  return res.json(await storage.updateFolder(p(req.params.id), req.body.name ?? folder.name));
+  const { name, color, sortOrder, parentId } = req.body;
+  return res.json(await storage.updateFolder(p(req.params.id), { name, color, sortOrder, parentId }));
+});
+
+// POST /api/folders/reorder  — Salvar ordem de arrastamento de pastas em batch
+app.post("/api/folders/reorder", requireAuth, async (req, res) => {
+  const { orders } = req.body as { orders: { id: string; sortOrder: number }[] };
+  if (!orders || !Array.isArray(orders)) return res.status(400).json({ message: "orders inválidos" });
+  await storage.bulkReorderFolders(orders);
+  return res.json({ ok: true });
 });
 
 // DELETE /api/folders/:id

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * client/src/pages/LiveChat.tsx
  *
  * Painel de monitoramento do Live Chat â€” REFATORADO
@@ -79,6 +79,12 @@ interface Chat {
   aiHandled: string;
   needsHuman: string;
   mood?: string;
+  // Melhoria 1: score de engajamento da conversa
+  engagementScore?: number;
+  // Melhoria 2: produto VTEX detectado na conversa
+  vtexProduct?: string;
+  // Melhoria 3: quantidade de msgs filtradas como ruído
+  noiseFiltered?: number;
 }
 
 interface Message {
@@ -430,7 +436,7 @@ function LiveChat() {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "RETURN_TO_AI", chatId }));
     }
-    setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, status: "ai_active", agentId: null } : c));
+    setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, status: "ai_active", agentId: undefined } : c));
     toast({ title: "Fagner reativado", description: "O Fagner voltará a responder quando o cliente mandar mensagem." });
   };
 
@@ -666,6 +672,32 @@ function LiveChat() {
                             {sb.icon} {sb.label}
                           </span>
                         </div>
+
+                        {/* Melhoria 1: Barra de Temperatura do Lead */}
+                        {chat.engagementScore !== undefined && chat.engagementScore > 0 && (
+                          <div className="mt-1.5">
+                            <div className="flex justify-between items-center mb-0.5">
+                              <span className="text-[9px] text-zinc-400">
+                                {chat.engagementScore >= 70 ? '🔥 Quente' : chat.engagementScore >= 40 ? '🌡️ Morno' : '🧊 Frio'}
+                              </span>
+                              <span className="text-[9px] font-bold text-zinc-500">{chat.engagementScore}/100</span>
+                            </div>
+                            <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full bg-gradient-to-r ${scoreColor(chat.engagementScore)} transition-all duration-700`}
+                                style={{ width: `${Math.min(chat.engagementScore, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Melhoria 2: Badge de produto VTEX detectado */}
+                        {chat.vtexProduct && (
+                          <div className="flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-blue-50 border border-blue-100">
+                            <span className="text-[9px]">🛒</span>
+                            <span className="text-[9px] text-blue-700 font-semibold truncate max-w-[160px]">{chat.vtexProduct}</span>
+                          </div>
+                        )}
 
                         {/* Na aba Atenção, mostrar motivo do flag */}
                         {activeTab === "atencao" && chat.mood && (
@@ -1479,26 +1511,162 @@ function LiveChat() {
           </div>
         )}
 
-        {/* ─── Tab: Estatísticas ─────────────────────────────────── */}
-        {activeTab === "stats" && (
-          <div className="h-full flex flex-col items-center justify-center bg-white rounded-2xl border border-zinc-200/60 shadow-sm animate-tab-enter">
-            <div className="text-center">
-              <div className="w-20 h-20 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center mx-auto mb-4">
-                <BarChart3 className="w-10 h-10 text-zinc-300" />
-              </div>
-              <h3 className="text-lg font-bold text-zinc-700 mb-2">Estatísticas e BI</h3>
-              <p className="text-sm text-zinc-400 max-w-md leading-relaxed">
-                A coleta de dados está ativa desde o primeiro momento. O dashboard completo
-                com gráficos de conversão, origens de tráfego, e análises detalhadas será
-                implementado na próxima fase.
-              </p>
-              <div className="flex items-center justify-center gap-2 mt-6">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[11px] text-emerald-600 font-medium">Coletando dados...</span>
-              </div>
+        {/* ─── Tab: Estatísticas (Melhoria 4) */}
+        {activeTab === "stats" && <StatsTab />}
+      </div>
+    </div>
+  );
+}
+
+// ─── StatsTab Component ─────────────────────────────────────────────────────────
+function StatsTab() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/livechat/enhanced-stats", { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center bg-white rounded-2xl border border-zinc-200/60">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-zinc-400">Carregando estatísticas...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="h-full flex items-center justify-center bg-white rounded-2xl border border-zinc-200/60">
+        <p className="text-sm text-zinc-400">Nenhum dado disponível ainda.</p>
+      </div>
+    );
+  }
+
+  const totalLeads = (data.hotLeads ?? 0) + (data.warmLeads ?? 0) + (data.coldLeads ?? 0);
+  const leadTemp = totalLeads > 0 ? [
+    { label: '🔥 Quentes', value: data.hotLeads, color: 'from-red-500 to-orange-500', pct: Math.round((data.hotLeads / totalLeads) * 100) },
+    { label: '🌡️ Mornos',  value: data.warmLeads, color: 'from-yellow-400 to-amber-500', pct: Math.round((data.warmLeads / totalLeads) * 100) },
+    { label: '🧊 Frios',   value: data.coldLeads, color: 'from-teal-400 to-emerald-500', pct: Math.round((data.coldLeads / totalLeads) * 100) },
+  ] : [];
+
+  const conversionRate = data.totalChats > 0 ? Math.round((data.closedWithSale / data.totalChats) * 100) : 0;
+  const vtexRate = data.totalChats > 0 ? Math.round((data.vtexHits / data.totalChats) * 100) : 0;
+
+  return (
+    <div className="h-full overflow-y-auto p-1 animate-tab-enter">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+
+        {/* Card 1: Temperatura dos Leads */}
+        <div className="bg-white rounded-2xl border border-zinc-200/60 shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#dc2626,#f97316)' }}>
+              <TrendingUp className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-zinc-800">Temperatura dos Leads</h3>
+              <p className="text-[10px] text-zinc-400">Baseado no [SCORE:xx] do Gemini</p>
             </div>
           </div>
-        )}
+          <div className="text-center mb-4">
+            <p className="text-4xl font-black text-zinc-800">{data.avgEngagementScore}<span className="text-lg text-zinc-400">/100</span></p>
+            <p className="text-[11px] text-zinc-400 mt-1">Engajamento médio geral</p>
+          </div>
+          {leadTemp.map(item => (
+            <div key={item.label} className="mb-3">
+              <div className="flex justify-between text-[11px] mb-1">
+                <span className="text-zinc-600 font-medium">{item.label}</span>
+                <span className="text-zinc-400">{item.value} chats ({item.pct}%)</span>
+              </div>
+              <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
+                <div className={`h-full rounded-full bg-gradient-to-r ${item.color} transition-all duration-700`} style={{ width: `${item.pct}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Card 2: VTEX e Intenção Comercial */}
+        <div className="bg-white rounded-2xl border border-zinc-200/60 shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#1d4ed8,#60a5fa)' }}>
+              <Search className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-zinc-800">Intenção Comercial</h3>
+              <p className="text-[10px] text-zinc-400">Buscas de produto no catálogo VTEX</p>
+            </div>
+          </div>
+          <div className="space-y-3 mb-4">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-blue-50 border border-blue-100">
+              <span className="text-sm font-semibold text-blue-800">🛒 Chats com produto VTEX</span>
+              <span className="text-xl font-black text-blue-700">{data.vtexHits}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 rounded-xl bg-zinc-50 border border-zinc-100">
+              <span className="text-sm text-zinc-600">Taxa de intenção</span>
+              <span className="text-sm font-bold text-zinc-800">{vtexRate}%</span>
+            </div>
+          </div>
+          {data.topVtexProducts?.length > 0 && (
+            <div>
+              <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2">Top produtos buscados</p>
+              <div className="space-y-1.5">
+                {data.topVtexProducts.map((p: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span className="text-[11px] text-zinc-600 truncate flex-1 mr-2">{p.name}</span>
+                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{p.count}x</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Card 3: Conversão e Ruído */}
+        <div className="bg-white rounded-2xl border border-zinc-200/60 shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#059669,#34d399)' }}>
+              <Activity className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-zinc-800">Conversão e Eficiência</h3>
+              <p className="text-[10px] text-zinc-400">Resultados e filtro de ruído</p>
+            </div>
+          </div>
+          <div className="space-y-2.5">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+              <span className="text-sm font-semibold text-emerald-800">✅ Fecharam venda</span>
+              <span className="text-xl font-black text-emerald-700">{data.closedWithSale}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 rounded-xl bg-zinc-50 border border-zinc-100">
+              <span className="text-sm text-zinc-600">Taxa de conversão</span>
+              <span className="text-sm font-bold text-zinc-800">{conversionRate}%</span>
+            </div>
+            <div className="flex justify-between items-center p-3 rounded-xl bg-zinc-50 border border-zinc-100">
+              <span className="text-sm text-zinc-600">❌ Sem venda</span>
+              <span className="text-sm font-bold text-zinc-800">{data.closedWithoutSale}</span>
+            </div>
+            <div className="h-px bg-zinc-100 my-2" />
+            <div className="flex justify-between items-center p-3 rounded-xl bg-yellow-50 border border-yellow-100">
+              <div>
+                <span className="text-sm font-semibold text-yellow-800">🛡️ Ruídos filtrados</span>
+                <p className="text-[9px] text-yellow-600">Respondidos sem consumir tokens Gemini</p>
+              </div>
+              <span className="text-xl font-black text-yellow-700">{data.noiseTotal}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 rounded-xl bg-zinc-50 border border-zinc-100">
+              <span className="text-sm text-zinc-600">Total de chats</span>
+              <span className="text-sm font-bold text-zinc-800">{data.totalChats}</span>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
