@@ -232,6 +232,7 @@ function LiveChat() {
   const [attentionReason, setAttentionReason] = useState("Falta de informação");
   const [attentionObs, setAttentionObs] = useState("");
   const [visitorChats, setVisitorChats] = useState<Chat[]>([]);
+  const [pastNegotiations, setPastNegotiations] = useState<any[]>([]);
   const [historyModal, setHistoryModal] = useState<{ visitor: Visitor; pageviews: Pageview[] } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -431,11 +432,20 @@ function LiveChat() {
 
   // Fetch chat history when visitor selected in CRM
   useEffect(() => {
-    if (!selectedVisitor) { setVisitorChats([]); return; }
+    if (!selectedVisitor) { 
+      setVisitorChats([]); 
+      setPastNegotiations([]);
+      return; 
+    }
     fetch(`/api/livechat/visitors/${selectedVisitor.id}/chats`, { credentials: "include" })
       .then(r => r.ok ? r.json() : [])
       .then(setVisitorChats)
       .catch(() => setVisitorChats([]));
+
+    fetch(`/api/livechat/visitors/${selectedVisitor.id}/history`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then(setPastNegotiations)
+      .catch(() => setPastNegotiations([]));
   }, [selectedVisitor]);
 
   // ——— Load chat messages —————————————————————————————————————————————————
@@ -1503,68 +1513,62 @@ function LiveChat() {
                   {/* Col 2: Chat Atual (Conversas Ativas) */}
                   <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden bg-white">
                     <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2 flex-shrink-0">
-                      {"\u{1F4AC}"} Atendimento Atual
+                      {"\u{1F4AC}"} Conversas da Sessão
                     </p>
                     <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-                      {(() => {
-                        const ativos = visitorChats.filter(c => c.status !== "closed");
-                        if (ativos.length === 0) {
-                          return (
-                            <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
-                              <MessageCircle className="w-6 h-6 mb-1 opacity-40" />
-                              <p className="text-[10px] text-center">Nenhum chat em andamento</p>
-                            </div>
-                          );
-                        }
-                        return ativos.map(c => (
+                      {visitorChats.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
+                          <MessageCircle className="w-6 h-6 mb-1 opacity-40" />
+                          <p className="text-[10px] text-center">Nenhum chat</p>
+                        </div>
+                      ) : (
+                        visitorChats.map(c => (
                           <div
                             key={c.id}
                             onClick={() => openVisitorChat(c.id)}
                             className="flex items-center gap-1.5 px-2 py-2 rounded-lg bg-red-50/50 border border-red-100 cursor-pointer hover:bg-red-50 hover:border-red-300 transition-all group shadow-sm"
                           >
-                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-500 animate-pulse" />
+                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.status === "closed" ? "bg-zinc-300" : "bg-emerald-500 animate-pulse"}`} />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-[11px] font-bold text-red-700 leading-tight">
-                                {c.visitorName || "Visitante"}
+                                {c.visitorName || selectedVisitor.name || "Visitante"}
                               </p>
                               <span className="text-[9px] text-red-500/70 font-medium">{timeAgo(c.startedAt)}</span>
                             </div>
                             <span className="text-[10px] text-red-600 font-bold ml-1 flex-shrink-0">→</span >
                           </div>
-                        ));
-                      })()}
+                        ))
+                      )}
                     </div>
                   </div>
 
-                  {/* Col 3: Histórico de Negociações (Chats Fechados) */}
+                  {/* Col 3: Histórico de Negociações (Outros Cards) */}
                   <div className="w-[200px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden bg-zinc-50/30">
                     <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2 flex-shrink-0">
                       {"\u{1F4C2}"} Negociações Anteriores
                     </p>
                     <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-                      {(() => {
-                        const passados = visitorChats.filter(c => c.status === "closed");
-                        if (passados.length === 0) {
-                          return (
-                            <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
-                              <Layers className="w-6 h-6 mb-1 opacity-40" />
-                              <p className="text-[10px] text-center">Nenhum histórico</p>
-                            </div>
-                          );
-                        }
-                        return passados.map(c => (
+                      {pastNegotiations.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
+                          <Layers className="w-6 h-6 mb-1 opacity-40" />
+                          <p className="text-[10px] text-center">Nenhum histórico extra</p>
+                        </div>
+                      ) : (
+                        pastNegotiations.map((pn: any) => (
                           <div
-                            key={c.id}
-                            onClick={() => openVisitorChat(c.id)}
+                            key={pn.id}
+                            onClick={() => setSelectedVisitor(pn)}
                             className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white border border-zinc-200 cursor-pointer hover:border-zinc-300 hover:shadow-sm transition-all group"
                           >
-                            <span className="truncate flex-1 text-[10px] text-zinc-600 group-hover:text-zinc-900 transition-colors">
-                              {new Date(c.startedAt).toLocaleDateString("pt-BR", { day: '2-digit', month: 'short' })} • {c.visitorName ? c.visitorName.split(" ")[0] : "Vis."}
-                            </span>
-                            <span className="text-[8px] bg-zinc-100 text-zinc-400 px-1 py-0.5 rounded flex-shrink-0">Ler</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="truncate text-[10px] font-medium text-zinc-600 group-hover:text-zinc-900 transition-colors">
+                                {new Date(pn.lastSeenAt).toLocaleDateString("pt-BR", { day: '2-digit', month: 'short' })} • {pn.pipelineStage ? pn.pipelineStage.replace(/_/g," ") : ""}
+                              </p>
+                            </div>
+                            <span className="text-[8px] bg-zinc-100 text-zinc-400 px-1 py-0.5 rounded flex-shrink-0">Card</span>
                           </div>
-                        ));
-                      })()}
+                        ))
+                      )}
                     </div>
                   </div>
 

@@ -57,6 +57,13 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json(visitor);
   });
 
+  router.get("/visitors/:id/history", requireAuth, async (req: Request, res: Response) => {
+    const visitor = await lcStorage.getVisitorById(p(req.params.id));
+    if (!visitor) return res.status(404).json({ message: "Visitante não encontrado" });
+    const history = await lcStorage.getVisitorHistoryByCookie(visitor.cookieId, visitor.id);
+    return res.json(history);
+  });
+
   router.get("/visitors/:id/chats", requireAuth, async (req: Request, res: Response) => {
     try {
       const chats = await lcStorage.listChatsByVisitor(p(req.params.id));
