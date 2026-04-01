@@ -188,7 +188,7 @@ export const lcStorage = {
   },
 
   async getPipelineStats(): Promise<Record<string, number>> {
-    const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
+    const stages = ['novo_atendimento', 'em_atendimento', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'];
     const result: Record<string, number> = {};
     for (const stage of stages) {
       const [row] = await db.select({ c: sql<number>`count(*)` })
@@ -197,6 +197,28 @@ export const lcStorage = {
       result[stage] = Number(row?.c ?? 0);
     }
     return result;
+  },
+
+  // ── Pós Venda — Dados coletados pelo Fagner (persistentes entre sessões) ──
+  async updateVisitorPosVendaData(id: string, data: {
+    nome?: string | null;
+    telefone?: string | null;
+    email?: string | null;
+    cnpjCpf?: string | null;
+    notaPedido?: string | null;
+    problema?: string | null;
+  }): Promise<void> {
+    const setClauses: string[] = [];
+    if (data.nome      != null) setClauses.push(`"posVendaNome" = '${data.nome.replace(/'/g, "\'\'")}'`);
+    if (data.telefone  != null) setClauses.push(`"posVendaTelefone" = '${data.telefone.replace(/'/g, "\'\'")}'`);
+    if (data.email     != null) setClauses.push(`"posVendaEmail" = '${data.email.replace(/'/g, "\'\'")}'`);
+    if (data.cnpjCpf   != null) setClauses.push(`"posVendaCnpjCpf" = '${data.cnpjCpf.replace(/'/g, "\'\'")}'`);
+    if (data.notaPedido != null) setClauses.push(`"posVendaNotaPedido" = '${data.notaPedido.replace(/'/g, "\'\'")}'`);
+    if (data.problema  != null) setClauses.push(`"posVendaProblema" = '${data.problema.replace(/'/g, "\'\'")}'`);
+    if (setClauses.length === 0) return;
+    await db.execute(sql.raw(
+      `UPDATE lc_visitors SET ${setClauses.join(', ')}, "lastSeenAt" = '${new Date().toISOString()}' WHERE "id" = '${id}'`
+    ));
   },
 
   async incrementVisitorPages(id: string): Promise<void> {
@@ -544,6 +566,13 @@ export async function ensureLiveChatSchema(): Promise<void> {
     ['lc_visitors', '"lastSeenAt" TEXT NOT NULL DEFAULT now()::text'],
     ['lc_visitors', '"name" TEXT'],
     ['lc_visitors', '"notes" JSONB DEFAULT \'[]\'::jsonb'],
+    // lc_visitors — Dados Pós Venda (coletados pelo Fagner)
+    ['lc_visitors', '"posVendaNome" TEXT'],
+    ['lc_visitors', '"posVendaTelefone" TEXT'],
+    ['lc_visitors', '"posVendaEmail" TEXT'],
+    ['lc_visitors', '"posVendaCnpjCpf" TEXT'],
+    ['lc_visitors', '"posVendaNotaPedido" TEXT'],
+    ['lc_visitors', '"posVendaProblema" TEXT'],
     // lc_chats
     ['lc_chats', '"mood" TEXT'],
     ['lc_chats', '"visitorEmail" TEXT'],

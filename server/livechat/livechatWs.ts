@@ -15,7 +15,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
 import { lcStorage } from "./livechatStorage.js";
-import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, isObviousNoise } from "./livechatAI.js";
+import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, isObviousNoise, detectStageIntent } from "./livechatAI.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 
 // ─── Connection maps ─────────────────────────────────────────────────────────
@@ -819,6 +819,51 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id });
                 }
 
+                // ── Detectar tags de estágio [STAGE:...] ──
+                const stageTagMatch = rawReply.match(/\[STAGE:(pos_venda|outros)\]/i);
+                if (stageTagMatch) {
+                  const newStage = stageTagMatch[1].toLowerCase() as string;
+                  await lcStorage.updateVisitorPipeline(currentVisitorId, newStage);
+                  broadcastPipelineUpdate(currentVisitorId, newStage);
+                  console.log(`[LiveChat] Visitante ${currentVisitorId} movido para '${newStage}' via tag do Fagner`);
+                } else {
+                  // Fallback: detecção por regex na mensagem do USUÁRIO (para capturar intenção não marcada pelo Gemini)
+                  const intentFromUserMsg = detectStageIntent(combinedContent);
+                  if (intentFromUserMsg) {
+                    await lcStorage.updateVisitorPipeline(currentVisitorId, intentFromUserMsg);
+                    broadcastPipelineUpdate(currentVisitorId, intentFromUserMsg);
+                    console.log(`[LiveChat] Visitante ${currentVisitorId} movido para '${intentFromUserMsg}' via regex na mensagem do user`);
+                  }
+                }
+
+                // ── Detectar tag de dados de pós venda [POS_VENDA_DADOS:{...}] ──
+                const posVendaTagMatch = rawReply.match(/\[POS_VENDA_DADOS:([\s\S]*?)\]/);
+                if (posVendaTagMatch) {
+                  try {
+                    const posVendaData = JSON.parse(posVendaTagMatch[1].trim());
+                    await lcStorage.updateVisitorPosVendaData(currentVisitorId, {
+                      nome:        posVendaData.nome        ?? null,
+                      telefone:    posVendaData.telefone    ?? null,
+                      email:       posVendaData.email       ?? null,
+                      cnpjCpf:     posVendaData.cnpjCpf     ?? null,
+                      notaPedido:  posVendaData.notaPedido  ?? null,
+                      problema:    posVendaData.problema    ?? null,
+                    });
+                    // Atualiza para pos_venda se ainda não estiver
+                    await lcStorage.updateVisitorPipeline(currentVisitorId, "pos_venda");
+                    broadcastPipelineUpdate(currentVisitorId, "pos_venda");
+                    // Notifica painel para atualizar o modal do visitante
+                    broadcastToAgents({
+                      type: "VISITOR_POS_VENDA_UPDATED",
+                      visitorId: currentVisitorId,
+                      posVendaData,
+                    });
+                    console.log(`[LiveChat] Dados de pós venda salvos para visitante ${currentVisitorId}`);
+                  } catch (parseErr: any) {
+                    console.warn("[LiveChat] Falha ao parsear POS_VENDA_DADOS:", parseErr.message);
+                  }
+                }
+
                 // Start follow-ups (3m, 8m, 10m)
                 startFollowUpTimers(currentVisitorId, chat.id);
               }, 5000); // 5 sec cooldown
@@ -843,7 +888,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               lcStorage.getStats(),
             ]);
 
-            const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
+            const stages = ['novo_atendimento', 'em_atendimento', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'];
             const pipeline: Record<string, any[]> = {};
             for (const stage of stages) {
               pipeline[stage] = await lcStorage.listVisitorsByPipeline(stage);

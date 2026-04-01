@@ -56,6 +56,55 @@ const NOISE_REPLIES: string[] = [
   "Pode perguntar! Estou aqui para ajudar com máquinas e equipamentos industriais.",
 ];
 
+
+// ─── Detecção de intenção de ESTÁGIO (regex, zero custo LLM) ─────────────────
+// Identifica se o cliente se enquadra em "outros" ou "pos_venda"
+// Retorna null se não detectado — Fagner continua atendimento normal
+
+const OUTROS_PATTERNS: RegExp[] = [
+  /curr[ií]culo|enviar.{0,15}cv|meu.{0,10}cv|mandar.{0,10}curr/i,
+  /vaga|emprego|trabalhar.*tecfag|trabalho.*tecfag/i,
+  /localiza[çc][aã]o|onde.{0,10}(fica|estão?|são?|vocês?)|como chegar/i,
+  /falar.{0,20}(diretamente|pessoalmente|específico|fulano|gerente|diretor|responsável|dono|sócio)/i,
+  /conversa.{0,15}paralela|assunto.{0,15}(pessoal|particular|outro)/i,
+];
+
+const POS_VENDA_PATTERNS: RegExp[] = [
+  /m[aá]quina.{0,20}(comprei|comprada|adquirida|j[aá].{0,10}comprei)/i,
+  /j[aá].{0,10}(comprei|adquiri|sou.{0,5}cliente|sou.{0,5}comprador)/i,
+  /marcar.{0,10}(visita|reuni[aã]o|agendamento|atendimento)/i,
+  /agendar.{0,10}(visita|reuni[aã]o|chamada|video)/i,
+  /rastrear|rastreio|rastreamento|status.{0,10}(entrega|pedido)/i,
+  /nota.{0,10}fiscal|nf.?e?|danfe|xml.{0,10}(nota|nf)/i,
+  /segunda.?via|2[aªa].?via.{0,10}(boleto|nota|nf)/i,
+  /boleto.{0,15}(vencido|pagar|pagamento|2.?via)/i,
+  /p[oó]s.?venda|setor.{0,15}(p[oó]s|suporte|qualidade)/i,
+  /falar.{0,20}(financeiro|p[oó]s.?venda|suporte técnico)/i,
+  /corre[çc][aã]o.{0,10}(nf|nota|fiscal)/i,
+  /devolu[çc][aã]o|devolver.{0,10}m[aá]quina/i,
+  /garantia|ativar.{0,10}garantia|prazo.{0,10}garantia/i,
+  /juridico|processo|a[çc][aã]o.{0,10}(judicial|legal)|ameaça/i,
+  /ajuste.{0,15}m[aá]quina|regular.{0,15}m[aá]quina/i,
+  /defeito|quebrada?|não.{0,10}funciona|parou.{0,10}(funcionar|de funcionar)/i,
+  /problema.{0,15}(na|com|da).{0,5}m[aá]quina/i,
+  /video.?chamada|chamada.{0,10}v[ií]deo|v[ií]deo.{0,10}call/i,
+  /teste.{0,10}técnico|t[eé]cnico.{0,10}teste/i,
+  /visita.{0,10}técnica|t[eé]cnico.{0,10}visita/i,
+  /manuten[çc][aã]o|conserto|reparar/i,
+  /assistência.{0,10}t[eé]cnica|suporte.{0,10}técnico/i,
+];
+
+export function detectStageIntent(message: string): 'pos_venda' | 'outros' | null {
+  const trimmed = message.trim();
+  for (const p of POS_VENDA_PATTERNS) {
+    if (p.test(trimmed)) return 'pos_venda';
+  }
+  for (const p of OUTROS_PATTERNS) {
+    if (p.test(trimmed)) return 'outros';
+  }
+  return null;
+}
+
 export function isObviousNoise(message: string): { isNoise: boolean; reply: string } {
   const trimmed = message.trim();
   // Mensagens vazias ou muito curtas sem conteúdo técnico
@@ -139,6 +188,83 @@ Interprete a dúvida do cliente e responda com naturalidade usando essas informa
    - Se o cliente enrolar e não passar o documento, insista no documento.
    - APÓS OBTER O CPF/CNPJ: Prossiga informando o e-mail do SAC (sac@tecfag.com.br) ou diga que vai direcionar para a equipe de logística/qualidade entrar em contato.
 
+
+## DETECÇÃO DE ESTÁGIO E REDIRECIONAMENTO (CRÍTICO)
+
+### INTENÇÃO "OUTROS" — Desvios fora do escopo comercial
+Quando o cliente abordar assuntos como envio de currículo/vaga de emprego, pedir localização da empresa,
+querer apenas um bate papo pessoal/paralelo, ou exigir falar com uma pessoa específica da empresa:
+1. Responda de forma GENTIL, HUMANA e BREVE com as informações corretas.
+2. Para currículo/emprego: direcione ao e-mail dho@tecfag.com.br
+3. Para localização: informe o endereço (Rua Leo Greatti Neto, 1-130, Bauru/SP)
+4. Para falar com alguém específico: passe o WhatsApp (14) 99105-4116 ou (14) 3161-5000
+5. Adicione a tag SILENCIOSA [STAGE:outros] NO FINAL da sua resposta (NÃO é visível ao cliente)
+
+### INTENÇÃO "PÓS VENDA" — Clientes que já compraram
+Quando você identificar que o assunto do cliente é QUALQUER um destes:
+• Ajuda com máquina já comprada / defeito / problema / ajuste
+• Marcar visita ao showroom ou reunião online técnica
+• Rastrear máquina em entrega
+• Nota fiscal / 2ª via de NF / Correção de NF
+• 2ª via de boleto
+• Garantia / Ativação de garantia
+• Falar com pós venda ou financeiro
+• Devolução
+• Ameaça judicial / Processo
+• Visita técnica / Teste técnico / Manutenção
+• Vídeo chamada técnica
+
+**Você OBRIGATORIAMENTE deve:**
+1. Adicionar a tag SILENCIOSA [STAGE:pos_venda] na primeira resposta (NÃO visível ao cliente)
+2. Se JÁ EXISTEM DADOS DE PÓS VENDA do cliente no contexto, CONFIRME-OS com o cliente em vez de coletar do zero
+3. Se NÃO HÁ dados de pós venda, inicie o FLUXO DE COLETA abaixo
+
+### FLUXO DE COLETA DE DADOS — PÓS VENDA (se os dados ainda não existem)
+**Colete 1 dado por vez, nesta ordem EXATA. Seja humano e natural:**
+
+**Passo 1 — Nome:**
+"Para agilizar o seu atendimento, preciso de algumas informações. Pode me informar o nome completo de quem realizou a compra?"
+
+**Passo 2 — Telefone:**
+"Perfeito! E qual é o número de telefone para contato via WhatsApp e ligação?"
+
+**Passo 3 — E-mail:**
+"Ótimo! Qual o e-mail do responsável para receber o suporte?"
+
+**Passo 4 — CPF/CNPJ (OBRIGATÓRIO):**
+"Por favor, informe o CPF ou CNPJ que foi utilizado para realizar a compra. Isso é necessário para localizar seu pedido."
+
+**Passo 5 — Nota do pedido (OPCIONAL):**
+"E o número da nota fiscal do pedido? Se não tiver em mãos agora, tudo bem — pode pular essa parte."
+(Se o cliente não tiver ou disser que não tem: responda que não tem problema e prossiga)
+
+**Após coletar todos os dados — OVERVIEW:**
+Mostre um resumo assim:
+"Anotei tudo! Vou confirmar os dados abaixo:
+• Nome: [nome]
+• Telefone: [tel]
+• E-mail: [email]
+• CPF/CNPJ: [cnpj]
+• Nº da nota: [nota ou 'Não informado']
+
+Está tudo correto?"
+
+Se o cliente disser que está correto → vá ao ENCERRAMENTO.
+Se o cliente corrigir algum item → agradeça, atualize e refaça o overview.
+
+**ENCERRAMENTO DO FLUXO:**
+Depois que o cliente confirmar os dados, diga:
+"Perfeito! Já anotei todas as suas informações. Em menos de 24 horas, nosso setor responsável entrará em contato o mais rápido possível. Obrigado pela paciência!"
+
+E adicione a tag SILENCIOSA com os dados coletados:
+[POS_VENDA_DADOS:{"nome":"...","telefone":"...","email":"...","cnpjCpf":"...","notaPedido":"...","problema":"..."}]
+
+### DADOS DE PÓS VENDA JÁ EXISTENTES (quando o contexto informar que há dados salvos)
+Se o contexto incluir a seção ## DADOS PÓS VENDA DO CLIENTE, isso significa que já temos os dados desse cliente.
+Nesse caso:
+1. Mostre os dados ao cliente perguntando se ainda são válidos: "Encontrei seus dados cadastrais! Confirma que estes dados ainda estão corretos?"
+2. Se o cliente confirmar → vá direto ao ENCERRAMENTO sem coletar nada
+3. Se precisar atualizar → atualize apenas o campo necessário e refaça a confirmação
 ## SEU PAPEL NO SITE
 Você está atendendo visitantes no site tecfag.com.br. Seu objetivo principal é CONVERTER VENDAS.
 - Ajude o cliente a encontrar o produto certo
@@ -563,6 +689,20 @@ export async function processVisitorMessage(
   } else if (shippingIntent.wantsFrete && shippingIntent.cep && !session.lastSkuId) {
     // Tem CEP mas não tem produto
     contextParts.push(`## INTENÇÃO DE FRETE DETECTADA\nO cliente quer frete para CEP ${shippingIntent.cep}, mas nenhum produto foi selecionado ainda.\nINSTRUÇÃO: Pergunte qual produto o cliente tem interesse para calcular o frete.`);
+  }
+
+
+  // Injetar dados de pós venda do visitor (se existirem) para que Fagner confirme em vez de coletar
+  const { posVendaNome, posVendaTelefone, posVendaEmail, posVendaCnpjCpf, posVendaNotaPedido, posVendaProblema } = (visitor ?? {}) as any;
+  if (posVendaNome || posVendaTelefone || posVendaEmail || posVendaCnpjCpf) {
+    contextParts.unshift(`## DADOS PÓS VENDA DO CLIENTE (já cadastrados — confirme com o cliente antes de iniciar novo fluxo de coleta)
+• Nome: ${posVendaNome || 'não informado'}
+• Telefone: ${posVendaTelefone || 'não informado'}
+• E-mail: ${posVendaEmail || 'não informado'}
+• CPF/CNPJ: ${posVendaCnpjCpf || 'não informado'}
+• Nota do pedido: ${posVendaNotaPedido || 'não informado'}
+• Problema relatado: ${posVendaProblema || 'não informado'}
+`);
   }
 
   // Add visitor name context (so Fagner knows who he's talking to)

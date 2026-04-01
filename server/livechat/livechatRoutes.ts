@@ -139,7 +139,7 @@ export function registerLiveChatRoutes(app: any): void {
   router.get("/pipeline", requireAuth, async (_req: Request, res: Response) => {
     try {
       try { await lcStorage.migrateNullPipelineStages(); } catch {}
-      const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
+      const stages = ['novo_atendimento', 'em_atendimento', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'];
       const result: Record<string, any[]> = {};
       for (const stage of stages) {
         result[stage] = await lcStorage.listVisitorsByPipeline(stage);
@@ -154,6 +154,26 @@ export function registerLiveChatRoutes(app: any): void {
   router.get("/pipeline/stats", requireAuth, async (_req: Request, res: Response) => {
     const stats = await lcStorage.getPipelineStats();
     return res.json(stats);
+  });
+
+
+  // ── Pós Venda — Salvar dados coletados pelo Fagner ────────────────────
+  router.patch("/visitors/:id/pos-venda", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { nome, telefone, email, cnpjCpf, notaPedido, problema } = req.body;
+      await lcStorage.updateVisitorPosVendaData(p(req.params.id), {
+        nome:        nome        || null,
+        telefone:    telefone    || null,
+        email:       email       || null,
+        cnpjCpf:     cnpjCpf     || null,
+        notaPedido:  notaPedido  || null,
+        problema:    problema    || null,
+      });
+      return res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[LiveChat] PATCH /visitors/:id/pos-venda error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
   });
 
   // ── Melhoria 4: Estatísticas enriquecidas (engagement, VTEX, ruído) ─────────

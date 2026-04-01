@@ -1,0 +1,8584 @@
+Te damos boas-vindas à documentação da API v2 do RD Station CRM, projetada para ser poderosa, previsível e fácil de usar. Com ela, você pode criar integrações robustas para estender e conectar o RD Station CRM a outras ferramentas.
+
+A API (Application Programming Interface ou Interface de Programação de Aplicativos) é um padrão de programação, com conjuntos de instruções cuja finalidade é desenvolver a integração entre diferentes plataformas de softwares, como o RD Station CRM e outra ferramenta que você utilize.
+
+Todas as nossas APIs são organizadas em torno da arquitetura REST e são acessadas via protocolo HTTPS. Então, se você já interagiu com uma API RESTful, muitos dos conceitos serão familiares.
+
+Sua primeira chamada para a API v2 do RD Station CRM
+Open Recipe
+Requisitos para começar
+Possuir uma conta do RD Station CRM. Se ainda não tiver, crie uma aqui.
+Ter uma conta do plano Basic, Pro ou Advanced do RD Station CRM.
+Um pouco de conhecimento de programação.
+📘
+Dica
+O Modo Desenvolvedor pode ser ativado, para facilitar a coleta do ID dos registros.
+
+Entidades
+As nomenclaturas das entidades utilizadas na API deverão seguir o padrão conforme a tabela a seguir:
+
+RD Station CRM	API
+Negociação	deal
+Empresa	organization
+Contato	contact
+Tarefa	task
+Produto	product
+Campanha	campaign
+Motivo de perda	lost reason
+Fonte	source
+Segmento	segment
+Campo personalizado	custom field
+Usuário	user
+Domínio base
+Todas as requisições para a API v2 do RD Station CRM devem usar a seguinte URL base:
+
+
+https://api.rd.services/crm/v2/
+Exemplo:
+
+Para listar os contatos, deve-se usar o endereço completo: GET https://api.rd.services/crm/v2/contacts
+
+Segurança
+A API está disponível apenas no protocolo HTTPS com criptografia TLS versão 1.3.
+
+Formatos de dados
+Payload
+O dados da API v2 são sempre trafegados usando JSON.
+
+Assim, o Content-Type sempre será application/json.
+
+Data e hora
+As propriedades de data e hora (DateTime) seguem o padrão ISO 8601 com timezone padrão sendo o UTC.
+
+Autenticação
+Todas as requisições para a API v2 devem ser autenticadas.
+
+Para mais detalhes, leia sobre a autenticação.
+
+Limite de requisições
+Para garantir a estabilidade da plataforma para todos os usuários, a API impõe limites no número de requisições que podem ser feitas em um determinado período.
+
+Se você exceder esse limite, receberá uma resposta com o código de status 429 Too Many Requests. A resposta incluirá um cabeçalho Retry-After indicando quantos segundos você deve esperar antes de fazer uma nova tentativa.
+
+Plano	Limite máximo
+Basic, Pro, Advanced	120 requisições por minuto
+Saiba mais sobre os planos do RD Station CRM.
+
+Status de retorno
+A API v2 utiliza códigos de status HTTP padrão para indicar o sucesso ou a falha de uma requisição.
+
+Código	Significado	Descrição
+200 OK	Sucesso	A requisição foi bem-sucedida.
+201 Created	Criado	O recurso foi criado com sucesso. Exemplo: em respostas do método POST.
+204 No Content	Sem conteúdo	A requisição foi bem-sucedida mas não há conteúdo para retornar. Exemplo: em respostas do método DELETE.
+400 Bad Request	Requisição inválida	A requisição está malformada e não consegue ser processada. Exemplo: o corpo JSON está inválido ou tem parâmetros obrigatórios ausentes.
+401 Unauthorized	Não autorizado	O token da API está ausente ou inválido.
+403 Forbidden	Proibido	O token não tem permissão para acessar o recurso solicitado.
+404 Not Found	Não encontrado	O recurso solicitado não existe.
+422 Unprocessable Entity	Entidade inválida	A entidade não pode ser processada.
+429 Too Many Requests	Muitas requisições	O limite de requisições foi excedido.
+500 Internal Server Error	Erro interno	Erro interno ou inesperado no servidor.
+Estrutura do playload
+A estrutura base de payload a ser enviados para a API será sempre a seguinte:
+
+JSON
+
+{
+  "data": {} /* ou [] */
+}
+Sendo o retorno das requisições em caso de sucesso:
+
+JSON
+
+{
+  "data": {}, /* ou [] */
+  "links": {}
+}
+E em caso de erros:
+
+JSON
+
+{
+  "errors": []
+}
+Propriedade	Tipo	Descrição
+data	Object/Array<Object>	Dados a serem enviados ou retornados nos end-points.
+links	Object	Dados extras como a navegação de listagens. Nem todos os end-points utilizam essa propriedade.
+errors	Array<Object>	Em caso de erro, essa propriedade retorna a lista de problemas. Essa propriedade nunca é retornada em conjunto com a data.
+Tratamento de erros
+E em caso de erros, cada um será listado na propriedade errors e também será informado pelo status HTTP seguindo os status de retorno.
+
+JSON
+
+{
+  "errors": []
+}
+Paginação
+End-points que retornam listas de recursos (como GET /contacts ou GET /deals) utilizam paginação para gerenciar grandes volumes de dados.
+
+Use os parâmetros de consulta page[number] e page[size] para navegar pelos resultados. Os parâmetros são passados como query params (URL) através do argumento page. Exemplo:
+
+
+https://api.rd.services/crm/v2/contacts?page[number]=2&page[size]=10
+Propriedade	Tipo	Descrição
+page[number]	Integer	Indica a página a ser retornada. Padrão: 1.
+page[size]	Integer	Indica a quantidade de objetos a serem retornados em cada página. Padrão: 20.
+Para facilitar, as requisições de listagens informam os links de navegação de páginas dentro da propriedade links. Dessa forma, pode-se simplesmente navegar por esses simples sem precisar recriar toda a URL.
+
+Exemplo de uma requisição para https://api.rd.services/crm/v2/contacts?filter=name:Walter&sort[created_at]=asc&page[number]=5&page[size]=10 que tem 85 registros:
+
+JSON
+
+{
+  "data": [
+    /* { ... }, ... */
+  ],
+  "links": {
+    "first": "https://api.rd.services/crm/v2/contacts?filter=name:Walter&sort[created_at]=asc&page[number]=1&page[size]=10",
+    "prev": "https://api.rd.services/crm/v2/contacts?filter=name:Walter&sort[created_at]=asc&page[number]=4&page[size]=10",
+    "self": "https://api.rd.services/crm/v2/contacts?filter=name:Walter&sort[created_at]=asc&page[number]=5&page[size]=10",
+    "next": "https://api.rd.services/crm/v2/contacts?filter=name:Walter&sort[created_at]=asc&page[number]=6&page[size]=10",
+    "last": "https://api.rd.services/crm/v2/contacts?filter=name:Walter&sort[created_at]=asc&page[number]=9&page[size]=10"
+  }
+}
+Os links de uma requisição de listagem já terão os parâmetros filter, sort e page reproduzidos para seguir a navegação de páginas.
+
+Ordenação
+End-points que retornam listas de registros podem modificar a ordenação dos dados baseado em algumas das propriedades da entidade. Mas atenção, nem todas as propriedades podem ser usadas para ordenação. Para mais detalhes acesse a página da documentação referente ao recurso para identificar as possíveis propriedades de ordenação.
+
+A ordenação é feita através do parâmetro sort[propriedade]=direção onde "propriedade" refere-se ao campo de ordenação e a "direção" pode ser asc para ascendente e desc para descendente.
+
+Exemplo:
+
+
+https://api.rd.services/crm/v2/contacts?sort[created_at]=asc
+O exemplo acima retorna a lista de contatos ordenados de forma decrescente pela data de criação, que retorna a lista de contatos com os criados mais recentemente primeiro.
+
+Os links de uma requisição de listagem já terão os parâmetros filter, sort e page reproduzidos para seguir a navegação de páginas.
+
+Filtro
+Saiba mais sobre como filtrar os dados aqui.
+
+Os links de uma requisição de listagem já terão os parâmetros filter, sort e page reproduzidos para seguir a navegação de páginas.
+
+Bases legais
+As principais Leis de Proteção de Dados, como a LGPD (Brasil) e o GDPR (União Europeia), estabelecem que, para que qualquer pessoa, física ou jurídica, possa realizar qualquer operação com um dado pessoal − seja coletar, transmitir ou processar −, é necessário possuir uma base legal presente na LGPD, ou seja, uma hipótese da lei que justifique o tratamento desses dados.
+
+Lei mais sobre como utilizar as bases legais.
+
+Notas sobre a listagem
+Ao utilizar o método listar das entidades de negociação, empresa e contato é possível listar apenas os 10 mil primeiros registros do filtro especificado.
+
+As credenciais de autenticação dão acesso a apenas um produto RD Station escolhido. Para cada produto deverá ter suas próprias credenciais de acesso. Isso é válido para todas as credenciais, como client_id, client_secret e access_token.
+
+A autenticação da API do RD Station CRM é baseada no protocolo de segurança OAuth2. Para essa integração, optamos por definir um prazo de expiração de 2 horas (7200 segundos) para os tokens.
+
+End-point de autenticação OAuth2:
+
+
+https://api.rd.services/oauth2/
+Como funciona a autenticação?
+Ao criar o seu aplicativo na RD Station App Store você receberá as duas credenciais, que chamamos de client_id e client_secret.
+
+Essas credenciais são utilizadas para gerar o code, que autoriza a conexão do aplicativo à uma conta específica do RD Station CRM.
+
+O code será utilizado uma única vez para gerar os tokens: access_token e o refresh_token.
+
+Uma vez que os tokens tenham sido gerados, o access_token será utilizado no Header das requisições para autorizar as trocas de mensagens via API.
+
+Para manter o access_token válido, basta você utilizar o refresh_token para renovar o access_token.
+
+Ao utilizar o refresh_token para obter um novo access_token, um novo refresh_token também será retornado na resposta. É crucial que a sua aplicação armazene e utilize este novo refresh_token para as futuras renovações, descartando o anterior.
+
+Passo a passo para realizar a autenticação
+Acesse as páginas abaixo para conferir o passo a passo com a explicação detalhada do processo de Autenticação:
+
+Passo 1: Criar um aplicativo e credenciais
+Passo 2: Gerar código de autorização
+Passo 3: Obter token de acesso
+Passo 4: Renovar token de acesso
+Ao concluir o passo 3, estará autorizado para operar a API e saberá como atualizar o seu token. Com o passo 4, você saberá como renovar o access_token.
+
+Como gerar o código de autorização
+No passo anterior, você criou o aplicativo na RD Station App Store e obteve as credenciais. Neste passo, vamos utilizar as credenciais client_id e redirect_uri para obter o code.
+
+O objetivo dessa etapa é autorizar o aplicativo (criado no passo 1) a se conectar com a conta desejada do RD Station CRM.
+
+Compondo a URL de autorização
+Você deve substituir o parâmetro client_id da URL de autorização indicada abaixo, pelas credenciais obtidas no passo anterior.
+
+O parâmetro redirect_uri deve ser substituído pela URL de callback cadastrada no aplicativo criado no passo 1.
+
+URL de autorização
+
+https://accounts.rdstation.com/oauth/authorize?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=YOUR_REDIRECT_URI
+Gerador de URL de autorização
+Campo
+Valor
+Descrição
+Client ID:
+insira aqui o seu client_id
+client_id do aplicativo
+Redirect URI:
+insira aqui a sua redirect_uri
+redirect_uri do aplicativo (callback)
+URL de autenticação:
+Copiar
+https://accounts.rdstation.com/oauth/authorize?response_type=code&client_id=&redirect_uri=
+ℹ️
+Certifique-se de que a sua URL de callback foi inserida por completo, exatamente como foi cadastrada no aplicativo.
+
+Exemplo de URL de autorização
+Veja um exemplo de como ficaria a URL de autorização após substituir o client_id e redirect_uri pelas credenciais geradas por um aplicativo.
+
+Exemplo de URL de autorização completa
+
+https://accounts.rdstation.com/oauth/authorize?response_type=code&client_id=68956445-3421-4a0f-a0dd-3142a97621f4&redirect_uri=https://www.rdstation.com/contato
+Autorizando o aplicativo
+Após gerar a URL de autorização, é necessário acessá-la para obter o code.
+
+Ao acessar/ser redirecionado para a URL de autorização, o usuário poderá selecionar qual conta da RD Station deseja integrar e será exibida a caixa de permissões para confirmar a autorização.
+
+Se o redirecionamento for feito corretamente, o code será retornado na URL de callback fornecida no parâmetro redirect_uri com a estrutura similar:
+
+
+https://yourapp.org/auth/callback?code={code}
+Pode realizar essa etapa acessando a URL de autorização pela barra de endereço do seu navegador para ser redirecionado para a sua conta da RD Station, autorizar a conexão e obter o code.
+Como obter os tokens access_token e refresh_token
+Agora que você tem o code de autorização, vamos usa-lo para gerar os tokens de acesso que permitirão que você faça requisições à API do RD Station CRM. O code é válido por apenas 5 minutos, então certifique-se de fazer essa troca imediatamente após recebê-lo.
+
+ℹ️
+O code tem duração de 5 minutos.
+
+O que você vai precisar
+client_id: O ID do seu aplicativo
+client_secret: A chave secreta do seu aplicativo
+code: O código de autorização obtido no passo 2 (válido por 5 minutos)
+redirect_uri: A mesma URL de callback usada no passo 2
+grant_type: Deve ser authorization_code
+Fazendo a requisição para obter os tokens
+Envie uma requisição POST para o end-point de tokens.
+
+Exemplo com cURL:
+
+Shell
+
+curl -X POST https://api.rd.services/oauth2/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d 'client_id=seu-client-id-aqui' \
+  -d 'client_secret=seu-client-secret-aqui' \
+  -d 'code=seu-codigo-de-autorizacao-aqui' \
+  -d 'redirect_uri=https://seu-site.com/callback' \
+  -d 'grant_type=authorization_code'
+Agora que você obteve os tokens, o code não é mais necessário.
+
+ℹ️
+Os tokens de acesso do RD Station CRM têm uma validade de 2 horas (7200 segundos). Certifique-se de implementar a lógica de renovação usando o refresh_token.
+
+Passo 4: Renovar token de acesso
+Como renovar o access_token
+O access_token do RD Station CRM tem validade de 2 horas. Quando ele expirar, sua aplicação deverá usar o refresh_token para obter um novo access_token de forma programática, sem que o usuário precise passar pelo fluxo de autorização novamente.
+
+O refresh_token expirará caso não seja utilizado por um período de 14 dias. Contanto que sua aplicação o utilize para renovar o access_token dentro desse intervalo, a conexão se manterá ativa indefinidamente.
+
+Quando renovar o token
+Você deve renovar o access_token quando:
+
+Receber o erro 401 Unauthorized em uma requisição;
+O access_token estiver prestes a expirar (recomenda-se renovar quando faltar menos de 5 minutos);
+O usuário retornar ao aplicativo após um período de inatividade.
+Fazendo a requisição de renovação
+Envie uma requisição POST para o end-point de tokens com grant_type=refresh_token.
+
+Exemplo com cURL:
+
+Shell
+
+curl -X POST https://api.rd.services/oauth2/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d 'client_id=seu-client-id-aqui' \
+  -d 'client_secret=seu-client-secret-aqui' \
+  -d 'refresh_token=seu-refresh-token-aqui' \
+  -d 'grant_type=refresh_token'
+Importante sobre o refresh_token
+O refresh_token é renovado a cada uso (rolling refresh token);
+O novo refresh_token terá uma nova data de expiração (14 dias a partir da renovação);
+Sempre armazene o novo refresh_token retornado, o antigo já não funciona mais;
+Se o refresh_token expirar, o usuário precisará fazer o fluxo de autorização novamente.
+Implementação recomendada
+Antes de cada requisição à API:
+
+Verifique se o access_token atual está expirado ou prestes a expirar (recomenda-se renovar quando faltar menos de 5 minutos);
+Se sim, use o refresh_token para obter um novo access_token;
+Substitua o par de tokens anterior (access_token e refresh_token) pelo novo par recebido na resposta da API;
+Repita a requisição original com o novo token.
+
+A API v2 do CRM utiliza a RDQL (RD Query Language) para realizar filtros avançados em listagens de recursos. Para aplicar um filtro, utilize o parâmetro de query filter.
+
+A sintaxe básica é filter=campo:valor. Por exemplo, para buscar negociações com o nome "Teste", a query seria filter=name:Teste.
+
+Operadores
+Operador	Exemplo	Descrição
+=	status:won	Status é "won"
+!=	-status:won	Status é diferente de "won"
+>	total_price:>100	Preço total é maior que 100
+<	total_price:<100	Preço total é menor que 100
+>=	total_price:>=100	Preço total é maior ou igual a 100
+<=	total_price:<=100	Preço total é menor ou igual a 100
+IN	status:(won,lost)	Status é "won" ou "lost"
+NIN	-status:(won,lost)	Status não é "won" nem "lost"
+MATCH	name:~Test	Nome contém "Test" (case-insensitive)
+Tipos de dados
+Tipo	Exemplo
+String	string, "string com espaços"
+Integer	10
+Float	10.5
+Date	2023-01-01
+DateTime	"2023-01-01 12:00:00"
+Time	12:00:00
+Array	(1, "2 b", 3c)
+Agrupamentos e operadores lógicos
+É possível agrupar expressões com parênteses e utilizar operadores lógicos como and (padrão) e or.
+
+Exemplo	Descrição
+status:won total_price:>100	Status é "won" E preço total é maior que 100
+status:won or status:lost	Status é "won" OU "lost"
+(status:won or status:lost) and total_price:>100	(Status é "won" OU "lost") E preço total é maior que 100
+Filtro por campos personalizados
+Campos personalizados podem ser filtrados usando o prefixo @ seguido do slug do campo personalizado.
+
+Exemplo	Descrição
+@setor:tecnologia	Campo personalizado "setor" é igual a "tecnologia".
+-@ativo:true	Campo personalizado "ativo" é diferente de "true".
+@prioridade:(alta,media)	Campo personalizado "prioridade" é "alta" ou "media".
+Recursos que suportam filtro por campos personalizados:
+
+Negociações (Deals)
+Contatos (Contacts)
+Empresas (Organizations)
+Produtos (Products)
+
+Bases legais
+As principais leis de proteção de dados, como a LGPD (Lei Geral de Proteção de Dados Pessoais, Brasil) e o GDPR (General Data Protection Regulation, União Europeia), estabelecem que, para que qualquer pessoa, física ou jurídica, possa realizar qualquer operação com um dado pessoal − seja coletar, transmitir ou processar −, é necessário possuir uma base legal presente na LGPD, ou seja, uma hipótese da lei que justifique o tratamento desses dados.
+
+A LGPD prevê bases legais que autorizam o tratamento de dados pessoais. As bases legais não têm dependência ou predominância entre si, e para todo caso de tratamento de dados, existe uma base legal mais apropriada.
+
+A atribuição das bases legais aos contatos do RD Station CRM para Contato e envio de comunicação engloba envio de emails e a prática de ligações via RD Station CRM.
+
+É possível adicionar as seguintes bases legais:
+
+Consentimento (consent)
+Obrigação legal, processo judicial, proteção do crédito (judicial_process)
+Legítimo interesse (legitimate_interest)
+Contrato preexistente (pre_existent_contract)
+Execução de políticas públicas (public_interest)
+Proteção da vida, tutela da saúde (vital_interest)
+Saiba mais sobre os conceitos e cada uma das bases legais aqui.
+
+Como registrar as bases legais
+O registro das bases legais é realizado a partir dos seguintes parâmetros dentro da entidade alvo, como a de contato:
+
+Propriedade	Tipo	Descrição
+category	String	A categoria relativa à base legal, sendo "comunicação" ou "processamento de dados". Opções: communications, data_processing.
+type	String	Qual base legal autoriza o tratamento dos dados pessoais. Opções: consent, judicial_process, legitimate_interest, pre_existent_contract, public_interest, vital_interest.
+status	String	Use granted para confirmar o consentimento e declined para indicar que o consentimento foi recusado. Opções: granted, declined.
+Exemplo de como os parâmetros devem ser enviados:
+
+JSON
+
+{
+  "legal_bases": [
+    {
+      "category": "data_processing",
+      "type": "consent",
+      "status": "granted"
+    },
+    {
+      "category": "communications",
+      "type": "vital_interest",
+      "status": "granted"
+    }
+  ]
+}
+
+Casos de uso
+Cada caso de uso é apresentado como um tutorial autocontido, descrevendo um cenário de negócio, o fluxo de trabalho passo a passo e como as entidades da API v2 do RD Station CRM são utilizadas para resolver o problema.
+
+Estes casos de uso cobrem fluxos de trabalho comuns e de alto valor, conectando o RD Station CRM a outras ferramentas essenciais do ecossistema SaaS.
+
+Dicionário de termos
+Webhook: É uma notificação automática que um sistema envia para outro quando algo acontece. Em vez de você perguntar por novidades, o sistema te avisa sozinho e em tempo real.
+End-point: É o "endereço" exato onde um sistema busca uma informação ou executa uma tarefa específica. Pense nele como um ramal direto para falar com o setor certo de uma empresa.
+Payload: É o pacote de dados real que você envia em uma comunicação. Se a comunicação fosse uma carta, o payload seria a mensagem escrita dentro dela.
+Middleware: Pense nele como uma plataforma de segurança para a comunicação entre dois ou mais sistemas, encarregada de verificar permissões para requisições e de correlacionar entidades idênticas em diversas plataformas.
+Sincronização bidirecional de contatos com uma plataforma de automação de marketing
+Cenário de negócio
+Uma empresa utiliza uma ferramenta de automação de marketing (como Mailchimp ou ActiveCampaign) para capturar leads e nutrir sua base de contatos. Ao mesmo tempo, a equipe de vendas gerencia esses contatos no RD Station CRM. É crucial que ambas as plataformas estejam sempre sincronizadas: novos assinantes da ferramenta de marketing devem ser criados no CRM, e as atualizações feitas no CRM (como uma mudança de cargo ou estágio no funil) devem ser refletidas na ferramenta de marketing para segmentação de campanhas.
+
+Fluxo de trabalho e mapeamento da API
+Este fluxo de trabalho demonstra uma sincronização bidirecional e orientada a eventos, que é mais eficiente do que a verificação periódica (polling), ou seja: o sistema trabalha quando é acionado e não a cada 10 em 10 minutos, por exemplo.
+
+Passo 1: Novo assinante na plataforma de marketing → Criar contato no RD Station CRM
+Gatilho: Um novo usuário subscreve a uma newsletter no site da empresa. A plataforma de marketing captura essa informação.
+Ação: A plataforma de marketing (ou um middleware como o Zapier) aciona uma chamada para o end-point POST /contacts da API v2.
+Mapeamento de entidades:
+Contato: O corpo da requisição deve conter os dados básicos do novo assinante. O campo email é essencial. Campos como name e custom_fields podem ser preenchidos com informações adicionais coletadas no formulário de inscrição.
+Bases legais: Um ponto crucial para a conformidade com LGPD/GDPR é o preenchimento do objeto legal_bases. A requisição deve incluir a base legal para o contato, como consentimento para emails de marketing. Exemplo: { "legal_bases": [{ "category": "consent", "type": "marketing_email", "status": "active" }] }.
+Passo 2: Contato atualizado no RD Station CRM → Atualizar assinante na plataforma de marketing
+Gatilho: Um vendedor no RD Station CRM atualiza o cargo (job_title) de um contato ou altera um campo personalizado que indica um novo interesse de produto.
+Ação: Esta atualização dispara o webhook crm_contact_updated, que foi previamente subscrito pela integração.
+Mapeamento de entidades:
+Webhook: A integração recebe um payload do webhook contendo o objeto do contacto completo e atualizado.
+Contato: O sistema de integração extrai o ID ou email do contato do payload e os campos que foram alterados. Em seguida, ele usa a API da plataforma de marketing para encontrar e atualizar o assinante correspondente.
+Passo 3: Lead qualificado para vendas → Criar negociação no RD Station CRM
+Gatilho: Um contato na plataforma de marketing atinge um determinado score de engajamento (lead scoring), tornando-se um "Marketing Qualified Lead" (MQL).
+Ação: A automação de marketing aciona uma chamada para o end-point POST /deals da API v2.
+Mapeamento de entidades:
+Negociação: Uma nova negociação é criada. O nome da negociação pode ser padronizado (ex: "Nova negociação para Nome do Contato"). A negociação deve ser associada ao contato existente (via contact_id, que pode ser obtido no passo 1 ou 2), a um owner_id (o vendedor responsável) e a um pipeline_id e stage_id iniciais.
+Fonte: O source_id pode ser definido para indicar que a negociação originou-se da campanha de marketing específica, permitindo uma análise de ROI mais precisa.
+Sincronização de negociações com um sistema ERP
+Cenário de negócio
+Uma empresa gerencia seu processo comercial inicial no RD Station CRM, onde as negociações são criadas e qualificadas. Ao chegar em um determinado ponto do funil de vendas, como a solicitação de um orçamento, é necessário transferir as informações da empresa e da negociação para o sistema de gestão (ERP), onde o orçamento ou pedido de venda é formalmente gerado. Para manter a visibilidade e o controle do vendedor no CRM, o número do orçamento gerado no ERP precisa ser registrado de volta na negociação. Além disso, o status final da negociação (ganha ou perdida) no CRM deve refletir no status do orçamento no ERP, garantindo que ambos os sistemas estejam sincronizados.
+
+Fluxo de trabalho e mapeamento da API
+Este fluxo de trabalho demonstra uma sincronização bidirecional e orientada a eventos, garantindo que as informações fluam do CRM para o ERP e vice-versa em momentos chave do processo de vendas.
+
+Passo 1: Oportunidade atinge estágio de orçamento → Criar orçamento no ERP
+Gatilho: Um vendedor no RD Station CRM move uma negociação para uma etapa específica do funil, como "orçamento solicitado".
+Ação: Esta atualização dispara o webhook crm_deal_updated, que foi previamente subscrito pela integração. O middleware (plataforma de integração) recebe a notificação e utiliza os dados da negociação e da empresa associada para criar um novo orçamento no sistema ERP.
+Mapeamento de entidades:
+Webhook: A integração recebe um payload contendo o objeto de negociação completo e atualizado.
+Negociação: O sistema de integração extrai o ID da negociação, seus contact_ids e outras informações pertinentes.
+Contato e empresa: A partir dos contact_ids, a integração pode buscar os dados dos contatos associados (via GET /contacts/{id}) e, a partir deles, obter o organization_id para buscar os detalhes da empresa (via GET /organizations/{id}). Essas informações são então usadas para cadastrar a empresa no ERP, se ela ainda não existir.
+Passo 2: Orçamento criado no ERP → Atualizar negociação no RD Station CRM
+Gatilho: O sistema ERP finaliza a criação do orçamento e retorna um número de identificação único.
+Ação: O middleware recebe essa informação do ERP e realiza uma chamada para o end-point PATCH /deals/{id} da API v2 para atualizar a negociação original no RD Station CRM.
+Mapeamento de entidades:
+Deal: O corpo da requisição de atualização deve conter o objeto custom_fields. Para que isso funcione, um campo personalizado (ex: "ID do Orçamento no ERP") precisa ser previamente criado na entidade Negociação no CRM.
+Campo personalizado: A chave do objeto deve ser o identificador do campo personalizado, e o valor será o número do orçamento retornado pelo ERP. Exemplo: { "custom_fields": { "id_orcamento_erp": "ORC-2025-00123" } }.
+Passo 3: Negociação ganha/perdida no RD Station CRM → Atualizar status do orçamento no ERP
+Gatilho: Um vendedor altera o status de uma negociação no RD Station CRM para won (ganha) ou lost (perdida).
+Ação: A alteração de status dispara novamente o webhook crm_deal_updated. O middleware recebe a notificação, identifica o novo status da negociação e o ID do orçamento no ERP (armazenado no campo personalizado) e, em seguida, aciona a API do ERP para atualizar o status do orçamento correspondente para "vendido", "cancelado" ou "perdido".
+Mapeamento de entidades:
+Webhook: A integração recebe o payload com o objeto de negociação completo.
+Negociaç!ao: O sistema de integração extrai o valor do campo status, que pode ser won ou lost, e também o valor do campo personalizado que contém o ID do orçamento no ERP para saber qual registro específico deve ser atualizado no outro sistema.
+Criação de ticket de suporte e sincronização de contexto do cliente
+Cenário de negócio
+Quando um cliente abre um ticket de suporte numa plataforma de helpdesk (como Zendesk ou Freshdesk), o agente de suporte precisa de uma visão completa desse cliente para oferecer um atendimento rápido e contextualizado. O agente deve ver as informações de contato, a empresa e, crucialmente, se existem negociações de vendas em andamento com aquele cliente, tudo dentro da interface do helpdesk.
+
+Fluxo de trabalho e mapeamento da API
+Este fluxo de trabalho demonstra como o RD Station CRM pode atuar como a "fonte da verdade" para o contexto do cliente, enriquecendo outros sistemas de negócio.
+
+Passo 1: Novo ticket criado na plataforma de helpdesk
+Gatilho: Um cliente envia um email para o suporte, que gera um novo ticket no sistema de helpdesk.
+Ação: A plataforma de helpdesk, através de uma aplicação de integração (middleware), extrai o endereço de email do cliente do novo ticket.
+Passo 2: Buscar contexto do cliente no RD Station CRM
+Ação: A integração faz uma chamada para GET /contacts?filter=email:email_do_cliente para encontrar o registro do contato correspondente no CRM.
+Mapeamento de entidades:
+Contato: Se um contato for encontrado, a integração obtém seu id, name, job_title, e, mais importante, os IDs de suas associações, como organization_id e o array deal_ids, que contém informações sobre empresa e negociações deste contato.
+Passo 3: Exibir o contexto completo na interface do helpdesk
+Ação: Com os IDs obtidos no passo anterior, a integração faz chamadas adicionais à API v2 para enriquecer o perfil do cliente na tela do agente de suporte.
+Mapeamento de entidades:
+Empresa: Faz uma chamada GET /organizations/{id} para obter o nome e outros detalhes da empresa do cliente.
+Negociação: Itera sobre o array deal_ids do objeto de contato. Para cada deal_id, faz uma chamada GET /deals/{id} para buscar detalhes da negociação, como name, total_price e status. A integração pode optar por exibir apenas as negociações com status ongoing.
+Passo 4: Registrar a interação de suporte no RD Station CRM
+Gatilho: O agente de suporte resolve e fecha o ticket.
+Ação: A integração cria um registro dessa interação no RD Station CRM para que a equipe de vendas tenha visibilidade.
+Mapeamento de entidades:
+Anotação ou tarefa: A integração faz uma chamada para POST /deals/{deal_id}/notes ou POST /tasks. O corpo da requisição (description) pode conter um resumo do ticket ou um link para ele. O registro deve ser associado ao contact_id e, se relevante, ao deal_id da negociação mais importante, garantindo que o histórico do cliente seja completo e acessível para todas as equipes.
+
+Listar campanhas
+get
+https://api.rd.services/crm/v2/campaigns
+
+Listar campanhas da conta, permitindo que sistemas externos acessem e utilizem essas informações para atribuição.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+name	String	Filtro de nome.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+name
+created_at
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome da campanha.
+
+description
+string
+Descrição da campanha.
+
+created_at
+date-time
+Data de criação da campanha.
+
+updated_at
+date-time
+Data de atualização da campanha.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Updated 6 months ago
+
+Campanhas
+
+Criar campanha
+post
+https://api.rd.services/crm/v2/campaigns
+
+Permite a criação de uma nova campanha. É útil para registrar novas iniciativas de marketing antes que elas comecem a gerar negociações.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da campanha.
+
+description
+string
+Descrição da campanha.
+
+created_at
+date-time
+Data de criação da campanha.
+
+updated_at
+date-time
+Data de atualização da campanha.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Obter campanha
+get
+https://api.rd.services/crm/v2/campaigns/{id}
+
+Obter campanha específica pelo seu ID, como nome e descrição.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da campanha.
+
+description
+string
+Descrição da campanha.
+
+created_at
+date-time
+Data de criação da campanha.
+
+updated_at
+date-time
+Data de atualização da campanha.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Atualizar campanha
+put
+https://api.rd.services/crm/v2/campaigns/{id}
+
+Atualiza os dados de uma campanha existente. Pode ser usado para corrigir ou alterar o nome ou a descrição de uma iniciativa de marketing.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da campanha.
+
+description
+string
+Descrição da campanha.
+
+created_at
+date-time
+Data de criação da campanha.
+
+updated_at
+date-time
+Data de atualização da campanha.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Contatos
+O contato é uma entidade fundamental no RD Station CRM, representando um indivíduo com quem sua empresa se relaciona. Cada contato armazena informações essenciais como nome, email, telefone e pode estar associado a uma ou mais negociações e a uma empresa. A gestão eficaz de contatos é crucial para qualquer estratégia de relacionamento com o cliente.
+
+Listar contatos
+get
+https://api.rd.services/crm/v2/contacts
+
+Recupera uma lista paginada de todos os contatos na conta.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+name	String	Filtra por nome do contato. Suporta busca exata e busca por correspondência de termo (usando operador match ~).
+job_title	String	Filtra por título de cargo do contato. Suporta busca exata e busca por correspondência de termo (match).
+email	String	Filtra por endereço de e-mail do contato.
+phone	String	Filtra por número de telefone do contato.
+organization_id	String	Filtra por um ID de empresa.
+created_at	DateTime	Filtra contatos pela data e hora de criação.
+updated_at	DateTime	Filtra contatos pela data e hora da última atualização.
+@<custom_field_slug>	String	Filtra por um campo personalizado. Exemplo: cpf:111.111.111-11, erp_id:123.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+name
+created_at
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome do contato.
+
+job_title
+string
+Cargo do contato.
+
+emails
+array of objects
+Emails do contato.
+
+object
+email
+string
+Endereço de email.
+
+phones
+array of objects
+Telefones do contato.
+
+object
+phone
+string
+Telefone.
+
+type
+string
+enum
+Tipo do telefone.
+
+work fax home mobile
+
+birthday
+date
+Data de aniversário do contato. Formato: YYYY-MM-DD. Caso só tenha o mês e o dia, use 0000-MM-DD.
+
+social_profiles
+array of objects
+Perfis sociais do contato.
+
+object
+type
+string
+enum
+Tipo de perfil social.
+
+facebook linkedin skype
+
+username
+string
+Nome de usuário.
+
+organization_id
+string
+ID da organização.
+
+legal_bases
+array of objects
+Bases legais para o contato. (Saiba mais)
+
+object
+category
+string
+enum
+A categoria relativa à base legal.
+
+communications
+
+type
+string
+enum
+Qual base legal autoriza o tratamento dos dados pessoais.
+
+consent legitimate_interest pre_existent_contract judicial_process vital_interest public_interest
+
+status
+string
+enum
+Status da base legal.
+
+granted declined
+
+Show Details
+granted	Consentimento concedido pelo contato.
+declined	Consentimento recusado pelo contato.
+custom_fields
+object
+Campos personalizados do contato.
+
+Has additional fields
+created_at
+date-time
+Data de criação do contato.
+
+updated_at
+date-time
+Data de atualização do contato.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Criar contato
+post
+https://api.rd.services/crm/v2/contacts
+
+Cria um novo contato.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do contato.
+
+job_title
+string
+Cargo do contato.
+
+emails
+array of objects
+Emails do contato.
+
+object
+email
+string
+Endereço de email.
+
+phones
+array of objects
+Telefones do contato.
+
+object
+phone
+string
+Telefone.
+
+type
+string
+enum
+Tipo do telefone.
+
+work fax home mobile
+
+birthday
+date
+Data de aniversário do contato. Formato: YYYY-MM-DD. Caso só tenha o mês e o dia, use 0000-MM-DD.
+
+social_profiles
+array of objects
+Perfis sociais do contato.
+
+object
+type
+string
+enum
+Tipo de perfil social.
+
+facebook linkedin skype
+
+username
+string
+Nome de usuário.
+
+organization_id
+string
+ID da organização.
+
+legal_bases
+array of objects
+Bases legais para o contato. (Saiba mais)
+
+object
+category
+string
+enum
+A categoria relativa à base legal.
+
+communications
+
+type
+string
+enum
+Qual base legal autoriza o tratamento dos dados pessoais.
+
+consent legitimate_interest pre_existent_contract judicial_process vital_interest public_interest
+
+status
+string
+enum
+Status da base legal.
+
+granted declined
+
+Show Details
+granted	Consentimento concedido pelo contato.
+declined	Consentimento recusado pelo contato.
+custom_fields
+object
+Campos personalizados do contato.
+
+Has additional fields
+created_at
+date-time
+Data de criação do contato.
+
+updated_at
+date-time
+Data de atualização do contato.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Obter contato
+get
+https://api.rd.services/crm/v2/contacts/{id}
+
+Obter contato específico pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do contato.
+
+job_title
+string
+Cargo do contato.
+
+emails
+array of objects
+Emails do contato.
+
+object
+email
+string
+Endereço de email.
+
+phones
+array of objects
+Telefones do contato.
+
+object
+phone
+string
+Telefone.
+
+type
+string
+enum
+Tipo do telefone.
+
+work fax home mobile
+
+birthday
+date
+Data de aniversário do contato. Formato: YYYY-MM-DD. Caso só tenha o mês e o dia, use 0000-MM-DD.
+
+social_profiles
+array of objects
+Perfis sociais do contato.
+
+object
+type
+string
+enum
+Tipo de perfil social.
+
+facebook linkedin skype
+
+username
+string
+Nome de usuário.
+
+organization_id
+string
+ID da organização.
+
+legal_bases
+array of objects
+Bases legais para o contato. (Saiba mais)
+
+object
+category
+string
+enum
+A categoria relativa à base legal.
+
+communications
+
+type
+string
+enum
+Qual base legal autoriza o tratamento dos dados pessoais.
+
+consent legitimate_interest pre_existent_contract judicial_process vital_interest public_interest
+
+status
+string
+enum
+Status da base legal.
+
+granted declined
+
+Show Details
+granted	Consentimento concedido pelo contato.
+declined	Consentimento recusado pelo contato.
+custom_fields
+object
+Campos personalizados do contato.
+
+Has additional fields
+created_at
+date-time
+Data de criação do contato.
+
+updated_at
+date-time
+Data de atualização do contato.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Atualizar contato
+put
+https://api.rd.services/crm/v2/contacts/{id}
+
+Atualiza os campos de um contato existente.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do contato.
+
+job_title
+string
+Cargo do contato.
+
+emails
+array of objects
+Emails do contato.
+
+object
+email
+string
+Endereço de email.
+
+phones
+array of objects
+Telefones do contato.
+
+object
+phone
+string
+Telefone.
+
+type
+string
+enum
+Tipo do telefone.
+
+work fax home mobile
+
+birthday
+date
+Data de aniversário do contato. Formato: YYYY-MM-DD. Caso só tenha o mês e o dia, use 0000-MM-DD.
+
+social_profiles
+array of objects
+Perfis sociais do contato.
+
+object
+type
+string
+enum
+Tipo de perfil social.
+
+facebook linkedin skype
+
+username
+string
+Nome de usuário.
+
+organization_id
+string
+ID da organização.
+
+legal_bases
+array of objects
+Bases legais para o contato. (Saiba mais)
+
+object
+category
+string
+enum
+A categoria relativa à base legal.
+
+communications
+
+type
+string
+enum
+Qual base legal autoriza o tratamento dos dados pessoais.
+
+consent legitimate_interest pre_existent_contract judicial_process vital_interest public_interest
+
+status
+string
+enum
+Status da base legal.
+
+granted declined
+
+Show Details
+granted	Consentimento concedido pelo contato.
+declined	Consentimento recusado pelo contato.
+custom_fields
+object
+Campos personalizados do contato.
+
+Has additional fields
+created_at
+date-time
+Data de criação do contato.
+
+updated_at
+date-time
+Data de atualização do contato.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Campos personalizados
+Os campos personalizados oferecem a flexibilidade de estender os dados padrões do RD Station CRM. Eles permitem que as empresas capturem informações específicas e relevantes para seus processos de negócio, adicionando campos a entidades como negociações, contatos, empresas e produtos. A gestão desses campos via API possibilita a sincronização de estruturas de dados complexas entre o CRM e outros sistemas.
+
+Listar campos personalizados
+get
+https://api.rd.services/crm/v2/custom_fields
+
+Listar campos personalizados da conta, permitindo filtrar por entidade (negociação, contato, etc.) para entender a estrutura de dados de cada recurso.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+entity	String	Permite filtrar campos personalizados de uma entidade. Opções: organization, deal, contact, product.
+slug	String	Permite filtrar campos personalizados pelo slug.
+is:required	Boolean	Filtra por campos personalizados que são obrigatórios.
+is:visible	Boolean	Filtra por campos personalizados que são visíveis.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+slug
+order
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome do campo personalizado.
+
+slug
+string
+Identificador único em texto do campo personalizado.
+
+type
+string
+enum
+Tipo do campo personalizado
+
+text date option multiple_choice
+
+entity
+string
+enum
+Entidade à qual o campo é aplicado.
+
+deal contact organization product
+
+options
+array of strings
+Opções do campo personalizado, aplicável para tipos como option e multiple_choice.
+
+unique
+boolean
+Unicidade do campo personalizado.
+
+allow_new_option
+boolean
+Permitir novas opções para campos do tipo option e multiple_choice.
+
+order
+integer
+Ordem do campo personalizado.
+
+required_rules
+array of objects
+Regras que definem quando o campo é obrigatório.
+
+object
+property
+string
+Propriedade da regra de obrigatoriedade. Exemplo: deal_stage_id.
+
+value
+string
+ID da propriedade da regra de obrigatoriedade.
+
+always
+boolean
+Se verdadeiro, a regra sempre se aplica.
+
+display_rules
+array of objects
+Regras que definem quando o campo é exibido.
+
+object
+property
+string
+Propriedade da regra de exibição. Exemplo: deal_pipeline_id.
+
+value
+string
+ID da propriedade da regra de exibição.
+
+always
+boolean
+Se verdadeiro, a regra sempre se aplica.
+
+created_at
+date-time
+Data de criação do campo personalizado.
+
+updated_at
+date-time
+Data de atualização do campo personalizado.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Criar campo personalizado
+post
+https://api.rd.services/crm/v2/custom_fields
+
+Permite a criação de um novo campo personalizado para uma entidade específica, definindo seu rótulo, tipo (texto, data, opção, etc.) e outras propriedades, como obrigatoriedade e visibilidade.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do campo personalizado.
+
+slug
+string
+Identificador único em texto do campo personalizado.
+
+type
+string
+enum
+Tipo do campo personalizado
+
+text date option multiple_choice
+
+entity
+string
+enum
+Entidade à qual o campo é aplicado.
+
+deal contact organization product
+
+options
+array of strings
+Opções do campo personalizado, aplicável para tipos como option e multiple_choice.
+
+unique
+boolean
+Unicidade do campo personalizado.
+
+allow_new_option
+boolean
+Permitir novas opções para campos do tipo option e multiple_choice.
+
+order
+integer
+Ordem do campo personalizado.
+
+required_rules
+array of objects
+Regras que definem quando o campo é obrigatório.
+
+object
+property
+string
+Propriedade da regra de obrigatoriedade. Exemplo: deal_stage_id.
+
+value
+string
+ID da propriedade da regra de obrigatoriedade.
+
+always
+boolean
+Se verdadeiro, a regra sempre se aplica.
+
+display_rules
+array of objects
+Regras que definem quando o campo é exibido.
+
+object
+property
+string
+Propriedade da regra de exibição. Exemplo: deal_pipeline_id.
+
+value
+string
+ID da propriedade da regra de exibição.
+
+always
+boolean
+Se verdadeiro, a regra sempre se aplica.
+
+created_at
+date-time
+Data de criação do campo personalizado.
+
+updated_at
+date-time
+Data de atualização do campo personalizado.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Obter campo personalizado
+get
+https://api.rd.services/crm/v2/custom_fields/{id}
+
+Obter campo personalizado pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do campo personalizado.
+
+slug
+string
+Identificador único em texto do campo personalizado.
+
+type
+string
+enum
+Tipo do campo personalizado
+
+text date option multiple_choice
+
+entity
+string
+enum
+Entidade à qual o campo é aplicado.
+
+deal contact organization product
+
+options
+array of strings
+Opções do campo personalizado, aplicável para tipos como option e multiple_choice.
+
+unique
+boolean
+Unicidade do campo personalizado.
+
+allow_new_option
+boolean
+Permitir novas opções para campos do tipo option e multiple_choice.
+
+order
+integer
+Ordem do campo personalizado.
+
+required_rules
+array of objects
+Regras que definem quando o campo é obrigatório.
+
+object
+property
+string
+Propriedade da regra de obrigatoriedade. Exemplo: deal_stage_id.
+
+value
+string
+ID da propriedade da regra de obrigatoriedade.
+
+always
+boolean
+Se verdadeiro, a regra sempre se aplica.
+
+display_rules
+array of objects
+Regras que definem quando o campo é exibido.
+
+object
+property
+string
+Propriedade da regra de exibição. Exemplo: deal_pipeline_id.
+
+value
+string
+ID da propriedade da regra de exibição.
+
+always
+boolean
+Se verdadeiro, a regra sempre se aplica.
+
+created_at
+date-time
+Data de criação do campo personalizado.
+
+updated_at
+date-time
+Data de atualização do campo personalizado.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Atualizar campo personalizado
+put
+https://api.rd.services/crm/v2/custom_fields/{id}
+
+Atualiza as propriedades do campo personalizado existente. É útil para alterar títulos, adicionar novas opções a um campo de múltipla escolha ou modificar regras de visibilidade.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do campo personalizado.
+
+slug
+string
+Identificador único em texto do campo personalizado.
+
+type
+string
+enum
+Tipo do campo personalizado
+
+text date option multiple_choice
+
+entity
+string
+enum
+Entidade à qual o campo é aplicado.
+
+deal contact organization product
+
+options
+array of strings
+Opções do campo personalizado, aplicável para tipos como option e multiple_choice.
+
+unique
+boolean
+Unicidade do campo personalizado.
+
+allow_new_option
+boolean
+Permitir novas opções para campos do tipo option e multiple_choice.
+
+order
+integer
+Ordem do campo personalizado.
+
+required_rules
+array of objects
+Regras que definem quando o campo é obrigatório.
+
+object
+property
+string
+Propriedade da regra de obrigatoriedade. Exemplo: deal_stage_id.
+
+value
+string
+ID da propriedade da regra de obrigatoriedade.
+
+always
+boolean
+Se verdadeiro, a regra sempre se aplica.
+
+display_rules
+array of objects
+Regras que definem quando o campo é exibido.
+
+object
+property
+string
+Propriedade da regra de exibição. Exemplo: deal_pipeline_id.
+
+value
+string
+ID da propriedade da regra de exibição.
+
+always
+boolean
+Se verdadeiro, a regra sempre se aplica.
+
+created_at
+date-time
+Data de criação do campo personalizado.
+
+updated_at
+date-time
+Data de atualização do campo personalizado.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Deletar campo personalizado
+delete
+https://api.rd.services/crm/v2/custom_fields/{id}
+
+Deletar permanentemente o campo personalizado da conta. Esta é uma ação destrutiva e deve ser usada com cautela, pois pode resultar na perda de dados armazenados nesse campo em todos os registros associados.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+204
+No Content
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+Produtos na negociação
+Os produtos da negociação representam a associação entre uma negociação e um produto do seu catálogo. São fundamentais para detalhar quais itens compõem o valor total de uma negociação.
+
+Cada vez que um produto é adicionado a uma negociação, um registro de produto da negociação é criado, especificando não apenas o produto, mas também a quantidade e o preço unitário negociado para aquela oportunidade específica. Isso permite um cálculo preciso do valor da negociação e uma gestão de inventário mais eficaz.
+
+A manipulação deste recurso é essencial para empresas que vendem múltiplos produtos ou serviços e precisam de um controle granular sobre os itens de cada venda.
+
+Listar produtos na negociação
+get
+https://api.rd.services/crm/v2/deals/{deal_id}/products
+
+Listar produtos associados a uma negociação específica. É ideal para cenários onde é necessário obter os detalhes dos itens de uma venda, gerar um pedido ou sincronizar informações de carrinho de compras com o CRM.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+product_id	String	Filtra por um ID do produto.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+product_id
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+deal_id
+string
+required
+Identificador único.
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+price
+float
+Preço.
+
+quantity
+float
+Quantidade.
+
+discount_type
+string
+enum
+Tipo de desconto.
+
+amount percentage
+
+discount
+float
+Desconto.
+
+total_price
+float
+Total.
+
+billing_frequency
+string
+enum
+Recorrência.
+
+one-time monthly annually
+
+product_id
+string
+ID do produto.
+
+created_at
+date-time
+Data de criação.
+
+updated_at
+date-time
+Data de atualização.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Criar produto na negociação
+post
+https://api.rd.services/crm/v2/deals/{deal_id}/products
+
+Adiciona um produto do catálogo a uma negociação existente, especificando quantidade, preço e desconto. Permite construir ou modificar a composição de uma venda programaticamente.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+deal_id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+price
+float
+Preço.
+
+quantity
+float
+Quantidade.
+
+discount_type
+string
+enum
+Tipo de desconto.
+
+amount percentage
+
+discount
+float
+Desconto.
+
+total_price
+float
+Total.
+
+billing_frequency
+string
+enum
+Recorrência.
+
+one-time monthly annually
+
+product_id
+string
+ID do produto.
+
+created_at
+date-time
+Data de criação.
+
+updated_at
+date-time
+Data de atualização.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Atualizar produto na negociação
+put
+https://api.rd.services/crm/v2/deals/{deal_id}/products/{id}
+
+Atualizar os produtos que já estão associados a uma negociação, como sua quantidade, preço ou desconto.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+deal_id
+string
+required
+Identificador único.
+
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+price
+float
+Preço.
+
+quantity
+float
+Quantidade.
+
+discount_type
+string
+enum
+Tipo de desconto.
+
+amount percentage
+
+discount
+float
+Desconto.
+
+total_price
+float
+Total.
+
+billing_frequency
+string
+enum
+Recorrência.
+
+one-time monthly annually
+
+product_id
+string
+ID do produto.
+
+created_at
+date-time
+Data de criação.
+
+updated_at
+date-time
+Data de atualização.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+Listar negociações
+get
+https://api.rd.services/crm/v2/deals
+
+Este end-point recupera uma lista paginada de todas as negociações na conta, permitindo a filtragem por diversos critérios, como funil, etapa ou proprietário. É útil para sincronizar dados de negociações com sistemas externos ou para construir painéis de visualização personalizados.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+id	String	Filtra por um ou mais IDs de negociação.
+name	String	Filtra por nome da negociação, suportando busca exata ou por correspondência (usando operador match ~).
+rating	Integer	Filtra por um valor de classificação numérica da negociação.
+status	String	Filtra por status da negociação.
+closed_at	DateTime	Filtra por data e hora de fechamento da negociação.
+created_at	DateTime	Filtra por data e hora de criação da negociação.
+updated_at	DateTime	Filtra por data e hora da última atualização da negociação.
+expected_close_date	Date	Filtra pela data de fechamento prevista da negociação.
+organization_id	String	Filtra por um ID de empresa.
+contact_id	String	Filtra por um ou mais IDs de contato.
+stage_id	String	Filtra por um ID de etapa do funil de vendas.
+lost_reason_id	String	Filtra por um ID de motivo de perda da negociação.
+campaign_id	String	Filtra por um ID de campanha.
+owner_id	String	Filtra por um ID de proprietário (usuário) da negociação.
+pipeline_id	String	Filtra negociações por um ID de funil de vendas.
+product_ids	String	Filtra negociações que contêm um ou mais IDs de produtos.
+has:product	Boolean	Filtra negociações que têm produtos associados.
+@<custom_field_slug>	String	Filtra por um campo personalizado. Exemplo: filial:norte, erp_id:123.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+name
+rating
+created_at
+updated_at
+closed_at
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome da negociação.
+
+recurrence_price
+float
+Valor recorrente da negociação.
+
+one_time_price
+float
+Valor único da negociação.
+
+total_price
+float
+Valor total da negociação.
+
+expected_close_date
+date
+Data de previsão de fechamento da negociação.
+
+rating
+integer
+Qualificação da negociação.
+
+status
+string
+enum
+Status da negociação.
+
+won lost ongoing paused
+
+closed_at
+date-time
+Data de fechamento da negociação.
+
+pipeline_id
+string
+ID do funil de vendas da negociação.
+
+stage_id
+string
+ID da etapa do funil de vendas da negociação.
+
+owner_id
+string
+ID do usuário responsável pela negociação.
+
+source_id
+string
+ID da fonte da negociação.
+
+campaign_id
+string
+ID da campanha da negociação.
+
+lost_reason_id
+string
+ID do motivo de perda da negociação.
+
+organization_id
+string
+ID da empresa associada à negociação.
+
+contact_ids
+array of strings
+IDs dos contatos associados à negociação.
+
+custom_fields
+object
+Campos personalizados da negociação.
+
+Has additional fields
+created_at
+date-time
+Data de criação da negociação.
+
+updated_at
+date-time
+Data de atualização da negociação.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Criar negociação
+post
+https://api.rd.services/crm/v2/deals
+
+Este end-point permite a criação de uma nova negociação no RD Station CRM. É o ponto de partida para automatizar a entrada de novas oportunidades de venda, seja a partir de um formulário no site, de outro sistema ou de um evento de marketing.
+
+Importante: Somente é permitido criar negociações com status ongoing.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+👍
+Para criar Negociações em Funis específicos, utilize o atributo "stage_id", informando o ID da Etapa do Funil que deseja criá-la.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da negociação.
+
+recurrence_price
+float
+Valor recorrente da negociação.
+
+one_time_price
+float
+Valor único da negociação.
+
+total_price
+float
+Valor total da negociação.
+
+expected_close_date
+date
+Data de previsão de fechamento da negociação.
+
+rating
+integer
+Qualificação da negociação.
+
+status
+string
+enum
+Status da negociação.
+
+won lost ongoing paused
+
+closed_at
+date-time
+Data de fechamento da negociação.
+
+pipeline_id
+string
+ID do funil de vendas da negociação.
+
+stage_id
+string
+ID da etapa do funil de vendas da negociação.
+
+owner_id
+string
+ID do usuário responsável pela negociação.
+
+source_id
+string
+ID da fonte da negociação.
+
+campaign_id
+string
+ID da campanha da negociação.
+
+lost_reason_id
+string
+ID do motivo de perda da negociação.
+
+organization_id
+string
+ID da empresa associada à negociação.
+
+contact_ids
+array of strings
+IDs dos contatos associados à negociação.
+
+custom_fields
+object
+Campos personalizados da negociação.
+
+Has additional fields
+created_at
+date-time
+Data de criação da negociação.
+
+updated_at
+date-time
+Data de atualização da negociação.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Obter negociação
+get
+https://api.rd.services/crm/v2/deals/{id}
+
+Obter negociação específica pelo seu ID. Essencial para obter o estado atual de uma oportunidade antes de atualizá-la ou para obter suas informações em uma interface externa.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da negociação.
+
+recurrence_price
+float
+Valor recorrente da negociação.
+
+one_time_price
+float
+Valor único da negociação.
+
+total_price
+float
+Valor total da negociação.
+
+expected_close_date
+date
+Data de previsão de fechamento da negociação.
+
+rating
+integer
+Qualificação da negociação.
+
+status
+string
+enum
+Status da negociação.
+
+won lost ongoing paused
+
+closed_at
+date-time
+Data de fechamento da negociação.
+
+pipeline_id
+string
+ID do funil de vendas da negociação.
+
+stage_id
+string
+ID da etapa do funil de vendas da negociação.
+
+owner_id
+string
+ID do usuário responsável pela negociação.
+
+source_id
+string
+ID da fonte da negociação.
+
+campaign_id
+string
+ID da campanha da negociação.
+
+lost_reason_id
+string
+ID do motivo de perda da negociação.
+
+organization_id
+string
+ID da empresa associada à negociação.
+
+contact_ids
+array of strings
+IDs dos contatos associados à negociação.
+
+custom_fields
+object
+Campos personalizados da negociação.
+
+Has additional fields
+created_at
+date-time
+Data de criação da negociação.
+
+updated_at
+date-time
+Data de atualização da negociação.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Atualizar negociação
+put
+https://api.rd.services/crm/v2/deals/{id}
+
+Atualiza os campos da negociação. Este end-point pode ser usado para mover a negociação entre etapas ou funis, re-atribuir o proprietário ou modificar qualquer outro campo editável de negociações.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da negociação.
+
+recurrence_price
+float
+Valor recorrente da negociação.
+
+one_time_price
+float
+Valor único da negociação.
+
+total_price
+float
+Valor total da negociação.
+
+expected_close_date
+date
+Data de previsão de fechamento da negociação.
+
+rating
+integer
+Qualificação da negociação.
+
+status
+string
+enum
+Status da negociação.
+
+won lost ongoing paused
+
+closed_at
+date-time
+Data de fechamento da negociação.
+
+pipeline_id
+string
+ID do funil de vendas da negociação.
+
+stage_id
+string
+ID da etapa do funil de vendas da negociação.
+
+owner_id
+string
+ID do usuário responsável pela negociação.
+
+source_id
+string
+ID da fonte da negociação.
+
+campaign_id
+string
+ID da campanha da negociação.
+
+lost_reason_id
+string
+ID do motivo de perda da negociação.
+
+organization_id
+string
+ID da empresa associada à negociação.
+
+contact_ids
+array of strings
+IDs dos contatos associados à negociação.
+
+custom_fields
+object
+Campos personalizados da negociação.
+
+Has additional fields
+created_at
+date-time
+Data de criação da negociação.
+
+updated_at
+date-time
+Data de atualização da negociação.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Anexos
+Os Anexos (Files) são utilizados para armazenar documentos, imagens e outros arquivos relevantes associados a uma negociação (Deal). Eles facilitam o registro e o compartilhamento de informações importantes durante o processo de venda, como propostas comerciais, contratos e comprovantes.
+
+A gestão de anexos via API permite automatizar o envio e o controle de arquivos, integrando o RD Station CRM a sistemas externos de armazenamento, assinatura eletrônica ou gestão de documentos.
+
+Extensões de arquivos não suportadas
+Extensões
+exe, msi, bat, cmd, com, scr, pif, vbs, js, jse, wsf, ps1, dll, sys, lnk, reg, jar
+Arquivos que possuam múltiplas extensões também serão invalidados se qualquer uma delas estiver na lista de extensões não suportadas. Exemplo: file.exe.png.
+
+
+Listar arquivos da negociação
+get
+https://api.rd.services/crm/v2/deals/{deal_id}/files
+
+Lista os arquivos de uma negociação específica. É útil para exibir a lista de arquivos relacionados à jornada de vendas.
+
+Ordenação
+Propriedades disponíveis para ordenação.
+
+name
+created_at
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+deal_id
+string
+required
+Identificador único.
+
+Query Params
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+length ≤ 524288
+Nome do arquivo.
+
+size
+int64
+Tamanho do arquivo em bytes.
+
+url
+uri
+URL do arquivo.
+
+created_at
+date-time
+Data que o arquivo foi criado.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+Fazer upload de arquivo em uma negociação
+post
+https://api.rd.services/crm/v2/deals/{deal_id}/files
+
+Envia um arquivo para uma negociação específica. Este endpoint aceita requisições multipart/form-data, permitindo o upload direto de arquivos como imagens, PDFs e documentos relacionados à venda.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+deal_id
+string
+required
+Identificador único da negociação.
+
+Body Params
+data[file]
+file
+required
+Arquivo a ser enviado (ex.: PDF, imagem, documento, etc.)
+
+Nenhum arquivo escolhido
+Responses
+
+201
+Arquivo criado com sucesso
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+length ≤ 524288
+Nome do arquivo.
+
+size
+int64
+Tamanho do arquivo em bytes.
+
+url
+uri
+URL do arquivo.
+
+created_at
+date-time
+Data que o arquivo foi criado.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Deletar arquivo da negociação
+delete
+https://api.rd.services/crm/v2/deals/{deal_id}/files/{id}
+
+Remove permanentemente um arquivo específico de uma negociação. Use este endpoint para excluir documentos, imagens ou anexos que não são mais relevantes no processo de venda.
+
+O arquivo é identificado de forma única dentro da negociação.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+deal_id
+string
+required
+Identificador único da negociação.
+
+id
+string
+required
+Identificador único do arquivo a ser deletado.
+
+Responses
+204
+Arquivo deletado com sucesso (sem conteúdo de retorno).
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+Motivos de perda
+Os motivos de perda são utilizados para padronizar as razões pelas quais uma negociação é marcada como "perdida". Manter uma lista consistente de motivos de perda é crucial para a análise de vendas, permitindo que as equipes identifiquem tendências, entendam as objeções dos clientes e aprimorem seus processos comerciais e produtos.
+
+Listar motivos de perda
+get
+https://api.rd.services/crm/v2/lost_reasons
+
+Recupera a lista de todos os motivos de perda configurados na conta, tornando-os disponíveis para seleção em sistemas integrados.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+name	String	Permite filtrar por nome do motivo de perda.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+name
+created_at
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome do motivo de perda.
+
+created_at
+date-time
+Data de criação do motivo de perda.
+
+updated_at
+date-time
+Data de atualização do motivo de perda.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Criar motivo de perda
+post
+https://api.rd.services/crm/v2/lost_reasons
+
+Permite a criação de um novo motivo de perda, expandindo as opções disponíveis para classificar negociações perdidas.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do motivo de perda.
+
+created_at
+date-time
+Data de criação do motivo de perda.
+
+updated_at
+date-time
+Data de atualização do motivo de perda.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Obter motivo de perda
+get
+https://api.rd.services/crm/v2/lost_reasons/{id}
+
+Obter motivo de perda específico pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do motivo de perda.
+
+created_at
+date-time
+Data de criação do motivo de perda.
+
+updated_at
+date-time
+Data de atualização do motivo de perda.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+Atualizar motivo de perda
+put
+https://api.rd.services/crm/v2/lost_reasons/{id}
+
+Atualiza o nome de um motivo de perda existente, permitindo a correção ou o refinamento das opções de classificação.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do motivo de perda.
+
+created_at
+date-time
+Data de criação do motivo de perda.
+
+updated_at
+date-time
+Data de atualização do motivo de perda.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Anotações
+O objeto "Anotação" (Note) é um registro de texto associado a uma "Negociação" (Deal). Ele serve para documentar interações, observações importantes, próximos passos ou qualquer informação relevante que precise ser armazenada no histórico da negociação. As anotações são essenciais para manter a equipe alinhada, garantindo que todos os membros tenham acesso ao contexto completo da negociação. A gestão de anotações via API permite integrar o RD Station CRM com outras plataformas de comunicação ou automatizar o registro de atividades.
+Listar anotações da negociação
+get
+https://api.rd.services/crm/v2/deals/{deal_id}/notes
+
+Lista as anotações de uma negociação específica. É útil para exibir o histórico de interações durante a jornada de vendas ou para análises de comunicação.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+registered_at	DateTime	Filtra por data e hora de registro da anotação.
+user_id	String	Filtra pelo ID do usuário que criou a anotação.
+is:pinned	Boolean	Filtra anotações que foram fixadas.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+registered_at
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+deal_id
+string
+required
+Identificador único.
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+description
+string
+length ≤ 524288
+Texto da anotação.
+
+user_id
+string
+ID do usuário que criou a anotação.
+
+registered_at
+date-time
+Data que a anotação foi criada.
+
+pinned_at
+date-time
+Data que a anotação foi fixada.
+
+edited_by_id
+string
+ID do usuário que editou a anotação.
+
+edited_at
+date-time
+Data de edição da anotação.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Criar anotação na negociação
+post
+https://api.rd.services/crm/v2/deals/{deal_id}/notes
+
+Adiciona uma nova anotação em uma negociação específica. É o caminho para automatizar a entrada de registros de chamadas, resumos de reuniões ou qualquer outra informação relevante para a venda.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+deal_id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+description
+string
+length ≤ 524288
+Texto da anotação.
+
+user_id
+string
+ID do usuário que criou a anotação.
+
+registered_at
+date-time
+Data que a anotação foi criada.
+
+pinned_at
+date-time
+Data que a anotação foi fixada.
+
+edited_by_id
+string
+ID do usuário que editou a anotação.
+
+edited_at
+date-time
+Data de edição da anotação.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Empresas
+A empresa representa uma entidade de negócio com a qual sua empresa se relaciona. Ela serve como um contêiner para agrupar informações relacionadas a uma mesma companhia, proporcionando uma visão completa do cliente.
+Listar empresas
+get
+https://api.rd.services/crm/v2/organizations
+
+Recupera uma lista paginada de todas as empresas na conta.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+name	String	Filtra pelo nome da empresa.
+owner_id	String	Filtra por um ID de proprietário.
+segment_ids	String	Filtra por um ou mais IDs de segmentos.
+created_at	DateTime	Filtra pela data e hora de criação da empresa.
+updated_at	DateTime	Filtra pela data e hora da última atualização da empresa.
+@<custom_field_slug>	String	Filtra por um campo personalizado. Exemplo: cnpj:11.111.111/0001-11, erp_id:123.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+name
+created_at
+updated_at
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome da empresa.
+
+description
+string
+Descrição da empresa.
+
+url
+string
+Site da empresa.
+
+address
+object
+Endereço da empresa.
+
+
+address object
+segment_ids
+array of strings
+IDs dos segmentos da empresa.
+
+follower_ids
+array of strings
+IDs dos usuários seguidores da empresa.
+
+owner_id
+string
+ID do usuário responsável pela empresa.
+
+custom_fields
+object
+Campos personalizados da empresa.
+
+Has additional fields
+created_at
+date-time
+Data de criação da empresa.
+
+updated_at
+date-time
+Data de atualização da empresa.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+Criar empresa
+post
+https://api.rd.services/crm/v2/organizations
+
+Cria uma nova empresa. Nomes de empresa são únicos em toda a conta.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da empresa.
+
+description
+string
+Descrição da empresa.
+
+url
+string
+Site da empresa.
+
+address
+object
+Endereço da empresa.
+
+
+address object
+segment_ids
+array of strings
+IDs dos segmentos da empresa.
+
+follower_ids
+array of strings
+IDs dos usuários seguidores da empresa.
+
+owner_id
+string
+ID do usuário responsável pela empresa.
+
+custom_fields
+object
+Campos personalizados da empresa.
+
+Has additional fields
+created_at
+date-time
+Data de criação da empresa.
+
+updated_at
+date-time
+Data de atualização da empresa.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Obter empresa
+get
+https://api.rd.services/crm/v2/organizations/{id}
+
+Obter empresa específica pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da empresa.
+
+description
+string
+Descrição da empresa.
+
+url
+string
+Site da empresa.
+
+address
+object
+Endereço da empresa.
+
+
+address object
+segment_ids
+array of strings
+IDs dos segmentos da empresa.
+
+follower_ids
+array of strings
+IDs dos usuários seguidores da empresa.
+
+owner_id
+string
+ID do usuário responsável pela empresa.
+
+custom_fields
+object
+Campos personalizados da empresa.
+
+Has additional fields
+created_at
+date-time
+Data de criação da empresa.
+
+updated_at
+date-time
+Data de atualização da empresa.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+Atualizar empresa
+put
+https://api.rd.services/crm/v2/organizations/{id}
+
+Atualiza os campos de uma empresa existente.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da empresa.
+
+description
+string
+Descrição da empresa.
+
+url
+string
+Site da empresa.
+
+address
+object
+Endereço da empresa.
+
+
+address object
+segment_ids
+array of strings
+IDs dos segmentos da empresa.
+
+follower_ids
+array of strings
+IDs dos usuários seguidores da empresa.
+
+owner_id
+string
+ID do usuário responsável pela empresa.
+
+custom_fields
+object
+Campos personalizados da empresa.
+
+Has additional fields
+created_at
+date-time
+Data de criação da empresa.
+
+updated_at
+date-time
+Data de atualização da empresa.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Updated 6 months ago
+
+Obter empresa
+
+Funis de vendas
+No RD Station CRM, um funil de vendas é uma representação visual do processo de vendas, dividido em etapas sequenciais. Os funis de vendas permitem organizar e rastrear negociações à medida que progridem desde o contato inicial até o fechamento.
+
+Uma conta pode ter múltiplos funis de vendas para diferentes processos de vendas, como "Vendas Inbound", "Vendas Enterprise". As etapas do funil de vendas representam os marcos chave nesse processo, como "Qualificação", "Proposta Enviada", "Negociação". Os end-points de funis de vendas permitem a gestão programática dessas estruturas.
+
+Listar funis de vendas
+get
+https://api.rd.services/crm/v2/pipelines
+
+Listar funis de vendas.
+
+Ordenação
+Propriedades disponíveis para ordenação.
+
+order
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome do funil de vendas.
+
+order
+integer
+Ordem do funil de vendas.
+
+stage_ids
+array of strings
+IDs das etapas do funil de vendas.
+
+created_at
+date-time
+Data de criação do funil de vendas.
+
+updated_at
+date-time
+Data de atualização do funil de vendas.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Criar funil de vendas
+post
+https://api.rd.services/crm/v2/pipelines
+
+Ao criar um novo funil de vendas ele é automaticamente preenchido com as etapas padrões de um funil de vendas, que posteriormente poderão ser alteradas.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do funil de vendas.
+
+order
+integer
+Ordem do funil de vendas.
+
+stage_ids
+array of strings
+IDs das etapas do funil de vendas.
+
+created_at
+date-time
+Data de criação do funil de vendas.
+
+updated_at
+date-time
+Data de atualização do funil de vendas.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Obter funil de vendas
+get
+https://api.rd.services/crm/v2/pipelines/{id}
+
+Obter funil de vendas específico pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do funil de vendas.
+
+order
+integer
+Ordem do funil de vendas.
+
+stage_ids
+array of strings
+IDs das etapas do funil de vendas.
+
+created_at
+date-time
+Data de criação do funil de vendas.
+
+updated_at
+date-time
+Data de atualização do funil de vendas.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Atualizar funil de vendas
+put
+https://api.rd.services/crm/v2/pipelines/{id}
+
+Atualiza o nome ou a ordem de um funil de vendas existente.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do funil de vendas.
+
+order
+integer
+Ordem do funil de vendas.
+
+stage_ids
+array of strings
+IDs das etapas do funil de vendas.
+
+created_at
+date-time
+Data de criação do funil de vendas.
+
+updated_at
+date-time
+Data de atualização do funil de vendas.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Produtos
+Os produtos representam o catálogo de itens ou serviços que a empresa comercializa. Cada produto pode ter um nome, descrição, preço e visibilidade. A gestão do catálogo de produtos via API é essencial para manter a consistência das informações entre o CRM e outros sistemas, como de ERP, faturamento ou e-commerce, garantindo que as negociações reflitam as ofertas atuais.
+
+Listar produtos
+get
+https://api.rd.services/crm/v2/products
+
+O recurso "Produto" (Product) representa o catálogo de itens ou serviços que a empresa comercializa. Cada produto pode ter um nome, descrição, preço e visibilidade. A gestão do catálogo de produtos via API é essencial para manter a consistência das informações entre o CRM e sistemas de ERP, faturamento ou e-commerce, garantindo que as negociações reflitam as ofertas atuais.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+name	String	Permite filtrar produtos por nome. Suporta apenas correspondência exata.
+is:visible	Boolean	Filtra por produtos que são visíveis.
+@<custom_field_slug>	String	Filtra por um campo personalizado. Exemplo: color:blue, erp_id:123.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+name
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome do produto.
+
+description
+string
+Descrição do produto.
+
+price
+float
+Preço do produto.
+
+visible
+boolean
+Visibilidade do produto.
+
+custom_fields
+object
+Campos personalizados do produto.
+
+Has additional fields
+created_at
+date-time
+Data de criação do produto.
+
+updated_at
+date-time
+Data de atualização do produto.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Criar produto
+post
+https://api.rd.services/crm/v2/products
+
+Cria um novo produto com seus respectivos detalhes como nome, preço e descrição.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do produto.
+
+description
+string
+Descrição do produto.
+
+price
+float
+Preço do produto.
+
+visible
+boolean
+Visibilidade do produto.
+
+custom_fields
+object
+Campos personalizados do produto.
+
+Has additional fields
+created_at
+date-time
+Data de criação do produto.
+
+updated_at
+date-time
+Data de atualização do produto.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Obter produto
+get
+https://api.rd.services/crm/v2/products/{id}
+
+Recupera as informações completas de um produto específico pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do produto.
+
+description
+string
+Descrição do produto.
+
+price
+float
+Preço do produto.
+
+visible
+boolean
+Visibilidade do produto.
+
+custom_fields
+object
+Campos personalizados do produto.
+
+Has additional fields
+created_at
+date-time
+Data de criação do produto.
+
+updated_at
+date-time
+Data de atualização do produto.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Atualizar produto
+put
+https://api.rd.services/crm/v2/products/{id}
+
+Atualiza os dados de um produto existente no catálogo, como seu preço, nome ou visibilidade.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do produto.
+
+description
+string
+Descrição do produto.
+
+price
+float
+Preço do produto.
+
+visible
+boolean
+Visibilidade do produto.
+
+custom_fields
+object
+Campos personalizados do produto.
+
+Has additional fields
+created_at
+date-time
+Data de criação do produto.
+
+updated_at
+date-time
+Data de atualização do produto.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Segmentos
+Os segmentos são utilizados para categorizar ou classificar as empresas com base em critérios de negócio, como seu setor de atuação, porte ou região. A segmentação é uma ferramenta poderosa para organizar a base de clientes e aplicar estratégias de vendas e marketing mais direcionadas.
+
+Listar segmentos
+get
+https://api.rd.services/crm/v2/segments
+
+Recupera a lista de todos os segmentos de empresas configurados na conta.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+name	String	Permite filtrar segmentos por nome.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+name
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome do segmento.
+
+created_at
+date-time
+Data de criação do segmento.
+
+updated_at
+date-time
+Data de atualização do segmento.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Criar segmento
+post
+https://api.rd.services/crm/v2/segments
+
+Permite a criação de um novo segmento para classificar empresas.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do segmento.
+
+created_at
+date-time
+Data de criação do segmento.
+
+updated_at
+date-time
+Data de atualização do segmento.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Obter segmento
+get
+https://api.rd.services/crm/v2/segments/{id}
+
+Obter segmento específico pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do segmento.
+
+created_at
+date-time
+Data de criação do segmento.
+
+updated_at
+date-time
+Data de atualização do segmento.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Atualizar segmento
+put
+https://api.rd.services/crm/v2/segments/{id}
+
+Atualiza o nome de um segmento existente.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do segmento.
+
+created_at
+date-time
+Data de criação do segmento.
+
+updated_at
+date-time
+Data de atualização do segmento.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Fontes
+A fonte é utilizada para rastrear a origem das negociações. Fontes podem representar canais como "Formulário do site", "Indicação", "Evento presencial" ou "Prospecção ativa". A correta atribuição das fontes é vital para a análise da eficácia dos canais de aquisição de clientes.
+
+
+Listar fontes
+get
+https://api.rd.services/crm/v2/sources
+
+Recupera a lista de todas as fontes de negociação configuradas na conta.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+name	String	Permite filtrar fontes por nome.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+name
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome da fonte.
+
+description
+string
+Descrição da fonte.
+
+created_at
+date-time
+Data de criação da fonte.
+
+updated_at
+date-time
+Data de atualização da fonte.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Criar fonte
+post
+https://api.rd.services/crm/v2/sources
+
+Permite a criação de uma nova fonte, possibilitando o rastreamento de novos canais de aquisição.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da fonte.
+
+description
+string
+Descrição da fonte.
+
+created_at
+date-time
+Data de criação da fonte.
+
+updated_at
+date-time
+Data de atualização da fonte.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Updated 6 months ago
+
+Obter fonte
+get
+https://api.rd.services/crm/v2/sources/{id}
+
+Obter fonte específica pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da fonte.
+
+description
+string
+Descrição da fonte.
+
+created_at
+date-time
+Data de criação da fonte.
+
+updated_at
+date-time
+Data de atualização da fonte.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Atualizar fonte
+put
+https://api.rd.services/crm/v2/sources/{id}
+
+Obter fonte específica pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da fonte.
+
+description
+string
+Descrição da fonte.
+
+created_at
+date-time
+Data de criação da fonte.
+
+updated_at
+date-time
+Data de atualização da fonte.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Etapas do funil de vendas
+Uma etapa do funil de vendas representa um passo definido dentro de um processo de vendas, que é organizado em um funil de vendas. As negociações progridem através dessas etapas, desde a prospecção inicial até serem marcadas como ganhas ou perdidas.
+
+Cada etapa do funil de vendas possui um nome (exemplos: "Primeiro Contato", "Proposta Apresentada", "Negociação"), uma ordem que define sua posição no funil de vendas e descrições do que fazer nessa etapa.
+
+A correta configuração das etapas do funil de vendas é vital para a organização do processo comercial, a identificação de gargalos e a análise da eficiência da equipe de vendas em cada fase da jornada de compra do cliente.
+
+Listar etapas do funil de vendas
+get
+https://api.rd.services/crm/v2/pipelines/{pipeline_id}/stages
+
+Listar etapas de um funil de vendas específico.
+
+Ordenação
+Propriedades disponíveis para ordenação.
+
+order
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+pipeline_id
+string
+required
+Identificador único.
+
+Query Params
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome da etapa do funil de vendas.
+
+description
+string
+Descrição da etapa do funil de vendas.
+
+objective
+string
+Objetivo da etapa do funil de vendas.
+
+order
+integer
+Ordem da etapa do funil de vendas dentro do funil de vendas.
+
+created_at
+date-time
+Data de criação da etapa do funil de vendas.
+
+updated_at
+date-time
+Data de atualização da etapa do funil de vendas.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Updated 6 months ago
+
+Etapas do funil de vendas
+
+Criar etapa do funil de vendas
+post
+https://api.rd.services/crm/v2/pipelines/{pipeline_id}/stages
+
+Cria uma nova etapa dentro de um funil de vendas existente.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+pipeline_id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da etapa do funil de vendas.
+
+description
+string
+Descrição da etapa do funil de vendas.
+
+objective
+string
+Objetivo da etapa do funil de vendas.
+
+order
+integer
+Ordem da etapa do funil de vendas dentro do funil de vendas.
+
+created_at
+date-time
+Data de criação da etapa do funil de vendas.
+
+updated_at
+date-time
+Data de atualização da etapa do funil de vendas.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+Obter etapa do funil de vendas
+get
+https://api.rd.services/crm/v2/pipelines/{pipeline_id}/stages/{id}
+
+Obter etapa do funil de vendas específica.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+pipeline_id
+string
+required
+Identificador único.
+
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da etapa do funil de vendas.
+
+description
+string
+Descrição da etapa do funil de vendas.
+
+objective
+string
+Objetivo da etapa do funil de vendas.
+
+order
+integer
+Ordem da etapa do funil de vendas dentro do funil de vendas.
+
+created_at
+date-time
+Data de criação da etapa do funil de vendas.
+
+updated_at
+date-time
+Data de atualização da etapa do funil de vendas.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Updated 6 months ago
+
+Criar etapa do funil de vendas
+
+Atualizar etapa do funil de vendas
+put
+https://api.rd.services/crm/v2/pipelines/{pipeline_id}/stages/{id}
+
+Atualiza o nome ou a ordem de uma etapa do funil de vendas existente.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+pipeline_id
+string
+required
+Identificador único.
+
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome da etapa do funil de vendas.
+
+description
+string
+Descrição da etapa do funil de vendas.
+
+objective
+string
+Objetivo da etapa do funil de vendas.
+
+order
+integer
+Ordem da etapa do funil de vendas dentro do funil de vendas.
+
+created_at
+date-time
+Data de criação da etapa do funil de vendas.
+
+updated_at
+date-time
+Data de atualização da etapa do funil de vendas.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Tarefas
+Uma tarefa no RD Station CRM é uma atividade agendada que precisa ser concluída, como uma ligação, um email de acompanhamento ou uma reunião. As tarefas podem ser associadas a negociações e são atribuídas a um usuário específico. Elas são essenciais para organizar o trabalho da equipe de vendas e garantir que nenhuma oportunidade seja esquecida.
+
+Updated 6 months ago
+
+Listar tarefas
+get
+https://api.rd.services/crm/v2/tasks
+
+Recupera uma lista paginada de tarefas, com filtros para status, tipo e responsável.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+deal_id	String	Filtra por um ID de negócio específico.
+type	String	Filtra pelo tipo da tarefa.
+owner_ids	String	Filtra por um ou mais IDs de proprietários (donos).
+completed_at	DateTime	Filtra por data e hora de conclusão da tarefa.
+due_date	DateTime	Filtra por data e hora de vencimento da tarefa.
+status	String	Filtra pelo status da tarefa.
+Ordenação
+Propriedades disponíveis para ordenação.
+
+due_date
+deal_id
+completed_at
+updated_at
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+sort
+object
+Ordenação. (Saiba mais)
+
+
+sort object
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Assunto da tarefa.
+
+description
+string
+Notas ou descrição adicional da tarefa.
+
+type
+string
+enum
+Tipo da tarefa.
+
+call email meeting task lunch visit whatsapp
+
+status
+string
+enum
+Status da tarefa.
+
+open completed canceled
+
+due_date
+date-time
+Data limite para conclusão da tarefa.
+
+created_by_id
+string
+ID do usuário que criou a tarefa.
+
+completed_at
+date-time
+Data em que a tarefa foi concluída.
+
+completed_by_id
+string
+ID do usuário que concluiu a tarefa.
+
+deal_id
+string
+ID da negociação associada.
+
+owner_ids
+array of strings
+IDs dos usuários responsáveis pela tarefa.
+
+created_at
+date-time
+Data de criação da tarefa.
+
+updated_at
+date-time
+Data de atualização da tarefa.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Updated 6 months ago
+
+Criar tarefa
+post
+https://api.rd.services/crm/v2/tasks
+
+Cria uma nova tarefa e a associa a uma negociação. Tarefas só podem ser criadas com o status aberto (default).
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Assunto da tarefa.
+
+description
+string
+Notas ou descrição adicional da tarefa.
+
+type
+string
+enum
+Tipo da tarefa.
+
+call email meeting task lunch visit whatsapp
+
+status
+string
+enum
+Status da tarefa.
+
+open completed canceled
+
+due_date
+date-time
+Data limite para conclusão da tarefa.
+
+created_by_id
+string
+ID do usuário que criou a tarefa.
+
+completed_at
+date-time
+Data em que a tarefa foi concluída.
+
+completed_by_id
+string
+ID do usuário que concluiu a tarefa.
+
+deal_id
+string
+ID da negociação associada.
+
+owner_ids
+array of strings
+IDs dos usuários responsáveis pela tarefa.
+
+created_at
+date-time
+Data de criação da tarefa.
+
+updated_at
+date-time
+Data de atualização da tarefa.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Obter tarefa
+get
+https://api.rd.services/crm/v2/tasks/{id}
+
+Obter tarefa específica pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Assunto da tarefa.
+
+description
+string
+Notas ou descrição adicional da tarefa.
+
+type
+string
+enum
+Tipo da tarefa.
+
+call email meeting task lunch visit whatsapp
+
+status
+string
+enum
+Status da tarefa.
+
+open completed canceled
+
+due_date
+date-time
+Data limite para conclusão da tarefa.
+
+created_by_id
+string
+ID do usuário que criou a tarefa.
+
+completed_at
+date-time
+Data em que a tarefa foi concluída.
+
+completed_by_id
+string
+ID do usuário que concluiu a tarefa.
+
+deal_id
+string
+ID da negociação associada.
+
+owner_ids
+array of strings
+IDs dos usuários responsáveis pela tarefa.
+
+created_at
+date-time
+Data de criação da tarefa.
+
+updated_at
+date-time
+Data de atualização da tarefa.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Atualizar tarefa
+put
+https://api.rd.services/crm/v2/tasks/{id}
+
+Atualiza os campos de uma tarefa, como seu assunto, data ou status de conclusão.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Assunto da tarefa.
+
+description
+string
+Notas ou descrição adicional da tarefa.
+
+type
+string
+enum
+Tipo da tarefa.
+
+call email meeting task lunch visit whatsapp
+
+status
+string
+enum
+Status da tarefa.
+
+open completed canceled
+
+due_date
+date-time
+Data limite para conclusão da tarefa.
+
+created_by_id
+string
+ID do usuário que criou a tarefa.
+
+completed_at
+date-time
+Data em que a tarefa foi concluída.
+
+completed_by_id
+string
+ID do usuário que concluiu a tarefa.
+
+deal_id
+string
+ID da negociação associada.
+
+owner_ids
+array of strings
+IDs dos usuários responsáveis pela tarefa.
+
+created_at
+date-time
+Data de criação da tarefa.
+
+updated_at
+date-time
+Data de atualização da tarefa.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Updated 6 months ago
+
+Equipes
+As equipes representam um agrupamento de usuários dentro do RD Station CRM. As equipes são comumente usadas para organizar a força de vendas por território, especialidade ou qualquer outra estrutura organizacional. Os end-points de equipes são apenas leitura e serve para consultar a composição das equipes, o que é útil para lógicas de distribuição de negociações ou para relatórios de desempenho segmentados.
+
+Listar equipes
+get
+https://api.rd.services/crm/v2/teams
+
+Listar equipes, incluindo seus nomes e IDs.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+team_id
+string
+Identificador único.
+
+name
+string
+Nome da equipe.
+
+user_ids
+array of strings
+IDs dos usuários associados à equipe.
+
+created_at
+date-time
+Data de criação da equipe.
+
+updated_at
+date-time
+Data de atualização da equipe.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+Obter equipe
+get
+https://api.rd.services/crm/v2/teams/{id}
+
+Obter equipe específica pelo seu ID, incluindo a lista de IDs dos usuários que são membros da equipe.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+team_id
+string
+Identificador único.
+
+name
+string
+Nome da equipe.
+
+user_ids
+array of strings
+IDs dos usuários associados à equipe.
+
+created_at
+date-time
+Data de criação da equipe.
+
+updated_at
+date-time
+Data de atualização da equipe.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+Usuários
+O usuário representa um membro da equipe com acesso à conta do RD Station CRM. Cada usuário tem um perfil, permissões e pode ser proprietário de negociações. Os end-points de usuários são de apenas leitura e servem para recuperar informações sobre os membros da equipe, útil para atribuir proprietários a outros objetos ou para sincronizar equipes com sistemas externos.
+Listar usuários
+get
+https://api.rd.services/crm/v2/users
+
+Listar usuários da conta.
+
+Filtro
+Propriedades disponíveis para filtro usando RDQL.
+
+Propriedade	Tipo	Descrição
+is:active	Boolean	Filtra por usuários que estão ativos.
+is:visible	Boolean	Filtra por usuários que estão visíveis.
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+filter
+string
+Filtro no formato RDQL. (Saiba mais)
+
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+string
+Identificador único.
+
+name
+string
+Nome do usuário.
+
+email
+string
+Email do usuário.
+
+phone
+string
+Telefone do usuário.
+
+created_at
+date-time
+Data de criação do usuário.
+
+updated_at
+date-time
+Data de atualização do usuário.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+
+Obter usuário
+get
+https://api.rd.services/crm/v2/users/{id}
+
+Obter usuário específico pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+string
+Identificador único.
+
+name
+string
+Nome do usuário.
+
+email
+string
+Email do usuário.
+
+phone
+string
+Telefone do usuário.
+
+created_at
+date-time
+Data de criação do usuário.
+
+updated_at
+date-time
+Data de atualização do usuário.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Campanha criada
+wbhk
+crm_campaign_created
+
+Esse evento de webhook é disparado quando uma campanha é criada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_campaign_created
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+
+Campanha deletada
+wbhk
+crm_campaign_deleted
+
+Esse evento de webhook é disparado quando uma campanha é deletada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_campaign_deleted
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+Campanha atualizada
+wbhk
+crm_campaign_updated
+
+Esse evento de webhook é disparado quando uma campanha é atualizada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_campaign_updated
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+
+Contato criado
+wbhk
+crm_contact_created
+
+Esse evento de webhook é disparado quando um contato é criado.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_contact_created
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.Contato deletado
+wbhk
+crm_contact_deleted
+
+Esse evento de webhook é disparado quando um contato é deletado.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_contact_deleted
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+
+Updated 6 months ago
+Contato atualizado
+wbhk
+crm_contact_updated
+
+Esse evento de webhook é disparado quando um contato é atualizado.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_contact_updated
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+
+Updated 6 months ago
+
+Contato deletadoNegociação criada
+wbhk
+crm_deal_created
+
+Esse evento de webhook é disparado quando uma negociação é criada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_deal_created
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+
+Contato criado
+Contato atualizadoNegociação deletada
+wbhk
+crm_deal_deleted
+
+Esse evento de webhook é disparado quando uma negociação é deletada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_deal_deleted
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+objectNegociação atualizada
+wbhk
+crm_deal_updated
+
+Esse evento de webhook é disparado quando uma negociação é atualizada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_deal_updated
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+Did this page help you?
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.Motivo de perda criado
+wbhk
+crm_lost_reason_created
+
+Esse evento de webhook é disparado quando um motivo de perda é criado.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_lost_reason_created
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document objectMotivo de perda deletado
+wbhk
+crm_lost_reason_deleted
+
+Esse evento de webhook é disparado quando um motivo de perda é deletado.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_lost_reason_deleted
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+Responses
+2XXMotivo de perda atualizado
+wbhk
+crm_lost_reason_updated
+
+Esse evento de webhook é disparado quando um motivo de perda é atualizado.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_lost_reason_updated
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.Empresa criada
+wbhk
+crm_organization_created
+
+Esse evento de webhook é disparado quando uma empresa é criada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_organization_created
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+documentEmpresa deletada
+wbhk
+crm_organization_deleted
+
+Esse evento de webhook é disparado quando uma empresa é deletada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_organization_deleted
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+Empresa atualizada
+wbhk
+crm_organization_updated
+
+Esse evento de webhook é disparado quando uma empresa é atualizada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_organization_updated
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuidProduto criado
+wbhk
+crm_product_created
+
+Esse evento de webhook é disparado quando um produto é criado.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_product_created
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XXProduto deletado
+wbhk
+crm_product_deleted
+
+Esse evento de webhook é disparado quando um produto é deletado.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_product_deleted
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer oProduto atualizado
+wbhk
+crm_product_updated
+
+Esse evento de webhook é disparado quando um produto é atualizado.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_product_updated
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.utro código de resposta. A emissão do evento será repetida posteriormente.
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.Fonte criada
+wbhk
+crm_source_created
+
+Esse evento de webhook é disparado quando uma fonte é criada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_source_created
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+defaultFonte deletada
+wbhk
+crm_source_deleted
+
+Esse evento de webhook é disparado quando uma fonte é deletada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_source_deleted
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.Fonte atualizada
+wbhk
+crm_source_updated
+
+Esse evento de webhook é disparado quando uma fonte é atualizada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_source_updated
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.Tarefa criada
+wbhk
+crm_task_created
+
+Esse evento de webhook é disparado quando uma tarefa é criada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_task_created
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.Tarefa deletada
+wbhk
+crm_task_deleted
+
+Esse evento de webhook é disparado quando uma tarefa é deletada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_task_deleted
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+defaultTarefa atualizada
+wbhk
+crm_task_updated
+
+Esse evento de webhook é disparado quando uma tarefa é atualizada.
+
+Payload
+O conteúdo enviado ao seu end-point quando o evento é disparado.
+
+event_name
+const
+enum
+Tipo de evento do webhook.
+
+
+crm_deal_created
+Allowed:
+
+crm_task_updated
+event_timestamp
+date-time
+A data em que ocorreu o evento que acionou o webhook.
+
+transaction_uuid
+uuid
+Identificador único do evento.
+
+document
+object
+Documento relacionado ao evento do webhook.
+
+
+document object
+Responses
+2XX
+O evento é considerado aceito retornando qualquer código de resposta 2XX.
+
+default
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.
+O evento é considerado rejeitado para qualquer outro código de resposta. A emissão do evento será repetida posteriormente.Webhooks
+Disponibilidade
+RD Station CRM
+Free
+Basic
+Pro
+Advanced
+O webhook é a funcionalidade da API que possibilita a automatização do envio de dados e atividades do RD Station CRM para sistemas externos. Assim, é possível que você utilize ou desenvolva o seu próprio aplicativo personalizado para ler, salvar e realizar ações com esses dados. Esta é uma opção poderosa que permite manter todos os seus dados em sincronia e abre a possibilidade para todos os tipos de integração.
+
+Sempre que o evento configurado como gatilho no webhook é acionado, o RD Station CRM fará o disparo dos dados da entidade (negociação, fontes, campanhas, motivos de perda, etc) para integrações externas, contendo o payload padrão em JSON único e imutável (não é possível personalizar os dados enviados pelo webhook) para a URL de destino. O payload enviado conterá todas as informações disponíveis referentes à entidade alvo do webhook, o que inclui todos os campos padrão e personalizados, caso possuam, que foram preenchidos.
+
+Requisitos para funcionamento dos webhooks
+A URL cadastrada para consumo dos webhooks devem seguir os requisitos:
+
+Ser capaz de receber e consumir dados em formato JSON;
+Possuir certificado de segurança (HTTPS);
+Ter compatibilidade para fazer a leitura do pacote de dados que o RD Station CRM envia.
+Requisição
+Quando o evento configurado no webhook é acionado, o RD Station CRM envia uma requisição com o mesmo método configurado no http_method e com o cabeçalho Content-Type: application/json.
+
+Autenticação
+Webhooks do RD Station CRM oferecem suporte a autenticação por cabeçalho HTTP customizado, permitindo que integrações externas validem a origem das requisições recebidas.
+
+O RD Station CRM incluirá automaticamente o cabeçalho configurado em todas as requisições disparadas pelo webhook quando forem informados os parâmetros:
+
+auth_header: nome do cabeçalho HTTP que será enviado na requisição.
+auth_key: valor que será atribuído ao cabeçalho definido em auth_header.
+Caso os parâmetros de autenticação não sejam informados, o comportamento do webhook permanece o mesmo, sendo enviada apenas a requisição padrão com Content-Type: application/json.
+
+Retentativas de envio
+Caso nosso serviço de webhooks tenha problemas ao entregar suas notificações, nós tentaremos enviá-las novamente por mais 5 vezes.
+
+Os possíveis problemas na entrega das notificações podem ser:
+
+Se o end-point de callback demorar mais de 5 segundos para responder a requisição;
+Se a resposta do end-point de callback retornar um HTTP Status Code diferente de 2XX.
+Após a falha no envio ocorrer, as notificações entram em uma fila para serem reprocessadas. Caso o re-envio da notificação falhar as 5 vezes seguidas, a notificação será marcada como falha permanente e não será mais reenviada.
+
+Em situações como as descritas acima é possível que eventos anormais possam ocorrer como perceber a duplicidade de chegada de eventos em seu sistema. Caso isto ocorra pode ser um indício de que o tempo de resposta do end-point está superior aos 5 segundos esperados.
+
+Suspensão de webhooks
+Existem situações em que podem ocorrer uma sequência de erros para uma mesma URL de destino, como por exemplo uma instabilidade na aplicação para qual a URL de destino está apontando.
+
+Caso o sistema de webhooks receba um volume acima do esperado para a mesma URL ela terá seus status alterado para suspenso. Para que um webhook seja suspenso é necessário que o mesmo esteja sempre retornando erros de forma constante, o que significa que a integração não está funcionando como deveria.
+
+O sistema de webhooks faz uma análise sobre estes erros, e caso seja constatado que o mesmo não será resolvido sozinho, pode acontecer a suspensão temporária conforme mencionado acima.
+
+Para mais informações, acesse esse artigo em nossa central de ajuda.Listar webhooks
+get
+https://api.rd.services/crm/v2/webhooks
+
+Lista todos os webhooks.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+page
+object
+Paginação. (Saiba mais)
+
+
+page object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+array of objects
+Lista de recursos relacionados.
+
+object
+id
+uuid
+Identificador único.
+
+name
+string
+Nome do webhook.
+
+event_name
+string
+enum
+Nome do evento do webhook.
+
+crm_campaign_created crm_campaign_deleted crm_campaign_updated crm_contact_created crm_contact_deleted crm_contact_updated crm_deal_created crm_deal_deleted crm_deal_updated crm_lost_reason_created crm_lost_reason_deleted crm_lost_reason_updated crm_organization_created crm_organization_deleted crm_organization_updated crm_product_created crm_product_deleted crm_product_updated crm_source_created crm_source_deleted crm_source_updated crm_task_created crm_task_deleted crm_task_updated
+
+http_method
+string
+enum
+Método HTTP do webhook.
+
+POST
+
+url
+url
+URL do webhook.
+
+status
+string
+enum
+Status do webhook.
+
+active suspended inactive
+
+auth_header
+string
+Nome do header de autenticação do webhook.
+
+auth_key
+string
+Chave de autenticação do webhook.
+
+created_at
+date-time
+Data de criação do webhook
+
+updated_at
+date-time
+Data de atualização do webhook.
+
+links
+object
+Links de navegação da paginação.
+
+first
+uri
+Link para a primeira página.
+
+prev
+uri
+Link para a página anterior.
+
+self
+uri
+Link para a página atual.
+
+next
+uri
+Link para a próxima página.
+
+last
+uri
+Link para a última página.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+429
+O limite de requisições foi excedido.
+
+
+500Criar webhook
+post
+https://api.rd.services/crm/v2/webhooks
+
+Criar um webhook.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+201
+Created
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+uuid
+Identificador único.
+
+name
+string
+Nome do webhook.
+
+event_name
+string
+enum
+Nome do evento do webhook.
+
+crm_campaign_created crm_campaign_deleted crm_campaign_updated crm_contact_created crm_contact_deleted crm_contact_updated crm_deal_created crm_deal_deleted crm_deal_updated crm_lost_reason_created crm_lost_reason_deleted crm_lost_reason_updated crm_organization_created crm_organization_deleted crm_organization_updated crm_product_created crm_product_deleted crm_product_updated crm_source_created crm_source_deleted crm_source_updated crm_task_created crm_task_deleted crm_task_updated
+
+http_method
+string
+enum
+Método HTTP do webhook.
+
+POST
+
+url
+url
+URL do webhook.
+
+status
+string
+enum
+Status do webhook.
+
+active suspended inactive
+
+auth_header
+string
+Nome do header de autenticação do webhook.
+
+auth_key
+string
+Chave de autenticação do webhook.
+
+created_at
+date-time
+Data de criação do webhook
+
+updated_at
+date-time
+Data de atualização do webhook.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Updated 6 months ago
+
+Listar webhooks
+
+Erro interno ou inesperado no servidor.Obter webhook
+get
+https://api.rd.services/crm/v2/webhooks/{id}
+
+Obter um webhook específico pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+uuid
+required
+Identificador único.
+
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+uuid
+Identificador único.
+
+name
+string
+Nome do webhook.
+
+event_name
+string
+enum
+Nome do evento do webhook.
+
+crm_campaign_created crm_campaign_deleted crm_campaign_updated crm_contact_created crm_contact_deleted crm_contact_updated crm_deal_created crm_deal_deleted crm_deal_updated crm_lost_reason_created crm_lost_reason_deleted crm_lost_reason_updated crm_organization_created crm_organization_deleted crm_organization_updated crm_product_created crm_product_deleted crm_product_updated crm_source_created crm_source_deleted crm_source_updated crm_task_created crm_task_deleted crm_task_updated
+
+http_method
+string
+enum
+Método HTTP do webhook.
+
+POST
+
+url
+url
+URL do webhook.
+
+status
+string
+enum
+Status do webhook.
+
+active suspended inactive
+
+auth_header
+string
+Nome do header de autenticação do webhook.
+
+auth_key
+string
+Chave de autenticação do webhook.
+
+created_at
+date-time
+Data de criação do webhook
+
+updated_at
+date-time
+Data de atualização do webhook.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.Atualizar webhook
+put
+https://api.rd.services/crm/v2/webhooks/{id}
+
+Atualizar um webhook específico pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+uuid
+required
+Identificador único.
+
+Body Params
+data
+object
+Dados do recurso relacionado.
+
+
+data object
+Responses
+
+200
+OK
+
+Response body
+object
+data
+object
+Dados do recurso relacionado.
+
+id
+uuid
+Identificador único.
+
+name
+string
+Nome do webhook.
+
+event_name
+string
+enum
+Nome do evento do webhook.
+
+crm_campaign_created crm_campaign_deleted crm_campaign_updated crm_contact_created crm_contact_deleted crm_contact_updated crm_deal_created crm_deal_deleted crm_deal_updated crm_lost_reason_created crm_lost_reason_deleted crm_lost_reason_updated crm_organization_created crm_organization_deleted crm_organization_updated crm_product_created crm_product_deleted crm_product_updated crm_source_created crm_source_deleted crm_source_updated crm_task_created crm_task_deleted crm_task_updated
+
+http_method
+string
+enum
+Método HTTP do webhook.
+
+POST
+
+url
+url
+URL do webhook.
+
+status
+string
+enum
+Status do webhook.
+
+active suspended inactive
+
+auth_header
+string
+Nome do header de autenticação do webhook.
+
+auth_key
+string
+Chave de autenticação do webhook.
+
+created_at
+date-time
+Data de criação do webhook
+
+updated_at
+date-time
+Data de atualização do webhook.
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+Deletar webhook
+delete
+https://api.rd.services/crm/v2/webhooks/{id}
+
+Deletar um webhook específico pelo seu ID.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+uuid
+required
+Identificador único.
+
+Responses
+204
+No Content
+
+
+400
+A requisição está malformada e não consegue ser processada.
+
+
+401
+O token da API está ausente ou inválido.
+
+
+403
+O token não tem permissão para acessar o recurso solicitado.
+
+
+404
+O recurso solicitado não existe.
+
+
+422
+A entidade não pode ser processada.
+
+429
+O limite de requisições foi excedido.
+
+
+500
+Erro interno ou inesperado no servidor.
+
+
+
+
+

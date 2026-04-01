@@ -65,6 +65,13 @@ interface Visitor {
   lastSeenAt: string;
   name?: string;
   notes?: { date: string; stage: string; content: string }[];
+  // Dados Pós Venda (coletados pelo Fagner)
+  posVendaNome?: string;
+  posVendaTelefone?: string;
+  posVendaEmail?: string;
+  posVendaCnpjCpf?: string;
+  posVendaNotaPedido?: string;
+  posVendaProblema?: string;
 }
 
 interface Chat {
@@ -391,6 +398,25 @@ function LiveChat() {
                 return next;
               });
             }
+            break;
+          case "VISITOR_POS_VENDA_UPDATED":
+            // Atualiza dados de pós venda no estado local do visitante selecionado
+            if (selectedVisitor?.id === data.visitorId) {
+              setSelectedVisitor(prev => prev ? { ...prev, ...data.posVendaData } : prev);
+            }
+            // Atualiza também no pipeline
+            setPipelineData(prev => {
+              const next = { ...prev };
+              for (const stage of Object.keys(next)) {
+                next[stage] = (next[stage] || []).map((v: Visitor) =>
+                  v.id === data.visitorId ? { ...v, ...data.posVendaData } : v
+                );
+              }
+              return next;
+            });
+            setAllVisitors(prev => prev.map(v =>
+              v.id === data.visitorId ? { ...v, ...data.posVendaData } : v
+            ));
             break;
         }
       } catch {}
@@ -1311,9 +1337,11 @@ function LiveChat() {
               {[
                 { stage: "novo_atendimento", label: "Novo Atendimento", color: "#22c55e", bgLight: "rgba(34,197,94,0.06)", borderColor: "rgba(34,197,94,0.3)" },
                 { stage: "em_atendimento", label: "Em Atendimento", color: "#3b82f6", bgLight: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.3)" },
+                { stage: "pos_venda", label: "Pós Venda", color: "#8b5cf6", bgLight: "rgba(139,92,246,0.06)", borderColor: "rgba(139,92,246,0.3)" },
                 { stage: "finalizado_com_venda", label: "Finalizou Com Venda", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
                 { stage: "finalizado_sem_venda", label: "Finalizou Sem Venda", color: "#ef4444", bgLight: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.3)" },
                 { stage: "sem_resposta", label: "Não Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
+                { stage: "outros", label: "Outros", color: "#64748b", bgLight: "rgba(100,116,139,0.06)", borderColor: "rgba(100,116,139,0.3)" },
               ].map((col) => {
                 const items = pipelineData[col.stage] || [];
                 return (
@@ -1403,6 +1431,13 @@ function LiveChat() {
                                 <span>{src.icon} {src.label}</span>
                                 <span>{"\u2022"} {v.totalChats} chats</span>
                               </div>
+                               {/* Pós Venda badge */}
+                               {(v as any).posVendaNome && (
+                                 <div className="flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-purple-50 border border-purple-100">
+                                   <span className="text-[8px]">🎫</span>
+                                   <span className="text-[8px] text-purple-700 font-semibold truncate">{(v as any).posVendaNome}</span>
+                                 </div>
+                               )}
                             </div>
                           );
                         })
@@ -1572,7 +1607,31 @@ function LiveChat() {
                     </div>
                   </div>
 
-                  {/* Col 3: Notas da IA */}
+                  {/* Col: Dados Pós Venda */}
+                  {(selectedVisitor.posVendaNome || selectedVisitor.posVendaTelefone || selectedVisitor.posVendaEmail || selectedVisitor.posVendaCnpjCpf) && (
+                    <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden" style={{ background: "rgba(139,92,246,0.03)" }}>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-3 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
+                        🎫 Dados Pós Venda
+                      </p>
+                      <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                        {[
+                          { label: "Nome do comprador", value: selectedVisitor.posVendaNome, icon: "👤" },
+                          { label: "Telefone (WhatsApp)", value: selectedVisitor.posVendaTelefone, icon: "📱" },
+                          { label: "E-mail de suporte", value: selectedVisitor.posVendaEmail, icon: "✉️" },
+                          { label: "CPF / CNPJ", value: selectedVisitor.posVendaCnpjCpf, icon: "🪪" },
+                          { label: "Nota do pedido", value: selectedVisitor.posVendaNotaPedido || "Não informado", icon: "📄" },
+                          { label: "Problema relatado", value: selectedVisitor.posVendaProblema, icon: "⚙️" },
+                        ].filter(f => f.value).map(f => (
+                          <div key={f.label} className="p-2 bg-white rounded-lg border border-purple-100/60 shadow-sm">
+                            <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
+                            <p className="text-[11px] font-semibold text-zinc-700 break-all leading-snug">{f.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Col: Notas da IA */}
                   <div className="flex-1 p-4 flex flex-col overflow-hidden bg-zinc-50/30">
                     <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2 flex-shrink-0">
                       {"\u{1F4DD}"} Notas da IA

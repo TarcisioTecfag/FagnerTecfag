@@ -164,11 +164,18 @@ export const lcVisitors = pgTable("lc_visitors", {
   engagementScore: integer("engagementScore").notNull().default(0),
   isOnline: text("isOnline").notNull().default("true"),
   pipelineStage: text("pipelineStage").notNull().default("novo_atendimento"),
-  // Valores: 'novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'
+  // Valores: 'novo_atendimento', 'em_atendimento', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'
   firstSeenAt: text("firstSeenAt").notNull().default(sql`now()::text`),
   lastSeenAt: text("lastSeenAt").notNull().default(sql`now()::text`),
   name: text("name"),   // Nome fornecido pelo visitante via widget
   notes: jsonb("notes").$type<{ date: string; stage: string; content: string }[]>().default([]),
+  // ── Dados de Pós Venda (coletados pelo Fagner — persistentes entre sessões) ──
+  posVendaNome: text("posVendaNome"),
+  posVendaTelefone: text("posVendaTelefone"),
+  posVendaEmail: text("posVendaEmail"),
+  posVendaCnpjCpf: text("posVendaCnpjCpf"),
+  posVendaNotaPedido: text("posVendaNotaPedido"),
+  posVendaProblema: text("posVendaProblema"),
 });
 
 export const lcPageviews = pgTable("lc_pageviews", {
