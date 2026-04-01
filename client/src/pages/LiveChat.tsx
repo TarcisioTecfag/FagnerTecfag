@@ -158,6 +158,57 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d`;
 }
 
+function formatTextWithLinks(text: string) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) => {
+    if (urlRegex.test(part)) {
+      return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{part}</a>;
+    }
+    return part;
+  });
+}
+
+function renderMessageContent(text: string) {
+  if (!text) return null;
+  const anexoRegex = /\[Anexo_Cliente:\s*(.+?)\]/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = anexoRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(<span key={lastIndex}>{formatTextWithLinks(text.substring(lastIndex, match.index))}</span>);
+    }
+    const url = match[1];
+    const isImage = /\.(jpeg|jpg|gif|png|webp|svg|heic)$/i.test(url) || url.startsWith('data:image/');
+    
+    if (isImage) {
+      parts.push(
+        <div key={`anexo-${match.index}`} className="mt-2 mb-2 max-w-[280px] rounded-lg overflow-hidden border border-zinc-200 shadow-sm bg-white">
+          <a href={url} target="_blank" rel="noopener noreferrer" className="block p-1">
+             <img src={url} alt="Anexo do Cliente" className="w-full h-auto max-h-[220px] object-scale-down rounded hover:opacity-90 transition-opacity" />
+          </a>
+        </div>
+      );
+    } else {
+      parts.push(
+        <div key={`anexo-${match.index}`} className="block">
+          <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 mt-2 mb-2 px-3 py-2 bg-zinc-100 text-zinc-700 rounded-lg text-xs font-semibold hover:bg-zinc-200 border border-zinc-200 shadow-sm transition-all hover:-translate-y-0.5">
+            📎 Abrir Anexo (PDF/Outros)
+          </a>
+        </div>
+      );
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(<span key={lastIndex}>{formatTextWithLinks(text.substring(lastIndex))}</span>);
+  }
+  return parts;
+}
+
 function scoreColor(score: number): string {
   if (score >= 70) return "from-red-500 to-orange-500";
   if (score >= 40) return "from-yellow-500 to-amber-500";
@@ -889,7 +940,7 @@ function LiveChat() {
                               <span>{isVisitor ? "Visitante" : isAI ? "Fagner (IA)" : "Agente"}</span>
                               <span>&bull; {timeAgo(msg.sentAt)}</span>
                             </div>
-                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                            <div className="whitespace-pre-wrap break-words text-sm">{renderMessageContent(msg.content)}</div>
                           </div>
                         </div>
                       );
@@ -1673,3 +1724,4 @@ function StatsTab() {
 }
 
 export default LiveChat;
+

@@ -627,7 +627,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 try {
                   const chatNow = await lcStorage.getChatById(chat.id);
                   if (chatNow && !chatNow.visitorName) {
-                    const firstMsg = combinedContent.trim().slice(0, 60);
+                    const cleanFirstMsg = combinedContent.replace(/\[Anexo_Cliente:\s*[^\]]+\]/g, '📎 Anexo').trim();
+                    const firstMsg = cleanFirstMsg.slice(0, 60) || "📎 Anexo";
                     const chatLabel = firstMsg.length > 40
                       ? firstMsg.slice(0, 40) + "..."
                       : firstMsg;
