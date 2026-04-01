@@ -260,6 +260,8 @@ const MACHINE_INTENT_PATTERNS = [
   /(?:link|valor|preço|comprar).*?(?:da|do|de)\s+([a-zA-Z0-9\s\-]+)/i,
   // Pedidos diretos de produto atual na sessão ("link dele/dela")
   /(?:link|valor|preço|comprar).*?(?:dele|dela|dessa|desse|da\s+peça|do\s+kit|da\s+máquina|dela\s+no\s+site|dela\s+aqui|desse\s+aqui\s+no\s+site)/i,
+  // Pedidos genericos de link isolado (quando o usuario manda em mensagens picadas)
+  /(?:manda|mandar|envia|enviar|passa|passar|ver|achar|encontrar|qual)\s+(?:o\s+)?(?:link|valor|preço|site|ela\s+no\s+site|ele\s+no\s+site)/i,
   // Modelos específicos: ARLM-200, ARL-200A, etc
   /\b(?:arlm|arl)[- ]?\d+[a-z]*/i,
   /\bki[rt] de veda[cç][aã]o\b/i,
@@ -457,6 +459,15 @@ INSTRUÇÃO: Informe o cliente que houve um problema ao consultar o frete e peç
     return `## SIMULAÇÃO DE FRETE
 ⚠️ Nenhuma opção de entrega encontrada para o CEP ${result.cep}.
 INSTRUÇÃO: Informe ao cliente que não encontramos opções de entrega para essa região no momento e sugira contato com a equipe comercial para alternativas.`;
+  }
+
+  const allZero = result.options.every(opt => opt.price === 0);
+  if (allZero) {
+    return `## SIMULAÇÃO DE FRETE — CEP ${result.cep}
+⚠️ FRETE A COMBINAR (Máquina Pesada)
+
+INSTRUÇÃO (REGRA DE OURO): O sistema retornou R$ 0,00. Isso **NÃO** significa frete grátis! Significa "Entrega a Combinar".
+NUNCA diga que o frete é grátis ou 0 reais. Informe ao cliente que, devido ao peso ou dimensões exclusivas deste equipamento, o frete precisa ser cotado sob medida junto a transportadoras especializadas. Peça os dados dele (Nome, Telefone, CNPJ) para que um vendedor/especialista calcule a melhor opção de frete e entre em contato rapidamente.`;
   }
 
   const optionsTable = result.options
