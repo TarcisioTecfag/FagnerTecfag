@@ -715,7 +715,7 @@ export async function processVisitorMessage(
     // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
     // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou
     // ATENÇÃO: Sem emoji na mensagem de fallback para evitar balão solo de emoji
-    const fallbackReply = "Ops, tive uma instabilidade aqui! Me manda de novo o que você precisava?";
+    const fallbackReply = "Hm, acho que não entendi. O que você precisa exatamente?";
     return {
       reply: fallbackReply,
       needsHuman: false,

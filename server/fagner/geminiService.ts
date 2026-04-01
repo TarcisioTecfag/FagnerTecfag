@@ -326,7 +326,7 @@ export async function callGemini(opts: GeminiCallOptions): Promise<string> {
 
   if (cbIsOpen()) {
     console.error("[Gemini] Circuit Breaker está aberto — rejeitando chamada.");
-    return "Desculpe, estou passando por uma instabilidade no momento. Pode tentar de novo daqui a pouco? 🙏";
+    return "Opa, não consegui ver direito oque você me mandou, pode enviar novamente por favor?";
   }
 
   // Monta extra context com RAG + info de contexto
