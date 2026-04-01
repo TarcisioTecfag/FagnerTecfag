@@ -70,7 +70,7 @@ interface Visitor {
 interface Chat {
   id: string;
   visitorId: string;
-  agentId?: string;
+  agentId?: string | null;
   status: string;
   startedAt: string;
   endedAt?: string;

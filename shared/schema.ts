@@ -126,6 +126,7 @@ export const vtexCategories = pgTable("vtex_categories", {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
+export type InsertUser = { name: string; email: string; username: string; password?: string };
 export type Settings = typeof settings.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Message = typeof messages.$inferSelect;

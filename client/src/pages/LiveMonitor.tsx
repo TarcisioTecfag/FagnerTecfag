@@ -9,6 +9,15 @@ import SessionSidebar, { type Session } from "@/components/monitoring/SessionSid
 import ChatArea, { type Message } from "@/components/monitoring/ChatArea";
 import CapturedDataPanel from "@/components/monitoring/CapturedDataPanel";
 
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+interface NotificationData {
+  id: string;
+  senderName: string;
+  message: string;
+  time: string;
+}
+
 // ─── Demo Data ─────────────────────────────────────────────────────────────────
 const DEMO_MESSAGES_INITIAL: { id: string; sender: "user" | "bot"; content: string; timestamp: string }[] = [
   { id: "d1", sender: "bot",  content: "Olá! Sou o assistente virtual da Tecfag. Como posso ajudar você hoje?", timestamp: new Date(Date.now() - 12 * 60000).toISOString() },
@@ -282,7 +291,7 @@ export default function LiveMonitor() {
           id: `sim-${Date.now()}`,
           sender: "user",
           content,
-          timestamp: now.toISOString(),
+          timestamp: new Date().toISOString(),
           isNew: true,
         };
         setDemoMessages((prev) => [...prev, newMsg]);

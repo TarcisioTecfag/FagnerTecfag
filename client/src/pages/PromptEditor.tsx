@@ -141,7 +141,7 @@ export default function PromptEditor() {
                 {hasUnsavedChanges && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1"
-                    style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", ringColor: "rgba(251,191,36,0.30)" }}
+                    style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", borderColor: "rgba(251,191,36,0.30)" }}
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
                     Não salvo
