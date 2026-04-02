@@ -18,7 +18,21 @@ const DB_KEY_ACCESS  = "rd_crm_access_token";
 const DB_KEY_REFRESH = "rd_crm_refresh_token";
 const DB_KEY_EXPIRES = "rd_crm_token_expires_at";
 
+// IDs fixos cacheados em memória (buscados/criados na primeira chamada)
+let _sourceId:   string | null = null;
+let _campaignId: string | null = null;
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
+export interface CnpjData {
+  nome: string;           // razão social
+  fantasia?: string;
+  cnpj: string;
+  logradouro?: string;
+  municipio?: string;
+  uf?: string;
+  situacao?: string;
+}
+
 export interface PosVendaData {
   nome: string;
   telefone: string;
@@ -26,6 +40,7 @@ export interface PosVendaData {
   cnpjCpf?: string | null;
   notaPedido?: string | null;
   problema: string;
+  cnpjData?: CnpjData | null;   // dados da cnpj.ws, se disponíveis
 }
 
 interface RdToken {
@@ -175,12 +190,75 @@ async function rdRequest<T = any>(
   return json.data as T;
 }
 
+// ─── Source / Campaign: busca por nome, cria se não existir ──────────────────
+async function getOrCreateSourceId(): Promise<string> {
+  if (_sourceId) return _sourceId;
+  const name = "Referência | tecfag.com.br";
+  try {
+    // Busca nas 3 páginas
+    for (let page = 1; page <= 3; page++) {
+      const data = await rdRequest<any[]>("GET", `/sources?page[number]=${page}&page[size]=50`);
+      const found = (Array.isArray(data) ? data : []).find((s: any) => s.name === name);
+      if (found) { _sourceId = found.id; return _sourceId!; }
+    }
+    // Não encontrou — cria
+    const created = await rdRequest<{ id: string }>("POST", "/sources", { name });
+    _sourceId = created.id;
+    console.log(`[RD CRM] Fonte criada: ${_sourceId}`);
+  } catch (e: any) {
+    console.warn("[RD CRM] Não foi possível obter source_id:", e.message);
+    _sourceId = "";
+  }
+  return _sourceId!;
+}
+
+async function getOrCreateCampaignId(): Promise<string> {
+  if (_campaignId) return _campaignId;
+  const name = "Fagner | Vtex";
+  try {
+    for (let page = 1; page <= 2; page++) {
+      const data = await rdRequest<any[]>("GET", `/campaigns?page[number]=${page}&page[size]=50`);
+      const found = (Array.isArray(data) ? data : []).find((c: any) => c.name === name);
+      if (found) { _campaignId = found.id; return _campaignId!; }
+    }
+    const created = await rdRequest<{ id: string }>("POST", "/campaigns", { name });
+    _campaignId = created.id;
+    console.log(`[RD CRM] Campanha criada: ${_campaignId}`);
+  } catch (e: any) {
+    console.warn("[RD CRM] Não foi possível obter campaign_id:", e.message);
+    _campaignId = "";
+  }
+  return _campaignId!;
+}
+
+// ─── Empresa (Organization) ──────────────────────────────────────────────────
+async function findOrCreateOrganization(cnpjData: CnpjData): Promise<string | null> {
+  try {
+    const cnpjNum = cnpjData.cnpj.replace(/\D/g, "");
+    // Busca pela razão social
+    const found = await rdRequest<any[]>("GET", `/organizations?filter=name:${encodeURIComponent(cnpjData.nome)}`);
+    if (Array.isArray(found) && found.length > 0) {
+      console.log(`[RD CRM] Empresa existente: ${found[0].id}`);
+      return found[0].id;
+    }
+    // Cria empresa
+    const orgPayload: Record<string, any> = {
+      name: cnpjData.nome,
+      custom_fields: { cnpj: cnpjNum },
+    };
+    if (cnpjData.municipio) orgPayload.city    = cnpjData.municipio;
+    if (cnpjData.uf)        orgPayload.state   = cnpjData.uf;
+    const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
+    console.log(`[RD CRM] Empresa criada: ${org.id} — ${cnpjData.nome}`);
+    return org.id;
+  } catch (e: any) {
+    console.warn("[RD CRM] Não foi possível criar empresa:", e.message);
+    return null;
+  }
+}
+
 // ─── Contatos ────────────────────────────────────────────────────────────────
-/**
- * Busca contato pelo telefone. Retorna o primeiro encontrado ou null.
- */
 async function findContactByPhone(phone: string): Promise<{ id: string } | null> {
-  // Remove caracteres não numéricos para normalizar
   const normalized = phone.replace(/\D/g, "");
   try {
     const data = await rdRequest<any[]>("GET", `/contacts?filter=phone:${normalized}`);
@@ -191,18 +269,13 @@ async function findContactByPhone(phone: string): Promise<{ id: string } | null>
   }
 }
 
-/**
- * Cria contato no RD CRM ou retorna o existente (busca por telefone).
- */
 async function findOrCreateContact(posVenda: PosVendaData): Promise<string> {
-  // Tentar encontrar pelo telefone primeiro
   const existing = await findContactByPhone(posVenda.telefone);
   if (existing) {
     console.log(`[RD CRM] Contato existente encontrado: ${existing.id}`);
     return existing.id;
   }
 
-  // Criar novo contato
   const contactPayload: Record<string, any> = {
     name:   posVenda.nome,
     phones: [{ phone: posVenda.telefone.replace(/\D/g, ""), type: "mobile" }],
@@ -214,7 +287,9 @@ async function findOrCreateContact(posVenda: PosVendaData): Promise<string> {
   };
 
   if (posVenda.email) {
-    contactPayload.emails = [{ email: posVenda.email }];
+    // Campo padrão + campo personalizado "E-mail" (slug: e_mail)
+    contactPayload.emails         = [{ email: posVenda.email }];
+    contactPayload.custom_fields  = { e_mail: posVenda.email };
   }
 
   const contact = await rdRequest<{ id: string }>("POST", "/contacts", contactPayload);
@@ -223,15 +298,19 @@ async function findOrCreateContact(posVenda: PosVendaData): Promise<string> {
 }
 
 // ─── Negociações ─────────────────────────────────────────────────────────────
-/**
- * Cria uma negociação no funil O.S → etapa "PÓS VENDA" → responsável Melissa Bueno.
- */
-async function createDeal(posVenda: PosVendaData, contactId: string): Promise<string> {
-  const problema = posVenda.problema ?? "Suporte pós-venda";
-  const titulo   = `Pós Venda — ${posVenda.nome} — ${problema.slice(0, 50)}`;
+async function createDeal(
+  posVenda: PosVendaData,
+  contactId: string,
+  organizationId?: string | null
+): Promise<string> {
+  const problema   = posVenda.problema ?? "Suporte pós-venda";
+  // Título limpo: apenas nome do cliente
+  const titulo     = `Pós Venda — ${posVenda.nome}`;
+  // Descrição completa vai para campo personalizado
+  const infoCompl  = `${posVenda.nome} — ${problema}`
+    + (posVenda.cnpjCpf  ? ` | Doc: ${posVenda.cnpjCpf}` : "")
+    + (posVenda.notaPedido ? ` | NF: ${posVenda.notaPedido}` : "");
 
-  // pipeline_id: funil O.S (obrigatório pela API v2)
-  // Fallback: ID do funil O.S da Tecfag (67c9f944c7fe880018b30ab1)
   const pipelineId = (process.env.RD_CRM_PIPELINE_OS_ID ?? "67c9f944c7fe880018b30ab1").trim();
   const stageId    = (process.env.RD_CRM_PIPELINE_OS_STAGE_ID ?? "").trim();
   const ownerId    = (process.env.RD_CRM_OWNER_POS_VENDA_ID ?? "").trim();
@@ -239,7 +318,13 @@ async function createDeal(posVenda: PosVendaData, contactId: string): Promise<st
   if (!stageId) throw new Error("[RD CRM] RD_CRM_PIPELINE_OS_STAGE_ID não configurado");
   if (!ownerId) throw new Error("[RD CRM] RD_CRM_OWNER_POS_VENDA_ID não configurado");
 
-  console.log(`[RD CRM] Criando deal: pipeline=${pipelineId} stage=${stageId} owner=${ownerId}`);
+  // Busca IDs de fonte e campanha (cria se não existir)
+  const [sourceId, campaignId] = await Promise.all([
+    getOrCreateSourceId(),
+    getOrCreateCampaignId(),
+  ]);
+
+  console.log(`[RD CRM] Criando deal: pipeline=${pipelineId} stage=${stageId} source=${sourceId} campaign=${campaignId}`);
 
   const dealPayload: Record<string, any> = {
     name:        titulo,
@@ -248,11 +333,15 @@ async function createDeal(posVenda: PosVendaData, contactId: string): Promise<st
     owner_id:    ownerId,
     contact_ids: [contactId],
     status:      "ongoing",
+    rating:      1,  // Muito baixa intenção - FRIO (pós-venda)
+    custom_fields: {
+      informacoes_complementares: infoCompl,
+    },
   };
 
-  if (posVenda.notaPedido) {
-    dealPayload.custom_fields = { nota_pedido: posVenda.notaPedido };
-  }
+  if (sourceId)       dealPayload.source_id       = sourceId;
+  if (campaignId)     dealPayload.campaign_id     = campaignId;
+  if (organizationId) dealPayload.organization_id = organizationId;
 
   const deal = await rdRequest<{ id: string }>("POST", "/deals", dealPayload);
   console.log(`[RD CRM] Negociação criada: ${deal.id} — "${titulo}"`);
@@ -269,26 +358,15 @@ async function createNote(dealId: string, relatorio: string): Promise<void> {
 }
 
 // ─── Função principal ────────────────────────────────────────────────────────
-/**
- * Orquestra a criação completa de uma OS de Pós Venda no RD CRM:
- * 1. Busca/cria o Contato pelo telefone
- * 2. Cria a Negociação no Funil O.S → etapa "PÓS VENDA"
- * 3. Cria a Anotação com o relatório gerado pelo Fagner/Gemini
- * 4. Atualiza o rdCrmDealId no lcVisitors para evitar duplicatas
- *
- * @returns ID da negociação criada
- */
 export async function createPosVendaOS(
   visitorId: string,
   posVenda: PosVendaData,
   relatorio: string
 ): Promise<string> {
-  // Verificar configuração mínima
   if (!process.env.RD_CRM_CLIENT_ID || !process.env.RD_CRM_PIPELINE_OS_STAGE_ID) {
     throw new Error("[RD CRM] Variáveis de ambiente RD CRM não configuradas.");
   }
 
-  // Verificar se já existe uma OS para este visitante (evitar duplicata)
   const [visitor] = await db.select({ rdCrmDealId: lcVisitors.rdCrmDealId })
     .from(lcVisitors)
     .where(eq(lcVisitors.id, visitorId));
@@ -303,13 +381,19 @@ export async function createPosVendaOS(
   // 1. Contato
   const contactId = await findOrCreateContact(posVenda);
 
-  // 2. Negociação
-  const dealId = await createDeal(posVenda, contactId);
+  // 2. Empresa (se CNPJ disponível)
+  let organizationId: string | null = null;
+  if (posVenda.cnpjData) {
+    organizationId = await findOrCreateOrganization(posVenda.cnpjData);
+  }
 
-  // 3. Anotação
+  // 3. Negociação
+  const dealId = await createDeal(posVenda, contactId, organizationId);
+
+  // 4. Anotação
   await createNote(dealId, relatorio);
 
-  // 4. Persistir o dealId no visitante
+  // 5. Persistir o dealId no visitante
   await db.update(lcVisitors)
     .set({ rdCrmDealId: dealId })
     .where(eq(lcVisitors.id, visitorId));

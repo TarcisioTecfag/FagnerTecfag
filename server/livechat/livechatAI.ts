@@ -232,14 +232,27 @@ Quando você identificar que o assunto do cliente é QUALQUER um destes:
 **Passo 3 — E-mail:**
 "Ótimo! Qual o e-mail do responsável para receber o suporte?"
 
-**Passo 4 — CPF/CNPJ (OBRIGATÓRIO):**
-"Por favor, informe o CPF ou CNPJ que foi utilizado para realizar a compra. Isso é necessário para localizar seu pedido."
-
-**Passo 5 — Nota do pedido (OPCIONAL):**
+**Passo 4 — Nota do pedido (OPCIONAL):**
 "E o número da nota fiscal do pedido?"
 (Se o cliente disser que não tem, não tem problema algum e você prossegue. NÃO ofereça pular antes de ele responder.)
 
-**Após coletar todos os dados — OVERVIEW:**
+**Passo 5 — CNPJ/CPF (ÚLTIMO — OBRIGATÓRIO):**
+"Por último, preciso do CNPJ ou CPF utilizado no momento da compra. É importante que seja o mesmo documento que foi usado no pedido para conseguirmos localizar."
+
+**SE O CLIENTE INFORMAR CPF:**
+Você prossegue normalmente para o OVERVIEW (abaixo).
+
+**SE O CLIENTE INFORMAR CNPJ:**
+1. Responda APENAS com a mensagem: "Só um instante, vou verificar o CNPJ..." e adicione a tag silenciosa no final:
+[CNPJ_CHECK:xxxxxxxxxxxxxx] (coloque apenas números na tag).
+NÃO faça o overview ainda. O sistema irá interceptar essa tag e devolver o resultado da validação na próxima mensagem oculta [CNPJ_RESULT:{...}].
+
+**REAÇÕES AO RESULTADO DO CNPJ (após receber a tag CNPJ_RESULT):**
+- Se "valid: false" e "motivo: matematica": Diga "Hmm, esse CNPJ não parece correto. Pode conferir e enviar novamente?"
+- Se "valid: true": Diga "Encontrei! O pedido foi feito no CNPJ da **[nome da empresa]**, certo?". Se ele confirmar, vá para o OVERVIEW. Se ele disser que não é essa empresa, peça para enviar o CNPJ novamente.
+- Se "motivo: api_sem_retorno": Vá direto para o OVERVIEW (pule a verificação do nome).
+
+**Após coletar e confirmar todos os dados adequadamente — OVERVIEW:**
 Mostre um resumo. ATENÇÃO: CADA dado deve ficar em uma linha separada com uma linha em branco entre eles, para que o sistema quebre os balões de forma organizada:
 "Anotei tudo! Vou confirmar os dados abaixo:
 
@@ -249,9 +262,9 @@ Mostre um resumo. ATENÇÃO: CADA dado deve ficar em uma linha separada com uma 
 
 • E-mail: [email]
 
-• CPF/CNPJ: [cnpj]
-
 • Nº da nota: [nota ou 'Não informado']
+
+• CPF/CNPJ: [cnpj]
 
 Está tudo correto?"
 
@@ -1016,6 +1029,7 @@ export interface PosVendaReportInput {
   cnpjCpf?: string | null;
   notaPedido?: string | null;
   problema: string;
+  cnpjData?: any;
   conversationSnippet?: string; // últimas mensagens do chat
 }
 
@@ -1042,6 +1056,15 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
     ...(input.email         ? [`   • E-mail: ${input.email}`]         : []),
     ...(input.cnpjCpf       ? [`   • CPF/CNPJ: ${input.cnpjCpf}`]     : []),
     ...(input.notaPedido    ? [`   • Nota do Pedido: ${input.notaPedido}`] : [`   • Nota do Pedido: Não informado`]),
+    ...(input.cnpjData      ? [
+      ``,
+      `🏢 DADOS DA EMPRESA (Receita Federal)`,
+      `   • Razão Social: ${input.cnpjData.nome}`,
+      `   • Fantasia: ${input.cnpjData.fantasia || "N/A"}`,
+      `   • Endereço: ${input.cnpjData.logradouro}`,
+      `   • Cidade/UF: ${input.cnpjData.municipio} - ${input.cnpjData.uf}`,
+      `   • Situação: ${input.cnpjData.situacao}`
+    ] : []),
     ``,
     `🔧 PROBLEMA RELATADO`,
     `   ${input.problema}`,

@@ -258,6 +258,7 @@ export const lcStorage = {
     cnpjCpf?: string | null;
     notaPedido?: string | null;
     problema?: string | null;
+    cnpjData?: any | null;
   }): Promise<void> {
     const setClauses: string[] = [];
     if (data.nome      != null) setClauses.push(`"posVendaNome" = '${data.nome.replace(/'/g, "\'\'")}', "name" = '${data.nome.replace(/'/g, "\'\'")}'`);
@@ -266,6 +267,7 @@ export const lcStorage = {
     if (data.cnpjCpf   != null) setClauses.push(`"posVendaCnpjCpf" = '${data.cnpjCpf.replace(/'/g, "\'\'")}'`);
     if (data.notaPedido != null) setClauses.push(`"posVendaNotaPedido" = '${data.notaPedido.replace(/'/g, "\'\'")}'`);
     if (data.problema  != null) setClauses.push(`"posVendaProblema" = '${data.problema.replace(/'/g, "\'\'")}'`);
+    if (data.cnpjData  != null) setClauses.push(`"posVendaCnpjData" = '${JSON.stringify(data.cnpjData).replace(/'/g, "\'\'")}'`);
     if (setClauses.length === 0) return;
     await db.execute(sql.raw(
       `UPDATE lc_visitors SET ${setClauses.join(', ')}, "lastSeenAt" = '${new Date().toISOString()}' WHERE "id" = '${id}'`

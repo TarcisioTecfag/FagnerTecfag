@@ -639,28 +639,103 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                 const visitor = await lcStorage.getVisitorById(currentVisitorId);
                 let aiResponse: any;
+                let rawReply: string = "";
+                let aiTurnContent = combinedContent;
+                let internalTurns = 0;
 
-                try {
-                  aiResponse = await processVisitorMessage(
-                    chat.id,
-                    combinedContent,
-                    visitor?.currentPage ?? undefined,
-                    visitor?.name ?? undefined,
-                  ) as any;
-                } catch (err: any) {
-                  console.error(`[LiveChat AI] ❌ ERRO CRÍTICO (Uncaught) no processVisitorMessage:`, err);
-                  sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
-                  // Fallback forçado caso processVisitorMessage falhe antes do seu try/catch interno
-                  aiResponse = { reply: `Hm, acho que não entendi. O que você precisa exatamente? [CRASH: ${err.message}]`, isError: true };
+                while (internalTurns < 3) {
+                  try {
+                    aiResponse = await processVisitorMessage(
+                      chat.id,
+                      aiTurnContent,
+                      visitor?.currentPage ?? undefined,
+                      visitor?.name ?? undefined,
+                    ) as any;
+                  } catch (err: any) {
+                    console.error(`[LiveChat AI] ❌ ERRO CRÍTICO (Uncaught) no processVisitorMessage:`, err);
+                    sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
+                    aiResponse = { reply: `Hm, acho que não entendi. O que você precisa exatamente? [CRASH: ${err.message}]`, isError: true };
+                    break;
+                  }
+
+                  if (aiResponse.isError && !aiResponse.reply) {
+                    aiResponse.reply = "Hm, parece que estou sem acesso ao meu cérebro agora. Alguém da equipe já vai te atender!";
+                    break;
+                  }
+
+                  rawReply = aiResponse.reply;
+                  const cnpjCheckMatch = rawReply.match(/\[CNPJ_CHECK:([^\]]+)\]/);
+
+                  if (cnpjCheckMatch) {
+                    const doc = cnpjCheckMatch[1];
+                    const cleanMsg = rawReply.replace(/\[CNPJ_CHECK:[^\]]+\]/g, "").trim();
+
+                    if (cleanMsg) {
+                      sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
+                      await lcStorage.createMessage({ chatId: chat.id, sender: "ai", content: cleanMsg });
+                      sendToVisitor(currentVisitorId, { type: "CHAT_REPLY", chatId: chat.id, sender: "ai", content: cleanMsg, timestamp: new Date().toISOString() });
+                      broadcastToAgents({ type: "CHAT_MESSAGE", chatId: chat.id, visitorId: currentVisitorId, sender: "ai", content: cleanMsg, timestamp: new Date().toISOString() });
+                      sendToVisitor(currentVisitorId, { type: "TYPING_START" });
+                    }
+
+                    // Utils inline validation
+                    const d = doc.replace(/\D/g, "");
+                    const isMathValid = (function(c) {
+                      if(c.length === 11) {
+                         if (/^(\d)\1+$/.test(c)) return false;
+                         let sum=0, rem;
+                         for(let i=1;i<=9;i++) sum += parseInt(c.substring(i-1,i))*(11-i);
+                         rem = (sum*10)%11; if(rem===10||rem===11) rem=0; if(rem!==parseInt(c.substring(9,10))) return false;
+                         sum=0; for(let i=1;i<=10;i++) sum += parseInt(c.substring(i-1,i))*(12-i);
+                         rem = (sum*10)%11; if(rem===10||rem===11) rem=0; if(rem!==parseInt(c.substring(10,11))) return false;
+                         return true;
+                      } else if(c.length === 14) {
+                         if (/^(\d)\1+$/.test(c)) return false;
+                         let size=c.length-2, num=c.substring(0,size), dig=c.substring(size), sum=0, pos=size-7;
+                         for(let i=size;i>=1;i--){sum+=parseInt(num.charAt(size-i))*pos--;if(pos<2)pos=9;}
+                         let res=sum%11<2?0:11-sum%11; if(res!==parseInt(dig.charAt(0))) return false;
+                         size=size+1; num=c.substring(0,size); sum=0; pos=size-7;
+                         for(let i=size;i>=1;i--){sum+=parseInt(num.charAt(size-i))*pos--;if(pos<2)pos=9;}
+                         res=sum%11<2?0:11-sum%11; if(res!==parseInt(dig.charAt(1))) return false;
+                         return true;
+                      }
+                      return false;
+                    })(d);
+
+                    let result: any;
+                    if (!isMathValid) {
+                      result = { valid: false, motivo: "matematica" };
+                    } else if (d.length === 14) {
+                      try {
+                        const r = await fetch(`https://publica.cnpj.ws/cnpj/${d}`);
+                        if (!r.ok) throw new Error();
+                        const rd = await r.json();
+                        const cnpjData = {
+                          cnpj: d,
+                          nome: rd.razao_social,
+                          fantasia: rd.estabelecimento?.nome_fantasia,
+                          logradouro: rd.estabelecimento ? `${rd.estabelecimento.tipo_logradouro} ${rd.estabelecimento.logradouro}` : "",
+                          municipio: rd.estabelecimento?.cidade?.nome,
+                          uf: rd.estabelecimento?.estado?.sigla,
+                          situacao: rd.estabelecimento?.situacao_cadastral
+                        };
+                        result = { valid: true, nome: rd.razao_social, dados: cnpjData };
+                        await lcStorage.updateVisitorPosVendaData(currentVisitorId, { cnpjData });
+                      } catch {
+                        result = { valid: false, motivo: "api_sem_retorno" };
+                      }
+                    } else {
+                      result = { valid: true };
+                    }
+
+                    await lcStorage.createMessage({ chatId: chat.id, sender: "visitor", content: `[CNPJ_RESULT:${JSON.stringify(result)}]` });
+                    aiTurnContent = `[CNPJ_RESULT:${JSON.stringify(result)}]`;
+                    internalTurns++;
+                  } else {
+                    break;
+                  }
                 }
 
-                if (aiResponse.isError) {
-                  console.error(`[LiveChat AI] ⚠️ aiResponse.isError retornado como true. Enviando mensagem de fallback.`);
-                  if (!aiResponse.reply) aiResponse.reply = "Hm, parece que estou sem acesso ao meu cérebro agora (API Key não configurada). Alguém da equipe já vai te atender!";
-                }
-
-                // Extrair score (regex com escape simples correto)
-                const rawReply = aiResponse.reply;
                 let finalScore = visitor?.engagementScore ?? 0;
 
                 const scoreMatch = rawReply.match(/\[SCORE:(\d+)\]/i);
@@ -877,6 +952,14 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     });
                     console.log(`[LiveChat] Dados de pós venda salvos para visitante ${currentVisitorId}`);
 
+                    if (posVendaData.cnpjCpf) {
+                      const cv = await lcStorage.getVisitorById(currentVisitorId);
+                      if (cv?.posVendaCnpjData) {
+                         const pj = typeof cv.posVendaCnpjData === 'string' ? JSON.parse(cv.posVendaCnpjData) : cv.posVendaCnpjData;
+                         posVendaData.cnpjData = pj;
+                      }
+                    }
+
                     // ── Criar OS no RD Station CRM (background, não bloqueia o chat) ──
                     if (isRdCrmConfigured()) {
                       // Nota inicial: IA iniciando criação do card
@@ -900,6 +983,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             cnpjCpf:     posVendaData.cnpjCpf     ?? null,
                             notaPedido:  posVendaData.notaPedido  ?? null,
                             problema:    posVendaData.problema,
+                            cnpjData:    posVendaData.cnpjData,
                             conversationSnippet: snippet,
                           });
 
@@ -913,6 +997,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                               cnpjCpf:    posVendaData.cnpjCpf     ?? undefined,
                               notaPedido: posVendaData.notaPedido  ?? undefined,
                               problema:   posVendaData.problema,
+                              cnpjData:   posVendaData.cnpjData    ?? undefined,
                             },
                             relatorio
                           );
