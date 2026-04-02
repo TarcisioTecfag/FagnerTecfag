@@ -283,6 +283,11 @@ app.get("/api/ping", (_req, res) => {
   res.json({ pong: true, ts: Date.now(), uptime: process.uptime() });
 });
 
+import { lastGeminiError } from "./livechat/livechatAI.js";
+app.get("/api/test-error", (_req, res) => {
+  res.json({ error: lastGeminiError });
+});
+
 // ─── Diagnóstico Gemini — testa a API key e o modelo diretamente ─────────────
 // Endpoint temporário para diagnóstico rápido em produção (Railway).
 // Chame: GET /api/test-gemini?model=gemini-1.5-pro

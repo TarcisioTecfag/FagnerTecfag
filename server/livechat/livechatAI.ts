@@ -157,6 +157,7 @@ interface DiagEntry {
 const diagLog: DiagEntry[] = [];
 export function getDiagLog() { return diagLog; }
 export function hasAISession(chatId: string): boolean { return aiSessions.has(chatId); }
+export let lastGeminiError: any = null;
 
 // ─── System Prompt para o Site (sem fluxo de triagem) ─────────────────────────
 
@@ -877,6 +878,12 @@ export async function processVisitorMessage(
     console.error(`[LiveChat AI][DIAG]   Roles enviados: ${normalizedContents.map(c => c.role).join(' -> ')}`);
     diagLog.push({ ts: new Date().toISOString(), chatId, roles: normalizedContents.map(c => c.role), firstRole: normalizedContents[0]?.role ?? 'EMPTY', userMsg: userMessage.slice(0, 100), ok: false, error: err.message?.slice(0, 500) });
     if (diagLog.length > 20) diagLog.shift();
+    
+    lastGeminiError = {
+      message: err.message,
+      stack: err.stack,
+      time: new Date().toISOString()
+    };
 
     // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
     // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou
