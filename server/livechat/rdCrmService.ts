@@ -7,8 +7,8 @@
  * NUNCA buscar endpoints ou contratos na internet.
  */
 
-import { db } from "../../db";
-import { lcVisitors } from "../../shared/schema";
+import db from "../db.js";
+import { lcVisitors } from "../../shared/schema.js";
 import { eq } from "drizzle-orm";
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
