@@ -517,7 +517,9 @@ export async function processVisitorMessage(
       const pastMessages = await lcStorage.listMessagesByChat(chatId);
       if (pastMessages && pastMessages.length > 0) {
         // Usa as últimas 6 mensagens (3 turnos) para priorizar velocidade brutal e não explodir o contexto do Gemini
-        const recent = pastMessages.slice(-6);
+        // pastMessages vem do banco ordenado por data DESCENDENTE (o index 0 é a mensagem mais nova).
+        // Pegamos as 6 primeiras do array (que são as mais recentes), e INVERTEMOS para ficar na ordem cronológica!
+        const recent = pastMessages.slice(0, 6).reverse();
         for (const msg of recent) {
           if (msg.sender === "visitor") {
             session.history.push({ role: "user", parts: [{ text: msg.content }] });
@@ -763,8 +765,16 @@ export async function processVisitorMessage(
   const normalizedContents: { role: string; parts: any[] }[] = [];
   for (const msg of rawContents) {
     if (normalizedContents.length > 0 && normalizedContents[normalizedContents.length - 1].role === msg.role) {
-      normalizedContents[normalizedContents.length - 1].parts.push({ text: "\n\n" });
-      normalizedContents[normalizedContents.length - 1].parts.push(...msg.parts);
+      // Mesclar partes de texto para evitar arrays de múltiplas partes de texto que a API rejeita (HTTP 400)
+      const lastMsg = normalizedContents[normalizedContents.length - 1];
+      const hasOnlyText = lastMsg.parts.every((p: any) => p.text !== undefined) && msg.parts.every((p: any) => p.text !== undefined);
+      
+      if (hasOnlyText) {
+        const appendedText = msg.parts.map((p: any) => p.text).join("\n\n");
+        lastMsg.parts[0].text += "\n\n" + appendedText;
+      } else {
+        lastMsg.parts.push(...msg.parts);
+      }
     } else {
       normalizedContents.push({ role: msg.role, parts: [...msg.parts] });
     }
