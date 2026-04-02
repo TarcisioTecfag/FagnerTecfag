@@ -680,12 +680,19 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "")
                   .replace(/\[SCORE:\d+\]/gi, "")
                   .replace(/\[PRODUTO_IDENTIFICADO:[^\]]+\]/gi, "")
+                  .replace(/\[STAGE:[^\]]+\]/gi, "")
+                  .replace(/\[POS_VENDA_DADOS:[\s\S]*?\]/gi, "")
+                  .replace(/\[CRASH:[^\]]*\]/gi, "")
                   .trim();
 
                 // ─── Pré-processa: garante que URLs fiquem em parágrafos próprios ─────────
+                // Também converte bullets (• linha) em parágrafos duplos para que cada
+                // campo de confirmação de dados apareça em um balão separado
                 const processedReply = cleanReply
                   .replace(/(https?:\/\/[^\s)]+)/gi, "\n\n$1\n\n")
                   .replace(/(\/uploads\/[^\s)]+)/gi, "\n\n$1\n\n")
+                  // Cada linha de bullet "• Algo: valor" vira seu próprio parágrafo
+                  .replace(/\n([•\-])/g, "\n\n$1")
                   .replace(/\n{3,}/g, "\n\n")
                   .trim();
 
@@ -872,6 +879,10 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                     // ── Criar OS no RD Station CRM (background, não bloqueia o chat) ──
                     if (isRdCrmConfigured()) {
+                      // Nota inicial: IA iniciando criação do card
+                      await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", "⏳ Iniciando criação de card no RD Station CRM...");
+                      broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
+
                       (async () => {
                         try {
                           // Coletar snippet das últimas mensagens para enriquecer o relatório
@@ -906,6 +917,10 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             relatorio
                           );
 
+                          // Nota de sucesso
+                          await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", `✅ Card criado no RD Station CRM!\nID do Deal: ${dealId}\nLink: https://app.rdstation.com.br/crm/deals/${dealId}`);
+                          broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
+
                           // Notificar painel admin com o link da OS criada
                           broadcastToAgents({
                             type: "RD_CRM_OS_CREATED",
@@ -917,10 +932,14 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                           console.log(`[RD CRM] ✅ OS criada no RD CRM para visitante ${currentVisitorId}: ${dealId}`);
                         } catch (crmErr: any) {
                           console.error(`[RD CRM] ❌ Falha ao criar OS:`, crmErr.message);
+                          // Nota de falha visível no painel
+                          await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", `❌ Falha ao criar card no RD CRM\nMotivo: ${crmErr.message}`).catch(() => {});
+                          broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
                         }
                       })();
                     } else {
                       console.log("[RD CRM] Integração desativada (variáveis de ambiente não configuradas).");
+                      await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", "⚠️ Integração com RD Station CRM não configurada. Configure RD_CRM_CLIENT_ID e RD_CRM_CLIENT_SECRET para ativar a criação automática de cards.").catch(() => {});
                     }
                   } catch (parseErr: any) {
                     console.warn("[LiveChat] Falha ao parsear POS_VENDA_DADOS:", parseErr.message);

@@ -48,7 +48,14 @@ export const lcStorage = {
     if (Date.now() - lastSeenTime > TWO_HOURS_MS) {
       const { v4: uuidv4 } = await import("uuid");
       const newId = uuidv4();
-      
+
+      // Finaliza o card anterior antes de criar novo (não deixa em atendimento/sem stage)
+      if (visitor.pipelineStage === 'em_atendimento' || visitor.pipelineStage === 'pos_venda' || visitor.pipelineStage === 'novo_atendimento') {
+        await db.update(lcVisitors)
+          .set({ pipelineStage: 'finalizado_sem_venda' })
+          .where(eq(lcVisitors.id, visitor.id));
+      }
+
       await db.insert(lcVisitors).values({
         id: newId,
         cookieId: visitor.cookieId,
@@ -61,7 +68,7 @@ export const lcStorage = {
         utmSource: visitor.utmSource,
         utmMedium: visitor.utmMedium,
         utmCampaign: visitor.utmCampaign,
-        name: visitor.name,
+        name: visitor.name,        // Propaga nome para o novo card
         posVendaNome: visitor.posVendaNome,
         posVendaTelefone: visitor.posVendaTelefone,
         posVendaEmail: visitor.posVendaEmail,
@@ -278,6 +285,18 @@ export const lcStorage = {
       .where(eq(lcVisitors.id, visitorId));
   },
 
+  // ── Negociações Anteriores: busca todos os cards do mesmo cookie (exceto o atual) ──
+  async getVisitorHistoryByCookie(cookieId: string, excludeId: string): Promise<LcVisitor[]> {
+    return db.select()
+      .from(lcVisitors)
+      .where(and(
+        eq(lcVisitors.cookieId, cookieId),
+        sql`id != ${excludeId}`,
+      ))
+      .orderBy(desc(lcVisitors.lastSeenAt))
+      .limit(20);
+  },
+
   async incrementVisitorPages(id: string): Promise<void> {
     await db.update(lcVisitors)
       .set({
@@ -435,20 +454,25 @@ export const lcStorage = {
   },
 
   async sweepOrphanedChats(): Promise<void> {
-    // Fecha chats que estão ativos há horas sem término (ex: crash do servidor ou morte do websocket)
-    // Se o chat foi iniciado há mais de 1 hora e ainda não está closed, forçar closed e sem_resposta
-    const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    // Fecha chats ativos há mais de 90 minutos sem resposta ou sem encerramento
+    // (Protege contra crash do servidor que mata os timers in-memory de 10 min)
+    const cutoff = new Date(Date.now() - 90 * 60 * 1000).toISOString();
     
     const orphans = await db.select().from(lcChats)
       .where(and(
         sql`status != 'closed'`,
-        sql`started_at < ${cutoff}`
+        sql`"startedAt" < ${cutoff}`
       ));
       
     for (const chat of orphans) {
       await this.closeChat(chat.id);
-      await this.updateVisitorPipeline(chat.visitorId, "sem_resposta");
-      console.log(`[LiveChat Sweeper] Chat órfão ${chat.id} encerrado e visitante movido para sem_resposta.`);
+      // Só move para sem_resposta se o visitante ainda não foi movido para um estágio final
+      const visitor = await this.getVisitorById(chat.visitorId);
+      const finalStages = ['pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
+      if (visitor && !finalStages.includes(visitor.pipelineStage ?? '')) {
+        await this.updateVisitorPipeline(chat.visitorId, "sem_resposta");
+      }
+      console.log(`[LiveChat Sweeper] Chat órfão ${chat.id} encerrado.`);
     }
   },
 
