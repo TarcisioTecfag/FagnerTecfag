@@ -971,7 +971,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                           // Coletar snippet das últimas mensagens para enriquecer o relatório
                           const recentMessages = await lcStorage.listMessagesByChat(chat.id);
                           const snippet = recentMessages
-                            .slice(-6)
+                            .slice(-30)
                             .map(m => `${m.sender === 'visitor' ? 'Cliente' : 'Fagner'}: ${m.content.slice(0, 150)}`)
                             .join('\n');
 

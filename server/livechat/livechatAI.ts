@@ -107,8 +107,15 @@ export function detectStageIntent(message: string): 'pos_venda' | 'outros' | nul
 
 export function isObviousNoise(message: string): { isNoise: boolean; reply: string } {
   const trimmed = message.trim();
-  // Mensagens vazias ou muito curtas sem conteúdo técnico
-  if (trimmed.length < 4) {
+  
+  // Exceções para confirmações curtas no meio de fluxos e conversas normais
+  const validWords = ["sim", "nao", "não", "ok", "oi", "olá", "ola", "bom", "ss", "nn"];
+  if (validWords.includes(trimmed.toLowerCase())) {
+    return { isNoise: false, reply: '' };
+  }
+
+  // Mensagens completamente vazias ou apenas uma letra solta sem ser validWord
+  if (trimmed.length < 2) {
     return { isNoise: true, reply: NOISE_REPLIES[3] };
   }
   for (const pattern of NOISE_PATTERNS) {
@@ -538,9 +545,9 @@ export async function processVisitorMessage(
     try {
       const pastMessages = await lcStorage.listMessagesByChat(chatId);
       if (pastMessages && pastMessages.length > 0) {
-        // Usa as últimas 6 mensagens (3 turnos) para priorizar velocidade brutal e não explodir o contexto do Gemini
-        // pastMessages vem ordenado por ASC (a mais recente no final). slice(-6) pega as últimas 6 na ordem correta!
-        const recent = pastMessages.slice(-6);
+        // Usa as últimas 30 mensagens (15 turnos) para não perder o histórico do fluxo de coleta do CRM.
+        // pastMessages vem ordenado por ASC (a mais recente no final). slice(-30) pega as últimas 30 na ordem correta!
+        const recent = pastMessages.slice(-30);
         for (const msg of recent) {
           if (msg.sender === "visitor") {
             session.history.push({ role: "user", parts: [{ text: msg.content }] });
