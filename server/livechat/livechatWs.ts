@@ -648,14 +648,15 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     visitor?.name ?? undefined,
                   ) as any;
                 } catch (err: any) {
-                  console.error(`[LiveChat AI] ❌ ERRO CRÍTICO no processVisitorMessage:`, err);
+                  console.error(`[LiveChat AI] ❌ ERRO CRÍTICO (Uncaught) no processVisitorMessage:`, err);
                   sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
-                  return; // Falha interrompe o fluxo mas não trava o frontend
+                  // Fallback forçado caso processVisitorMessage falhe antes do seu try/catch interno
+                  aiResponse = { reply: "Hm, acho que não entendi. O que você precisa exatamente?", isError: true };
                 }
 
                 if (aiResponse.isError) {
-                  sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
-                  return; // Falha silenciosa
+                  console.error(`[LiveChat AI] ⚠️ aiResponse.isError retornado como true. Enviando mensagem de fallback.`);
+                  if (!aiResponse.reply) aiResponse.reply = "Hm, parece que estou sem acesso ao meu cérebro agora (API Key não configurada). Alguém da equipe já vai te atender!";
                 }
 
                 // Extrair score (regex com escape simples correto)

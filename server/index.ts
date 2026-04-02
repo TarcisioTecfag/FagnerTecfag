@@ -25,7 +25,7 @@ setInterval(() => {
 import express, { type Request, type Response, type NextFunction } from "express";
 import { registerLiveChatRoutes } from "./livechat/livechatRoutes.js";
 import { initLiveChatWs } from "./livechat/livechatWs.js";
-import { ensureLiveChatSchema } from "./livechat/livechatStorage.js";
+import { ensureLiveChatSchema, lcStorage } from "./livechat/livechatStorage.js";
 import cors from "cors";
 import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -38,6 +38,13 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { storage } from "./storage.js";
 import { pool, bootstrapSchema } from "./db.js";
+
+// Sweeper de chats órfãos (ocorre após reinícios do servidor)
+setInterval(() => {
+  lcStorage.sweepOrphanedChats().catch((err) => {
+    console.error("[LiveChat Sweeper] Erro:", err);
+  });
+}, 10 * 60 * 1000).unref();
 
 import {
   initOrchestrator,

@@ -434,6 +434,24 @@ export const lcStorage = {
       .limit(limit);
   },
 
+  async sweepOrphanedChats(): Promise<void> {
+    // Fecha chats que estão ativos há horas sem término (ex: crash do servidor ou morte do websocket)
+    // Se o chat foi iniciado há mais de 1 hora e ainda não está closed, forçar closed e sem_resposta
+    const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    
+    const orphans = await db.select().from(lcChats)
+      .where(and(
+        sql`status != 'closed'`,
+        sql`started_at < ${cutoff}`
+      ));
+      
+    for (const chat of orphans) {
+      await this.closeChat(chat.id);
+      await this.updateVisitorPipeline(chat.visitorId, "sem_resposta");
+      console.log(`[LiveChat Sweeper] Chat órfão ${chat.id} encerrado e visitante movido para sem_resposta.`);
+    }
+  },
+
   // ── Messages ─────────────────────────────────────────────────────────
 
   async createMessage(data: {
