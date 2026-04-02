@@ -505,6 +505,9 @@ export async function processVisitorMessage(
 
   // Get or create AI session
   // Se a sessão não existir em memória (ex: reinício do servidor), reconstruir histórico do banco
+  const chat = await lcStorage.getChatById(chatId);
+  const visitor = chat ? await lcStorage.getVisitorById(chat.visitorId) : null;
+
   let session = aiSessions.get(chatId);
   if (!session) {
     session = {
