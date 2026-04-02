@@ -128,7 +128,7 @@ export function isObviousNoise(message: string): { isNoise: boolean; reply: stri
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const GEMINI_CHAT_MODEL = "gemini-1.5-flash";
+const GEMINI_CHAT_MODEL = "gemini-3.1-pro-preview";
 const GEMINI_BASE       = "https://generativelanguage.googleapis.com/v1beta";
 
 // ─── In-memory chat sessions (histórico por chat) ─────────────────────────────
@@ -443,7 +443,12 @@ async function geminiRequest(url: string, payload: object): Promise<any> {
 
       if (!res.ok) {
         const body = await res.text().catch(() => "");
-        const err = new Error(`Gemini HTTP ${res.status}: ${body.slice(0, 200)}`);
+        // Log completo do erro do Gemini (era truncado em 200 chars o que escondia o problema real)
+        console.error(`[LiveChat AI][GEMINI ERROR] HTTP ${res.status}`);
+        console.error(`[LiveChat AI][GEMINI ERROR] Body completo: ${body.slice(0, 2000)}`);
+        console.error(`[LiveChat AI][GEMINI ERROR] URL usada: ${url.replace(/key=([^&]+)/, 'key=HIDDEN')}`);
+        console.error(`[LiveChat AI][GEMINI ERROR] Payload preview: ${JSON.stringify(payload).slice(0, 800)}`);
+        const err = new Error(`Gemini HTTP ${res.status}: ${body.slice(0, 500)}`);
         // Erros 4xx não devem ser tentados novamente
         if (/Gemini HTTP 4\d\d/.test(err.message)) throw err;
         if (attempt < LIVECHAT_RETRY_DELAYS.length) {
@@ -866,7 +871,7 @@ export async function processVisitorMessage(
     // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
     // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou
     // ATENÇÃO: Sem emoji na mensagem de fallback para evitar balão solo de emoji
-    const fallbackReply = `Hm, acho que não entendi. O que você precisa exatamente? [DEBUG: ${err.message || 'Unknown Error'}]`;
+    const fallbackReply = "Hm, acho que não entendi. O que você precisa exatamente?";
     return {
       reply: fallbackReply,
       needsHuman: false,

@@ -14,7 +14,7 @@ import { buildSessionSummary, ContactSession } from "./sessionManager.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const GEMINI_CHAT_MODEL      = "gemini-1.5-flash";
+const GEMINI_CHAT_MODEL      = "gemini-3.1-pro-preview";
 const GEMINI_EMBED_MODEL     = "gemini-embedding-001";
 const GEMINI_BASE            = "https://generativelanguage.googleapis.com/v1beta";
 

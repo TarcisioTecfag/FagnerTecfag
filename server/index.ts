@@ -283,6 +283,41 @@ app.get("/api/ping", (_req, res) => {
   res.json({ pong: true, ts: Date.now(), uptime: process.uptime() });
 });
 
+// ─── Diagnóstico Gemini — testa a API key e o modelo diretamente ─────────────
+// Endpoint temporário para diagnóstico rápido em produção (Railway).
+// Chame: GET /api/test-gemini
+app.get("/api/test-gemini", async (_req, res) => {
+  const apiKey = (await lcStorage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "";
+  if (!apiKey) return res.json({ ok: false, error: "GEMINI_API_KEY não configurada no banco ou env" });
+
+  const model = "gemini-3.1-pro-preview";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: "Diga apenas: OK" }] }],
+        generationConfig: { maxOutputTokens: 10 },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    
+    const body = await resp.text();
+    const parsed = JSON.parse(body).catch?.(() => body) ?? JSON.parse(body);
+    
+    if (!resp.ok) {
+      return res.json({ ok: false, status: resp.status, model, error: body.slice(0, 1000) });
+    }
+    
+    const reply = parsed?.candidates?.[0]?.content?.parts?.[0]?.text ?? "(sem texto)";
+    return res.json({ ok: true, model, reply, status: resp.status });
+  } catch (err: any) {
+    return res.json({ ok: false, model, error: err.message });
+  }
+});
+
 // ─── Chat Público — Endpoint para Upload de Imagens no Chat Widget ────────
 app.post("/api/chat-upload", (req, res, next) => {
   const handler = chatUpload.single("file");
