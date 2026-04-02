@@ -472,9 +472,10 @@ NUNCA diga que o frete é grátis ou 0 reais. Informe ao cliente que, devido ao 
 
   const optionsTable = result.options
     .slice(0, 5)
-    .map((opt, i) =>
-      `${i + 1}. **${opt.carrier}** — ${opt.priceFormatted} (${opt.deliveryDays} dias úteis)`
-    )
+    .map((opt, i) => {
+      const priceText = opt.price === 0 ? "A combinar (peso excedente)" : opt.priceFormatted;
+      return `${i + 1}. **${opt.carrier}** — ${priceText} (${opt.deliveryDays} dias úteis)`;
+    })
     .join("\n");
 
   return `## SIMULAÇÃO DE FRETE — CEP ${result.cep}
@@ -482,5 +483,5 @@ NUNCA diga que o frete é grátis ou 0 reais. Informe ao cliente que, devido ao 
 
 ${optionsTable}
 
-INSTRUÇÃO: Apresente as opções ao cliente de forma amigável. Destaque a mais econômica e a mais rápida. Se quiser comprar, ofereça ajuda para finalizar.`;
+INSTRUÇÃO: Apresente as opções ao cliente de forma comercial. Se alguma opção constar como "A combinar", NUNCA FALE que ela custa 0 reais nem que é grátis. Apenas diga que "Temos a opção de transportadora por X, ou modalidade a combinar, onde nosso especialista alinha o frete diretamente com você." Destaque a mais barata e a mais rápida.`;
 }
