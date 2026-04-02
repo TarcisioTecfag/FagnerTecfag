@@ -199,9 +199,36 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // ── Diagnóstico temporário (REMOVER após debug) ──────────────────
-  router.get("/diag", (_req: Request, res: Response) => {
-    return res.json(getDiagLog());
+  // ── Diagnóstico RD CRM: lista funis/etapas reais (para obter IDs corretos) ──
+  router.get("/rd-pipelines", requireAuth, async (_req: Request, res: Response) => {
+    try {
+      const at = process.env.RD_CRM_ACCESS_TOKEN;
+      if (!at) return res.status(400).json({ error: "RD_CRM_ACCESS_TOKEN não configurado" });
+
+      const r = await fetch("https://api.rd.services/crm/v2/pipelines", {
+        headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" }
+      });
+      const data = await r.json();
+      return res.json({ status: r.status, data });
+    } catch (err: any) {
+      return res.status(500).json({ message: err?.message });
+    }
+  });
+
+  // ── Diagnóstico RD CRM: lista etapas de um funil específico ──────────────────
+  router.get("/rd-stages/:pipelineId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const at = process.env.RD_CRM_ACCESS_TOKEN;
+      if (!at) return res.status(400).json({ error: "RD_CRM_ACCESS_TOKEN não configurado" });
+      const pid = p(req.params.pipelineId);
+      const r = await fetch(`https://api.rd.services/crm/v2/pipelines/${pid}/stages`, {
+        headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" }
+      });
+      const data = await r.json();
+      return res.json({ status: r.status, data });
+    } catch (err: any) {
+      return res.status(500).json({ message: err?.message });
+    }
   });
 
   // Mount all routes under /api/livechat
