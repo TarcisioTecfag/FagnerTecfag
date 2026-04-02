@@ -638,12 +638,20 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 } catch {}
 
                 const visitor = await lcStorage.getVisitorById(currentVisitorId);
-                const aiResponse = await processVisitorMessage(
-                  chat.id,
-                  combinedContent,
-                  visitor?.currentPage ?? undefined,
-                  visitor?.name ?? undefined,
-                ) as any;
+                let aiResponse: any;
+
+                try {
+                  aiResponse = await processVisitorMessage(
+                    chat.id,
+                    combinedContent,
+                    visitor?.currentPage ?? undefined,
+                    visitor?.name ?? undefined,
+                  ) as any;
+                } catch (err: any) {
+                  console.error(`[LiveChat AI] ❌ ERRO CRÍTICO no processVisitorMessage:`, err);
+                  sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
+                  return; // Falha interrompe o fluxo mas não trava o frontend
+                }
 
                 if (aiResponse.isError) {
                   sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
