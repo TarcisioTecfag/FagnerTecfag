@@ -63,7 +63,7 @@ Analise este áudio enviado por um cliente e responda em JSON:
 Responda APENAS o JSON, sem markdown.`;
 
   try {
-    const model = "gemini-3.1-pro-preview";
+    const model = "gemini-1.5-flash";
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
@@ -134,7 +134,7 @@ Se for nota fiscal, extraia número da nota, data e valor em structuredData.
 Responda APENAS o JSON, sem markdown.`;
 
   try {
-    const model = "gemini-3.1-pro-preview";
+    const model = "gemini-1.5-flash";
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {

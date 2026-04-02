@@ -128,7 +128,7 @@ export function isObviousNoise(message: string): { isNoise: boolean; reply: stri
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const GEMINI_CHAT_MODEL = "gemini-3.1-pro-preview";
+const GEMINI_CHAT_MODEL = "gemini-1.5-flash";
 const GEMINI_BASE       = "https://generativelanguage.googleapis.com/v1beta";
 
 // ─── In-memory chat sessions (histórico por chat) ─────────────────────────────
@@ -866,7 +866,7 @@ export async function processVisitorMessage(
     // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
     // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou
     // ATENÇÃO: Sem emoji na mensagem de fallback para evitar balão solo de emoji
-    const fallbackReply = "Hm, acho que não entendi. O que você precisa exatamente?";
+    const fallbackReply = `Hm, acho que não entendi. O que você precisa exatamente? [DEBUG: ${err.message || 'Unknown Error'}]`;
     return {
       reply: fallbackReply,
       needsHuman: false,
