@@ -187,8 +187,14 @@ async function createDeal(posVenda: PosVendaData, contactId: string): Promise<st
   const problema = posVenda.problema ?? "Suporte pós-venda";
   const titulo   = `Pós Venda — ${posVenda.nome} — ${problema.slice(0, 50)}`;
 
+  // pipeline_id: funil O.S (obrigatório pela API v2)
+  // A variável RD_CRM_PIPELINE_OS_ID deve ser configurada no Railway.
+  // Fallback: ID do funil O.S da Tecfag (67c9f944c7fe880018b30ab1)
+  const pipelineId = process.env.RD_CRM_PIPELINE_OS_ID ?? "67c9f944c7fe880018b30ab1";
+
   const dealPayload: Record<string, any> = {
     name:        titulo,
+    pipeline_id: pipelineId,
     stage_id:    process.env.RD_CRM_PIPELINE_OS_STAGE_ID!,
     owner_id:    process.env.RD_CRM_OWNER_POS_VENDA_ID!,
     contact_ids: [contactId],
