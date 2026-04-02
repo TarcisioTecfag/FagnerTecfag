@@ -399,25 +399,43 @@ function LiveChat() {
               });
             }
             break;
-          case "VISITOR_POS_VENDA_UPDATED":
-            // Atualiza dados de pós venda no estado local do visitante selecionado
+          case "VISITOR_POS_VENDA_UPDATED": {
+            // Atualiza dados de pós venda no estado local
+            const mapping: any = {
+              posVendaNome: data.posVendaData?.nome,
+              posVendaTelefone: data.posVendaData?.telefone,
+              posVendaEmail: data.posVendaData?.email,
+              posVendaCnpjCpf: data.posVendaData?.cnpjCpf,
+              posVendaNotaPedido: data.posVendaData?.notaPedido,
+              posVendaProblema: data.posVendaData?.problema,
+              name: data.posVendaData?.nome, // Sincroniza nome base
+            };
+
             if (selectedVisitor?.id === data.visitorId) {
-              setSelectedVisitor(prev => prev ? { ...prev, ...data.posVendaData } : prev);
+              setSelectedVisitor(prev => prev ? { ...prev, ...mapping } : prev);
             }
-            // Atualiza também no pipeline
+            
+            // Atualiza também no pipeline e chats para refletir o nome em tempo real
             setPipelineData(prev => {
               const next = { ...prev };
               for (const stage of Object.keys(next)) {
                 next[stage] = (next[stage] || []).map((v: Visitor) =>
-                  v.id === data.visitorId ? { ...v, ...data.posVendaData } : v
+                  v.id === data.visitorId ? { ...v, ...mapping } : v
                 );
               }
               return next;
             });
             setAllVisitors(prev => prev.map(v =>
-              v.id === data.visitorId ? { ...v, ...data.posVendaData } : v
+              v.id === data.visitorId ? { ...v, ...mapping } : v
             ));
+            
+            if (data.posVendaData?.nome) {
+               setChats(prev => prev.map(c => 
+                 c.visitorId === data.visitorId ? { ...c, visitorName: data.posVendaData.nome } : c
+               ));
+            }
             break;
+          }
         }
       } catch {}
     };
@@ -1430,6 +1448,18 @@ function LiveChat() {
                                <div className="flex items-center gap-2 text-[9px] text-zinc-400">
                                 <span>{src.icon} {src.label}</span>
                                 <span>{"\u2022"} {v.totalChats} chats</span>
+                                
+                                {(() => {
+                                  const previousCount = visitors.filter(p => p.cookieId === v.cookieId && p.id !== v.id).length;
+                                  if (previousCount > 0) {
+                                    return (
+                                      <span className="flex items-center gap-0.5 text-[8px] bg-amber-50 text-amber-600 font-bold px-1.5 py-0.5 rounded border border-amber-100 ml-auto">
+                                        {"\u{1F4C2}"} {previousCount} anterior{previousCount > 1 ? 'es' : ''}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                                {/* Pós Venda badge */}
                                {(v as any).posVendaNome && (
@@ -1607,29 +1637,29 @@ function LiveChat() {
                     </div>
                   </div>
 
-                  {/* Col: Dados Pós Venda */}
-                  {(selectedVisitor.posVendaNome || selectedVisitor.posVendaTelefone || selectedVisitor.posVendaEmail || selectedVisitor.posVendaCnpjCpf) && (
-                    <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden" style={{ background: "rgba(139,92,246,0.03)" }}>
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-3 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
-                        🎫 Dados Pós Venda
-                      </p>
-                      <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                        {[
-                          { label: "Nome do comprador", value: selectedVisitor.posVendaNome, icon: "👤" },
-                          { label: "Telefone (WhatsApp)", value: selectedVisitor.posVendaTelefone, icon: "📱" },
-                          { label: "E-mail de suporte", value: selectedVisitor.posVendaEmail, icon: "✉️" },
-                          { label: "CPF / CNPJ", value: selectedVisitor.posVendaCnpjCpf, icon: "🪪" },
-                          { label: "Nota do pedido", value: selectedVisitor.posVendaNotaPedido || "Não informado", icon: "📄" },
-                          { label: "Problema relatado", value: selectedVisitor.posVendaProblema, icon: "⚙️" },
-                        ].filter(f => f.value).map(f => (
-                          <div key={f.label} className="p-2 bg-white rounded-lg border border-purple-100/60 shadow-sm">
-                            <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
-                            <p className="text-[11px] font-semibold text-zinc-700 break-all leading-snug">{f.value}</p>
-                          </div>
-                        ))}
-                      </div>
+                  {/* Col: Dados Pós Venda (Sempre visível) */}
+                  <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden" style={{ background: "rgba(139,92,246,0.03)" }}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider mb-3 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
+                      🎫 Dados Pós Venda
+                    </p>
+                    <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                      {[
+                        { label: "Nome do comprador", value: selectedVisitor.posVendaNome, icon: "👤" },
+                        { label: "Telefone (WhatsApp)", value: selectedVisitor.posVendaTelefone, icon: "📱" },
+                        { label: "E-mail de suporte", value: selectedVisitor.posVendaEmail, icon: "✉️" },
+                        { label: "CPF / CNPJ", value: selectedVisitor.posVendaCnpjCpf, icon: "🪪" },
+                        { label: "Nota do pedido", value: selectedVisitor.posVendaNotaPedido, icon: "📄" },
+                        { label: "Problema relatado", value: selectedVisitor.posVendaProblema, icon: "⚙️" },
+                      ].map(f => (
+                        <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-80'}`}>
+                          <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
+                          <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
+                            {f.value || "Aguardando preenchimento"}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  </div>
 
                   {/* Col: Notas da IA */}
                   <div className="flex-1 p-4 flex flex-col overflow-hidden bg-zinc-50/30">

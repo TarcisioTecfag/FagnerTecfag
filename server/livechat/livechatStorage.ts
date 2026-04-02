@@ -30,8 +30,52 @@ export const lcStorage = {
   // ── Visitors ─────────────────────────────────────────────────────────
 
   async getVisitorByCookie(cookieId: string): Promise<LcVisitor | null> {
-    const rows = await db.select().from(lcVisitors).where(eq(lcVisitors.cookieId, cookieId)).limit(1);
-    return rows[0] ?? null;
+    const rows = await db.select()
+      .from(lcVisitors)
+      .where(eq(lcVisitors.cookieId, cookieId))
+      .orderBy(desc(lcVisitors.lastSeenAt))
+      .limit(1);
+    
+    if (rows.length === 0) return null;
+    let visitor = rows[0];
+
+    // Lógica da Sessão de 2 Horas: se a última atividade foi há mais de 2h, cria "nova" negociação.
+    // O usuário requisitou que cards finalizados há tempo não fossem reabertos e misturados.
+    const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+    const lastSeenTime = new Date(visitor.lastSeenAt).getTime();
+    
+    // Se passou do tempo, duplica os dados base mas cria um card NOVO
+    if (Date.now() - lastSeenTime > TWO_HOURS_MS) {
+      const { v4: uuidv4 } = await import("uuid");
+      const newId = uuidv4();
+      
+      await db.insert(lcVisitors).values({
+        id: newId,
+        cookieId: visitor.cookieId,
+        ip: visitor.ip,
+        city: visitor.city,
+        country: visitor.country,
+        browser: visitor.browser,
+        userAgent: visitor.userAgent,
+        source: visitor.source,
+        utmSource: visitor.utmSource,
+        utmMedium: visitor.utmMedium,
+        utmCampaign: visitor.utmCampaign,
+        name: visitor.name,
+        posVendaNome: visitor.posVendaNome,
+        posVendaTelefone: visitor.posVendaTelefone,
+        posVendaEmail: visitor.posVendaEmail,
+        posVendaCnpjCpf: visitor.posVendaCnpjCpf,
+        posVendaNotaPedido: visitor.posVendaNotaPedido,
+        totalVisits: visitor.totalVisits + 1,
+        pipelineStage: "novo_atendimento",
+        isOnline: "true",
+      });
+      console.log(`[LiveChat Storage] Sessão expirada (>2h). Novo Visitante (deal) criado para o cookie ${cookieId}: ${newId}`);
+      visitor = (await this.getVisitorById(newId))!;
+    }
+
+    return visitor;
   },
 
   async getVisitorById(id: string): Promise<LcVisitor | null> {
@@ -209,7 +253,7 @@ export const lcStorage = {
     problema?: string | null;
   }): Promise<void> {
     const setClauses: string[] = [];
-    if (data.nome      != null) setClauses.push(`"posVendaNome" = '${data.nome.replace(/'/g, "\'\'")}'`);
+    if (data.nome      != null) setClauses.push(`"posVendaNome" = '${data.nome.replace(/'/g, "\'\'")}', "name" = '${data.nome.replace(/'/g, "\'\'")}'`);
     if (data.telefone  != null) setClauses.push(`"posVendaTelefone" = '${data.telefone.replace(/'/g, "\'\'")}'`);
     if (data.email     != null) setClauses.push(`"posVendaEmail" = '${data.email.replace(/'/g, "\'\'")}'`);
     if (data.cnpjCpf   != null) setClauses.push(`"posVendaCnpjCpf" = '${data.cnpjCpf.replace(/'/g, "\'\'")}'`);
@@ -219,6 +263,13 @@ export const lcStorage = {
     await db.execute(sql.raw(
       `UPDATE lc_visitors SET ${setClauses.join(', ')}, "lastSeenAt" = '${new Date().toISOString()}' WHERE "id" = '${id}'`
     ));
+
+    // Propaga o nome também para todos os chats deste visitante para atualizar a UI
+    if (data.nome) {
+      await db.execute(sql.raw(
+        `UPDATE lc_chats SET "visitorName" = '${data.nome.replace(/'/g, "\'\'")}' WHERE "visitorId" = '${id}' AND ("visitorName" IS NULL OR "visitorName" = '')`
+      ));
+    }
   },
 
   async setRdCrmDealId(visitorId: string, dealId: string): Promise<void> {
