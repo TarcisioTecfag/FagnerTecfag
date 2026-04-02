@@ -5,11 +5,12 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite --port 5173",
-    "build": "vite build",
+    "build": "drizzle-kit push && vite build",
     "preview": "vite preview",
     "check": "tsc",
     "server": "tsx server/index.ts",
     "dev:server": "tsx watch server/index.ts",
+    "db:push": "drizzle-kit push",
     "seed": "tsx server/seed.ts",
     "sanitize": "tsx server/scripts/sanitize-manuals.ts"
   },
