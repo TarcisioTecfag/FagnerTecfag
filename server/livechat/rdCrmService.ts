@@ -135,6 +135,9 @@ async function getValidToken(): Promise<string> {
   return _tokenCache.accessToken;
 }
 
+/** Alias público para uso externo (ex: livechatRoutes) */
+export { getValidToken as getRdValidToken };
+
 // ─── Helper de requisição ────────────────────────────────────────────────────
 
 async function rdRequest<T = any>(
