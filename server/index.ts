@@ -285,12 +285,12 @@ app.get("/api/ping", (_req, res) => {
 
 // ─── Diagnóstico Gemini — testa a API key e o modelo diretamente ─────────────
 // Endpoint temporário para diagnóstico rápido em produção (Railway).
-// Chame: GET /api/test-gemini
-app.get("/api/test-gemini", async (_req, res) => {
+// Chame: GET /api/test-gemini?model=gemini-1.5-pro
+app.get("/api/test-gemini", async (req, res) => {
   const apiKey = (await lcStorage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "";
   if (!apiKey) return res.json({ ok: false, error: "GEMINI_API_KEY não configurada no banco ou env" });
 
-  const model = "gemini-3.1-pro-preview";
+  const model = (req.query.model as string) || "gemini-3.1-pro-preview";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   
   try {
@@ -298,10 +298,10 @@ app.get("/api/test-gemini", async (_req, res) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: "Diga apenas: OK" }] }],
-        generationConfig: { maxOutputTokens: 10 },
+        contents: [{ role: "user", parts: [{ text: "Diga apenas: OK. E responda em linguajar de teste, sem demorar." }] }],
+        generationConfig: { maxOutputTokens: 50 },
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     });
     
     const body = await resp.text();

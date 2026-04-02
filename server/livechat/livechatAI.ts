@@ -438,7 +438,7 @@ async function geminiRequest(url: string, payload: object): Promise<any> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(25_000), // 25s por tentativa — timeout reduzido para evitar "digitando para sempre"
+        signal: AbortSignal.timeout(45_000), // Tempo elevado (45s) para o modelo 3.1 pensar em cenários complexos
       });
 
       if (!res.ok) {
@@ -784,7 +784,7 @@ export async function processVisitorMessage(
   const payload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: normalizedContents,
-    generationConfig: { temperature: 0.75, maxOutputTokens: 600 },
+    generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
   };
 
   const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
