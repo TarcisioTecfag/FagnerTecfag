@@ -15,7 +15,8 @@ import { WebSocket, WebSocketServer } from "ws";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
 import { lcStorage } from "./livechatStorage.js";
-import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, isObviousNoise, detectStageIntent } from "./livechatAI.js";
+import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, isObviousNoise, detectStageIntent, generatePosVendaReport } from "./livechatAI.js";
+import { createPosVendaOS, isRdCrmConfigured } from "./rdCrmService.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 
 // ─── Connection maps ─────────────────────────────────────────────────────────
@@ -859,6 +860,59 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                       posVendaData,
                     });
                     console.log(`[LiveChat] Dados de pós venda salvos para visitante ${currentVisitorId}`);
+
+                    // ── Criar OS no RD Station CRM (background, não bloqueia o chat) ──
+                    if (isRdCrmConfigured()) {
+                      (async () => {
+                        try {
+                          // Coletar snippet das últimas mensagens para enriquecer o relatório
+                          const recentMessages = await lcStorage.listMessages(chatId ?? "", 10);
+                          const snippet = recentMessages
+                            .slice(-6)
+                            .map(m => `${m.sender === 'visitor' ? 'Cliente' : 'Fagner'}: ${m.content.slice(0, 150)}`)
+                            .join('\n');
+
+                          // Gerar relatório via Gemini
+                          const relatorio = await generatePosVendaReport({
+                            nome:        posVendaData.nome,
+                            telefone:    posVendaData.telefone,
+                            email:       posVendaData.email       ?? null,
+                            cnpjCpf:     posVendaData.cnpjCpf     ?? null,
+                            notaPedido:  posVendaData.notaPedido  ?? null,
+                            problema:    posVendaData.problema,
+                            conversationSnippet: snippet,
+                          });
+
+                          // Criar OS no RD CRM
+                          const dealId = await createPosVendaOS(
+                            currentVisitorId,
+                            {
+                              nome:       posVendaData.nome,
+                              telefone:   posVendaData.telefone,
+                              email:      posVendaData.email       ?? undefined,
+                              cnpjCpf:    posVendaData.cnpjCpf     ?? undefined,
+                              notaPedido: posVendaData.notaPedido  ?? undefined,
+                              problema:   posVendaData.problema,
+                            },
+                            relatorio
+                          );
+
+                          // Notificar painel admin com o link da OS criada
+                          broadcastToAgents({
+                            type: "RD_CRM_OS_CREATED",
+                            visitorId: currentVisitorId,
+                            dealId,
+                            dealUrl: `https://app.rdstation.com.br/crm/deals/${dealId}`,
+                          });
+
+                          console.log(`[RD CRM] ✅ OS criada no RD CRM para visitante ${currentVisitorId}: ${dealId}`);
+                        } catch (crmErr: any) {
+                          console.error(`[RD CRM] ❌ Falha ao criar OS:`, crmErr.message);
+                        }
+                      })();
+                    } else {
+                      console.log("[RD CRM] Integração desativada (variáveis de ambiente não configuradas).");
+                    }
                   } catch (parseErr: any) {
                     console.warn("[LiveChat] Falha ao parsear POS_VENDA_DADOS:", parseErr.message);
                   }

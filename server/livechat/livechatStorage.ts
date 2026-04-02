@@ -221,6 +221,13 @@ export const lcStorage = {
     ));
   },
 
+  async setRdCrmDealId(visitorId: string, dealId: string): Promise<void> {
+    await db.update(lcVisitors)
+      .set({ rdCrmDealId: dealId })
+      .where(eq(lcVisitors.id, visitorId));
+  }
+
+
   async incrementVisitorPages(id: string): Promise<void> {
     await db.update(lcVisitors)
       .set({
@@ -566,13 +573,21 @@ export async function ensureLiveChatSchema(): Promise<void> {
     ['lc_visitors', '"lastSeenAt" TEXT NOT NULL DEFAULT now()::text'],
     ['lc_visitors', '"name" TEXT'],
     ['lc_visitors', '"notes" JSONB DEFAULT \'[]\'::jsonb'],
-    // lc_visitors — Dados Pós Venda (coletados pelo Fagner)
-    ['lc_visitors', '"posVendaNome" TEXT'],
-    ['lc_visitors', '"posVendaTelefone" TEXT'],
-    ['lc_visitors', '"posVendaEmail" TEXT'],
-    ['lc_visitors', '"posVendaCnpjCpf" TEXT'],
-    ['lc_visitors', '"posVendaNotaPedido" TEXT'],
-    ['lc_visitors', '"posVendaProblema" TEXT'],
+    // lc_visitors — Dados Pós Venda (coletados pelo Fagner)
+
+    ['lc_visitors', '"posVendaNome" TEXT'],
+
+    ['lc_visitors', '"posVendaTelefone" TEXT'],
+
+    ['lc_visitors', '"posVendaEmail" TEXT'],
+
+    ['lc_visitors', '"posVendaCnpjCpf" TEXT'],
+
+    ['lc_visitors', '"posVendaNotaPedido" TEXT'],
+
+    ['lc_visitors', '"posVendaProblema" TEXT'],
+    ['lc_visitors', '"rdCrmDealId" TEXT'],
+
     // lc_chats
     ['lc_chats', '"mood" TEXT'],
     ['lc_chats', '"visitorEmail" TEXT'],

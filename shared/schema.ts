@@ -176,6 +176,8 @@ export const lcVisitors = pgTable("lc_visitors", {
   posVendaCnpjCpf: text("posVendaCnpjCpf"),
   posVendaNotaPedido: text("posVendaNotaPedido"),
   posVendaProblema: text("posVendaProblema"),
+  // ── Integração RD Station CRM ──────────────────────────────────────────────
+  rdCrmDealId: text("rdCrmDealId"),   // ID da negociação criada no RD CRM (evita duplicatas)
 });
 
 export const lcPageviews = pgTable("lc_pageviews", {

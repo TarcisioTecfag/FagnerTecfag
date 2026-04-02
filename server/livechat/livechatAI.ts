@@ -976,3 +976,89 @@ Apenas responda como a mensagem direta, sem asteriscos, sem bullets. Sem formata
 export function clearAISession(chatId: string): void {
   aiSessions.delete(chatId);
 }
+
+// ─── Relatório de Pós Venda para o RD CRM ─────────────────────────────────────
+
+export interface PosVendaReportInput {
+  nome: string;
+  telefone: string;
+  email?: string | null;
+  cnpjCpf?: string | null;
+  notaPedido?: string | null;
+  problema: string;
+  conversationSnippet?: string; // últimas mensagens do chat
+}
+
+/**
+ * Gera um relatório estruturado em texto para ser usado como Anotação
+ * na Negociação criada automaticamente no RD Station CRM.
+ * Usa o Gemini para sintetizar o contexto. Fallback para texto estruturado simples.
+ */
+export async function generatePosVendaReport(input: PosVendaReportInput): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const dataAtual = new Date().toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+
+  // Relatório base estruturado (usado como fallback ou enriquecido pelo Gemini)
+  const estruturado = [
+    `📋 OS DE PÓS VENDA — Gerado automaticamente pelo Fagner (Live Chat Tecfag)`,
+    `📅 Data/Hora: ${dataAtual}`,
+    ``,
+    `👤 IDENTIFICAÇÃO DO CLIENTE`,
+    `   • Nome: ${input.nome}`,
+    `   • Telefone: ${input.telefone}`,
+    ...(input.email         ? [`   • E-mail: ${input.email}`]         : []),
+    ...(input.cnpjCpf       ? [`   • CPF/CNPJ: ${input.cnpjCpf}`]     : []),
+    ...(input.notaPedido    ? [`   • Nota do Pedido: ${input.notaPedido}`] : [`   • Nota do Pedido: Não informado`]),
+    ``,
+    `🔧 PROBLEMA RELATADO`,
+    `   ${input.problema}`,
+    ``,
+    ...(input.conversationSnippet ? [
+      `💬 CONTEXTO DO ATENDIMENTO (Chat Widget Tecfag)`,
+      input.conversationSnippet,
+      ``,
+    ] : []),
+    `📌 STATUS: Aguardando primeiro contato da equipe de Pós Venda`,
+    `🤖 Gerado automaticamente pelo sistema Fagner IA — Tecfag`,
+  ].join("\n");
+
+  if (!apiKey) return estruturado;
+
+  // Enriquecer com Gemini (análise de tipo de atendimento)
+  try {
+    const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
+    const prompt = `
+Você é um assistente de operações da Tecfag (fabricante de máquinas industriais).
+Analise os dados abaixo de um atendimento de Pós Venda e gere um relatório conciso (máx 5 linhas) classificando:
+1. TIPO DE ATENDIMENTO: (Suporte Técnico / Visita Showroom / Reunião Online / Rastreio de Entrega / Outro)
+2. URGÊNCIA: (Alta / Média / Baixa)
+3. RESUMO DA SITUAÇÃO em 2-3 linhas
+
+Dados do cliente:
+Nome: ${input.nome}
+Telefone: ${input.telefone}
+Nota do Pedido: ${input.notaPedido ?? "Não informado"}
+Problema: ${input.problema}
+${input.conversationSnippet ? `\nContexto do chat:\n${input.conversationSnippet}` : ""}
+
+Responda APENAS com o relatório em texto simples, sem markdown, sem asteriscos.
+`.trim();
+
+    const data = await geminiRequest(url, {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
+    });
+
+    const analise = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (analise) {
+      return estruturado + `\n\n🧠 ANÁLISE FAGNER IA\n${analise}`;
+    }
+  } catch (err) {
+    console.warn("[RD CRM] Falha ao gerar análise Gemini para relatório:", err);
+  }
+
+  return estruturado;
+}
