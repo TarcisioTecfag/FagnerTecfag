@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "tsc",
-    "server": "drizzle-kit push && tsx server/index.ts",
+    "server": "tsx server/index.ts",
     "dev:server": "tsx watch server/index.ts",
     "db:push": "drizzle-kit push",
     "seed": "tsx server/seed.ts",
