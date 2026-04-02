@@ -8,12 +8,15 @@
  */
 
 import db from "../db.js";
-import { lcVisitors } from "../../shared/schema.js";
-import { eq } from "drizzle-orm";
+import { lcVisitors, settings } from "../../shared/schema.js";
+import { eq, sql } from "drizzle-orm";
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 const RD_API_BASE = "https://api.rd.services/crm/v2";
 const RD_AUTH_URL = "https://api.rd.services/oauth2/token";
+const DB_KEY_ACCESS  = "rd_crm_access_token";
+const DB_KEY_REFRESH = "rd_crm_refresh_token";
+const DB_KEY_EXPIRES = "rd_crm_token_expires_at";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface PosVendaData {
@@ -31,31 +34,65 @@ interface RdToken {
   expiresAt: number; // timestamp ms
 }
 
-// ─── Token storage em memória + env (sem tabela extra — tokens no env Railway) ─
+// ─── Token storage com persistência no banco (sobrevive a restarts do Railway) ─
 let _tokenCache: RdToken | null = null;
 
-function loadTokenFromEnv(): RdToken | null {
-  const at = process.env.RD_CRM_ACCESS_TOKEN;
-  const rt = process.env.RD_CRM_REFRESH_TOKEN;
-  if (!at || !rt) return null;
-  // Assume token ainda válido, refresh vai ocorrer no primeiro 401
-  return { accessToken: at, refreshToken: rt, expiresAt: Date.now() + 7200_000 };
+async function loadTokenFromDb(): Promise<RdToken | null> {
+  try {
+    const rows = await db.select().from(settings)
+      .where(sql`key IN (${DB_KEY_ACCESS}, ${DB_KEY_REFRESH}, ${DB_KEY_EXPIRES})`);
+
+    const map: Record<string, string> = {};
+    for (const r of rows) map[r.key] = r.value ?? "";
+
+    const at  = map[DB_KEY_ACCESS]  || process.env.RD_CRM_ACCESS_TOKEN;
+    const rt  = map[DB_KEY_REFRESH] || process.env.RD_CRM_REFRESH_TOKEN;
+    const exp = parseInt(map[DB_KEY_EXPIRES] ?? "0", 10) || Date.now();
+
+    if (!at || !rt) return null;
+    return { accessToken: at, refreshToken: rt, expiresAt: exp };
+  } catch {
+    const at = process.env.RD_CRM_ACCESS_TOKEN;
+    const rt = process.env.RD_CRM_REFRESH_TOKEN;
+    if (!at || !rt) return null;
+    return { accessToken: at, refreshToken: rt, expiresAt: Date.now() };
+  }
 }
 
-function saveTokenToEnv(token: RdToken) {
-  // Em produção os tokens são renovados em memória.
-  // O Railway não permite escrever em .env em runtime, então
-  // mantemos em cache de processo. Ao reiniciar, o refresh acontece
-  // automaticamente no primeiro uso via o refresh_token salvo no Railway.
+async function saveTokenToDb(token: RdToken): Promise<void> {
   _tokenCache = token;
-  process.env.RD_CRM_ACCESS_TOKEN = token.accessToken;
+  process.env.RD_CRM_ACCESS_TOKEN  = token.accessToken;
   process.env.RD_CRM_REFRESH_TOKEN = token.refreshToken;
+
+  const upsert = async (key: string, value: string) => {
+    const existing = await db.select().from(settings).where(eq(settings.key, key)).limit(1);
+    if (existing.length > 0) {
+      await db.update(settings).set({ value }).where(eq(settings.key, key));
+    } else {
+      // 'settings' tem id PK — usamos a key como id também para tokens RD CRM
+      await db.insert(settings).values({ id: `rd_crm_${key}`, key, value });
+    }
+  };
+
+  try {
+    await upsert(DB_KEY_ACCESS,  token.accessToken);
+    await upsert(DB_KEY_REFRESH, token.refreshToken);
+    await upsert(DB_KEY_EXPIRES, token.expiresAt.toString());
+    console.log("[RD CRM] Tokens persistidos no banco com sucesso.");
+  } catch (e: any) {
+    console.warn("[RD CRM] Falha ao persistir tokens no banco:", e.message);
+  }
 }
 
 async function refreshAccessToken(): Promise<RdToken> {
+  const current      = _tokenCache ?? await loadTokenFromDb();
   const clientId     = process.env.RD_CRM_CLIENT_ID!;
   const clientSecret = process.env.RD_CRM_CLIENT_SECRET!;
-  const refreshToken = _tokenCache?.refreshToken ?? process.env.RD_CRM_REFRESH_TOKEN!;
+  const refreshToken = current?.refreshToken ?? process.env.RD_CRM_REFRESH_TOKEN!;
+
+  if (!refreshToken) {
+    throw new Error("[RD CRM] Nenhum refresh_token disponível. Configure RD_CRM_REFRESH_TOKEN no Railway.");
+  }
 
   const body = new URLSearchParams({
     client_id:     clientId,
@@ -81,17 +118,17 @@ async function refreshAccessToken(): Promise<RdToken> {
     refreshToken: data.refresh_token,
     expiresAt:    Date.now() + (data.expires_in * 1000),
   };
-  saveTokenToEnv(token);
-  console.log("[RD CRM] Token renovado com sucesso.");
+  await saveTokenToDb(token);
+  console.log("[RD CRM] Token renovado e persistido com sucesso.");
   return token;
 }
 
 /** Retorna um access_token válido, renovando se necessário. */
 async function getValidToken(): Promise<string> {
   if (!_tokenCache) {
-    _tokenCache = loadTokenFromEnv();
+    _tokenCache = await loadTokenFromDb();
   }
-  // Renova se expirar em menos de 5 minutos
+  // Renova se expirar em menos de 5 minutos ou se o expiresAt já passou
   if (!_tokenCache || _tokenCache.expiresAt - Date.now() < 5 * 60_000) {
     _tokenCache = await refreshAccessToken();
   }
@@ -99,6 +136,7 @@ async function getValidToken(): Promise<string> {
 }
 
 // ─── Helper de requisição ────────────────────────────────────────────────────
+
 async function rdRequest<T = any>(
   method: string,
   path: string,
