@@ -651,7 +651,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   console.error(`[LiveChat AI] ❌ ERRO CRÍTICO (Uncaught) no processVisitorMessage:`, err);
                   sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
                   // Fallback forçado caso processVisitorMessage falhe antes do seu try/catch interno
-                  aiResponse = { reply: "Hm, acho que não entendi. O que você precisa exatamente?", isError: true };
+                  aiResponse = { reply: `Hm, acho que não entendi. O que você precisa exatamente? [CRASH: ${err.message}]`, isError: true };
                 }
 
                 if (aiResponse.isError) {

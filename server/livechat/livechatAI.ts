@@ -518,9 +518,8 @@ export async function processVisitorMessage(
       const pastMessages = await lcStorage.listMessagesByChat(chatId);
       if (pastMessages && pastMessages.length > 0) {
         // Usa as últimas 6 mensagens (3 turnos) para priorizar velocidade brutal e não explodir o contexto do Gemini
-        // pastMessages vem do banco ordenado por data DESCENDENTE (o index 0 é a mensagem mais nova).
-        // Pegamos as 6 primeiras do array (que são as mais recentes), e INVERTEMOS para ficar na ordem cronológica!
-        const recent = pastMessages.slice(0, 6).reverse();
+        // pastMessages vem ordenado por ASC (a mais recente no final). slice(-6) pega as últimas 6 na ordem correta!
+        const recent = pastMessages.slice(-6);
         for (const msg of recent) {
           if (msg.sender === "visitor") {
             session.history.push({ role: "user", parts: [{ text: msg.content }] });
