@@ -424,9 +424,10 @@ async function getRagDocuments(): Promise<{ id: string; name: string; content: s
 }
 
 // ─── Gemini request com retry (anti-congelamento) ────────────────────────────
-// Tentativas: 1ª imediata (30s timeout), 2ª após 8s (30s timeout), 3ª após 20s (30s timeout)
+// Tentativas: 1ª imediata (25s timeout), 2ª após 5s (25s timeout)
+// TIMEOUT REDUZIDO: 120s era muito alto — causava "digitando para sempre" no chat
 
-const LIVECHAT_RETRY_DELAYS = [8_000, 20_000];
+const LIVECHAT_RETRY_DELAYS = [5_000];
 
 async function geminiRequest(url: string, payload: object): Promise<any> {
   let lastErr: any;
@@ -437,7 +438,7 @@ async function geminiRequest(url: string, payload: object): Promise<any> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(120_000), // Limite extremo de 2 MINUTOS (gemini-3.1-pro com RAG VTEX/Manuais gigante)
+        signal: AbortSignal.timeout(25_000), // 25s por tentativa — timeout reduzido para evitar "digitando para sempre"
       });
 
       if (!res.ok) {
@@ -778,7 +779,7 @@ export async function processVisitorMessage(
   const payload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: normalizedContents,
-    generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+    generationConfig: { temperature: 0.75, maxOutputTokens: 600 },
   };
 
   const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
