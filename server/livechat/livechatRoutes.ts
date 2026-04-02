@@ -229,6 +229,41 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
+  // ── Diagnóstico: Fontes disponíveis no RD CRM ─────────────────────────────
+  router.get("/rd-sources", async (_req: Request, res: Response) => {
+    try {
+      const at = await getRdValidToken();
+      const r = await fetch("https://api.rd.services/crm/v2/sources", { headers: { Authorization: `Bearer ${at}` } });
+      return res.json({ status: r.status, data: await r.json() });
+    } catch (err: any) { return res.status(500).json({ message: err?.message }); }
+  });
+
+  // ── Diagnóstico: Campanhas disponíveis no RD CRM ──────────────────────────
+  router.get("/rd-campaigns", async (_req: Request, res: Response) => {
+    try {
+      const at = await getRdValidToken();
+      const r = await fetch("https://api.rd.services/crm/v2/campaigns", { headers: { Authorization: `Bearer ${at}` } });
+      return res.json({ status: r.status, data: await r.json() });
+    } catch (err: any) { return res.status(500).json({ message: err?.message }); }
+  });
+
+  // ── Diagnóstico: Campos personalizados de Deals ───────────────────────────
+  router.get("/rd-deal-fields", async (_req: Request, res: Response) => {
+    try {
+      const at = await getRdValidToken();
+      const r = await fetch("https://api.rd.services/crm/v2/deals/custom_fields", { headers: { Authorization: `Bearer ${at}` } });
+      return res.json({ status: r.status, data: await r.json() });
+    } catch (err: any) { return res.status(500).json({ message: err?.message }); }
+  });
+
+  // ── Diagnóstico: Campos personalizados de Contatos ────────────────────────
+  router.get("/rd-contact-fields", async (_req: Request, res: Response) => {
+    try {
+      const at = await getRdValidToken();
+      const r = await fetch("https://api.rd.services/crm/v2/contacts/custom_fields", { headers: { Authorization: `Bearer ${at}` } });
+      return res.json({ status: r.status, data: await r.json() });
+    } catch (err: any) { return res.status(500).json({ message: err?.message }); }
+  });
 
   // Mount all routes under /api/livechat
   app.use("/api/livechat", router);
