@@ -225,8 +225,7 @@ export const lcStorage = {
     await db.update(lcVisitors)
       .set({ rdCrmDealId: dealId })
       .where(eq(lcVisitors.id, visitorId));
-  }
-
+  },
 
   async incrementVisitorPages(id: string): Promise<void> {
     await db.update(lcVisitors)
