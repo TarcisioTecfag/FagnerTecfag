@@ -68,9 +68,15 @@ export const lcStorage = {
         utmSource: visitor.utmSource,
         utmMedium: visitor.utmMedium,
         utmCampaign: visitor.utmCampaign,
-        name: visitor.name,        // Propaga nome para o novo card
-        // Não propagamos dados de pós-venda: o Fagner coleta do zero no novo atendimento,
-        // garantindo que um card novo seja criado no RD CRM.
+        name: visitor.name,
+        // Propaga os dados de cadastro para o novo card — assim o Fagner confirma em vez de re-coletar.
+        // O que NÃO é propagado: histórico de conversa (gerenciado pela sessão AI em memória por chatId).
+        posVendaNome: visitor.posVendaNome,
+        posVendaTelefone: visitor.posVendaTelefone,
+        posVendaEmail: visitor.posVendaEmail,
+        posVendaCnpjCpf: visitor.posVendaCnpjCpf,
+        posVendaNotaPedido: visitor.posVendaNotaPedido,
+        // posVendaProblema e posVendaCnpjData NÃO propagados pois são específicos de cada atendimento
         totalVisits: visitor.totalVisits + 1,
         pipelineStage: "novo_atendimento",
         isOnline: "true",

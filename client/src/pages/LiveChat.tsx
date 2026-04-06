@@ -1273,19 +1273,19 @@ function LiveChat() {
               <h3 className="text-sm font-bold text-zinc-500 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-zinc-300" />
                 Visitantes Offline
-                <span className="text-zinc-400 font-normal">({visitors.filter(v => v.isOnline !== "true").length} recentes)</span>
+                <span className="text-zinc-400 font-normal">({filteredVisitors.filter(v => v.isOnline !== "true").length} recentes)</span>
               </h3>
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 bg-zinc-50/30">
-              {visitors.filter(v => v.isOnline !== "true").length === 0 ? (
+              {filteredVisitors.filter(v => v.isOnline !== "true").length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-zinc-400">
                   <User className="w-8 h-8 mb-2 opacity-20" />
-                  <p className="text-xs font-medium">Nenhum visitante offline recente</p>
+                  <p className="text-xs font-medium">{sq ? "Nenhum resultado encontrado" : "Nenhum visitante offline recente"}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 opacity-80 hover:opacity-100 transition-opacity">
-                  {visitors.filter(v => v.isOnline !== "true").map((v, idx) => {
+                  {filteredVisitors.filter(v => v.isOnline !== "true").map((v, idx) => {
                     const cat = categoryLabel(v.category);
                     const src = sourceLabel(v.source);
                     const displayUrl = v.currentPage && v.currentPage !== '/' && v.currentPage !== v.currentPageTitle 
@@ -1462,7 +1462,14 @@ function LiveChat() {
                 { stage: "sem_resposta", label: "Não Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
                 { stage: "outros", label: "Outros", color: "#64748b", bgLight: "rgba(100,116,139,0.06)", borderColor: "rgba(100,116,139,0.3)" },
               ].map((col) => {
-                const items = pipelineData[col.stage] || [];
+                // Aplica o filtro de search no kanban: filtra por nome do visitante
+                const allItems = pipelineData[col.stage] || [];
+                const items = sq
+                  ? allItems.filter((v: Visitor) =>
+                      (v.name ?? "").toLowerCase().includes(sq) ||
+                      (v.city ?? "").toLowerCase().includes(sq)
+                    )
+                  : allItems;
                 return (
                   <div
                     key={col.stage}
@@ -1769,17 +1776,34 @@ function LiveChat() {
                     </p>
                     <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                       {selectedVisitor.notes && selectedVisitor.notes.length > 0 ? (
-                        [...selectedVisitor.notes].reverse().map((n, i) => (
-                          <div key={i} className="p-2.5 bg-white border border-zinc-200/70 rounded-xl shadow-sm">
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-[10px] font-bold text-red-600">{n.stage}</span>
-                              <span className="text-[9px] text-zinc-300">
-                                {new Date(n.date).toLocaleDateString("pt-BR")} {new Date(n.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                              </span>
+                        [...selectedVisitor.notes].reverse().map((n, i) => {
+                          // Extrai link do RD Station da nota para criar botão dedicado
+                          const rdLinkMatch = n.content.match(/https:\/\/app\.rdstation\.com\.br\/crm\/[\w\-\/]+/);
+                          const cleanContent = n.content.replace(/Link: https:\/\/[^\s]+/g, "").trim();
+                          return (
+                            <div key={i} className="p-2.5 bg-white border border-zinc-200/70 rounded-xl shadow-sm">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-[10px] font-bold text-red-600">{n.stage}</span>
+                                <span className="text-[9px] text-zinc-300">
+                                  {new Date(n.date).toLocaleDateString("pt-BR")} {new Date(n.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-zinc-600 leading-snug whitespace-pre-line">{cleanContent}</p>
+                              {rdLinkMatch && (
+                                <a
+                                  href={rdLinkMatch[0]}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all hover:opacity-90 w-full justify-center"
+                                  style={{ background: "linear-gradient(135deg, #0078cc, #0056b3)" }}
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  ABRIR NO RD STATION
+                                </a>
+                              )}
                             </div>
-                            <p className="text-[11px] text-zinc-600 leading-snug">{n.content}</p>
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
                           <Bot className="w-8 h-8 mb-2 opacity-30" />

@@ -1011,8 +1011,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             relatorio
                           );
 
-                          // Nota de sucesso
-                          await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", `✅ Card criado no RD Station CRM!\nID do Deal: ${dealId}\nLink: https://app.rdstation.com.br/crm/deals/${dealId}`);
+                          // Nota de sucesso com link correto do RD Station CRM
+                          const dealUrl = `https://app.rdstation.com.br/sales/deals/${dealId}`;
+                          await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", `✅ Card criado no RD Station CRM!\nID do Deal: ${dealId}\nLink: ${dealUrl}`);
                           broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
 
                           // Notificar painel admin com o link da OS criada
@@ -1020,7 +1021,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             type: "RD_CRM_OS_CREATED",
                             visitorId: currentVisitorId,
                             dealId,
-                            dealUrl: `https://app.rdstation.com.br/crm/deals/${dealId}`,
+                            dealUrl,
                           });
 
                           console.log(`[RD CRM] ✅ OS criada no RD CRM para visitante ${currentVisitorId}: ${dealId}`);
