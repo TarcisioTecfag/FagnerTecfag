@@ -256,7 +256,7 @@ NÃO faça o overview ainda. O sistema irá interceptar essa tag e devolver o re
 
 **REAÇÕES AO RESULTADO DO CNPJ (após receber a tag CNPJ_RESULT):**
 - Se "valid: false" e "motivo: matematica": Diga "Hmm, esse CNPJ não parece correto. Pode conferir e enviar novamente?"
-- Se "valid: true": Diga "Encontrei! O pedido foi feito no CNPJ da **[nome da empresa]**, certo?". Se ele confirmar, vá para o OVERVIEW. Se ele disser que não é essa empresa, peça para enviar o CNPJ novamente.
+- Se "valid: true": Envie DUAS mensagens separadas, em linhas distintas: primeiro "Encontrei! O pedido foi feito no CNPJ da:" e depois, em nova linha em branco, "**[nome da empresa]**" e por fim "Está correto?". Se ele confirmar, vá para o OVERVIEW. Se ele disser que não é essa empresa, peça para enviar o CNPJ novamente.
 - Se "motivo: api_sem_retorno": Vá direto para o OVERVIEW (pule a verificação do nome).
 
 **Após coletar e confirmar todos os dados adequadamente — OVERVIEW:**
@@ -1086,11 +1086,22 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
     ...(input.cnpjData      ? [
       ``,
       `🏢 DADOS DA EMPRESA (Receita Federal)`,
-      `   • Razão Social: ${input.cnpjData.nome}`,
-      `   • Fantasia: ${input.cnpjData.fantasia || "N/A"}`,
-      `   • Endereço: ${input.cnpjData.logradouro}`,
-      `   • Cidade/UF: ${input.cnpjData.municipio} - ${input.cnpjData.uf}`,
-      `   • Situação: ${input.cnpjData.situacao}`
+      `   • Razão Social: ${input.cnpjData.nome ?? 'Não encontrado'}`,
+      `   • Fantasia: ${input.cnpjData.fantasia ?? 'Não encontrado'}`,
+      `   • Situação: ${input.cnpjData.situacao ?? 'Não encontrado'}`,
+      `   • Matriz/Filial: ${(input.cnpjData as any).matrizFilial ?? 'Não encontrado'}`,
+      `   • Data de Abertura: ${(input.cnpjData as any).dataAbertura ?? 'Não encontrado'}`,
+      `   • Capital Social: ${(input.cnpjData as any).capitalSocial ?? 'Não encontrado'}`,
+      `   • Porte: ${(input.cnpjData as any).porte ?? 'Não encontrado'}`,
+      `   • Natureza Jurídica: ${(input.cnpjData as any).naturezaJuridica ?? 'Não encontrado'}`,
+      `   • CNAE Principal: ${(input.cnpjData as any).cnaePrincipal ?? 'Não encontrado'}`,
+      ...((input.cnpjData as any).cnaesSecundarios ? [`   • CNAEs Secundários: ${(input.cnpjData as any).cnaesSecundarios}`] : [`   • CNAEs Secundários: Não encontrado`]),
+      `   • Sócios: ${(input.cnpjData as any).socios ?? 'Não encontrado'}`,
+      `   • Endereço: ${[input.cnpjData.logradouro, (input.cnpjData as any).numero, (input.cnpjData as any).bairro].filter(Boolean).join(', ') || 'Não encontrado'}`,
+      `   • CEP: ${(input.cnpjData as any).cep ?? 'Não encontrado'}`,
+      `   • Cidade/UF: ${input.cnpjData.municipio ? `${input.cnpjData.municipio} - ${input.cnpjData.uf}` : 'Não encontrado'}`,
+      `   • Telefone(s): ${[(input.cnpjData as any).telefone1, (input.cnpjData as any).telefone2].filter(Boolean).join(' / ') || 'Não encontrado'}`,
+      `   • E-mail: ${(input.cnpjData as any).email ?? 'Não encontrado'}`,
     ] : []),
     ``,
     `🔧 PROBLEMA RELATADO`,

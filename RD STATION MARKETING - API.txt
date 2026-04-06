@@ -1,0 +1,7182 @@
+Introdução e requisitos
+A API (Application Programming Interface ou Interface de Programação de Aplicativos) é um padrão de programação, com conjuntos de instruções cuja finalidade é desenvolver a integração entre diferentes plataformas de softwares, como o RD Station Marketing e outra ferramenta que você utilize.
+
+Aqui você vai encontrar a coleção de recursos do RD Station Marketing para realizar a integração com o seu sistema.
+
+Veja a seguir alguns pontos importantes:
+
+API RESTful - Todas as nossas APIs são organizadas em torno da arquitetura REST e são acessadas via HTTP.
+Então, se você já interagiu com uma API RESTful, muitos dos conceitos serão familiares.
+
+Domínio base - Todas as chamadas de API para o RD Station Marketing devem ser feitas para o domínio base <https://api.rd.services>.
+
+Respostas da API - Todas as respostas da API, incluindo casos de erro, serão retornados em formato JSON.
+
+URLs previsíveis - As APIs são projetadas para ter URLs previsíveis para acessar recursos e utilizam os códigos de resposta HTTP para indicar erros da API.
+
+Requisitos para começar
+Possuir uma conta do RD Station, se ainda não tiver, crie uma aqui.
+Possuir um aplicativo com uma API que você pode acessar.
+Um pouco de conhecimento de programação.
+Token de acesso
+Dentro do escopo da nossa API 2.0, existem duas formas de autenticação: Oauth2 e API Key.
+
+Oauth2: é utilizada para enviar eventos, marcar e desmarcar oportunidades, registrar vendas, atualizar contatos sem conversão, consultar diversas informações do RD Station Marketing, e os demais recursos disponíveis.
+API Key: é utilizada exclusivamente para envio de eventos de conversão para criar e atualizar contatos com o registro de uma conversão. É recomendada para integração de formulários e sistemas internos que enviam conversões para o RD Station Marketing.
+Segurança
+As APIs são fornecidas somente sob o protocolo TLS (Transport Layer Security) na versão 1.3 utilizado pelo HTTPs. Isto se deve ao fato que a versão atual (1.3) de aumentar a segurança da comunicação por ser uma evolução dos protocolos de segurança mais modernos, abandonou compatibilidade com outros protocolos antigos defasados que possuem vulnerabilidades de segurança.
+
+Outro motivo para o uso do TLS1.3 é a melhora na latência pois foram implementadas otimizações principalmente no handshake (momento em que a comunicação é estabelecida).
+
+📘
+Quer saber mais sobre RESTful?
+Caso você não tenha ouvido falar de RESTful, recomendamos este guia externo como referência.
+
+💬
+Precisa de suporte?
+Nós também temos uma Central de Ajuda bem completa.
+
+Continua com dúvida? Não se preocupe! Contamos com uma equipe especializada que pode te ajudar.
+
+Updated 7 months ago
+
+Próximo passo:
+Realize o processo de Autenticação para obter os Tokens para autorizar a troca de mensagens via API.
+
+Autenticação
+Bases Legais
+As principais Leis de Proteção de Dados, como a LGPD (Brasil) e o GDPR (União Europeia), estabelecem que, para que qualquer pessoa, física ou jurídica, possa realizar qualquer operação com um dado pessoal — seja coletar, transmitir ou processar —, é necessário possuir uma base legal presente na LGPD, ou seja, uma hipótese da lei que justifique o tratamento desses dados.
+
+A LGPD prevê bases legais que autorizam o tratamento de dados pessoais. As bases legais não têm dependência ou predominância entre si, e para todo caso de tratamento de dados, existe uma base legal mais apropriada.
+
+A atribuição das bases legais aos Contatos do RD Station Marketing para contato e envio de comunicação, engloba envio de e-mails e envio de mensagens de Whatsapp.
+
+É possível adicionar as seguintes bases legais:
+
+Consentimento (consent)
+Legítimo interesse (legitimate_interest)
+Contrato preexistente (pre_existent_contract)
+Obrigação legal (judicial_process)
+Execução de políticas públicas (public_interest)
+Processo Judicial (judicial_process)
+Proteção da vida (vital_interest)
+Tutela da saúde (vital_interest)
+Proteção do crédito (judicial_process)
+Saiba mais sobre os conceitos e cada uma das Bases Legais aqui.
+
+Como registrar as Bases Legais
+O registro das Bases Legais é realizado a partir dos seguintes parâmetros:
+
+Campo	Tipo	Parâmetros válidos	Descrição
+category	String	communications	A única categoria aceita é "communications".
+type	String	pre_existent_contract, consent, legitimate_interest, judicial_process, vital_interest or public_interest	Qual base legal autoriza o tratamento de dados pessoais.
+status	String	granted or declined	Valores aceitos: "granted" para confirmar o consentimento e "declined" para indicar que o consentimento foi recusado.
+Exemplo de como os parâmetros devem ser enviados:
+JSON
+
+"legal_bases": [
+      {
+        "category": "communications",
+        "type": "consent",
+        "status": "granted"
+      }
+    ]
+Quais APIs aceitam as Bases Legais
+As Bases Legais podem ser enviadas pelas seguintes APIs:
+
+Contatos
+Evento de conversão padrão
+Evento de Conversão via API Key
+Eventos de E-commerce
+Eventos de Chat
+Eventos de Chamada
+Eventos de Mídia
+Batch de Eventos
+Limite de requisições da API
+Para preservar a integridade e a confiabilidade da plataforma, as nossas APIs têm o seguinte limite de taxa (rate limit):
+
+Contatos
+Limite de requisições para atualização de um contato específico
+
+Limite máximo	Período	Método HTTP	Plano
+24 Requisições	24 horas	PATCH	Light, Basic, Pro, Advanced
+Limite de requisições por conta
+
+Limite máximo	Período	Método HTTP	Plano
+120 Requisições	1 Minuto	GET, POST, PATCH, DELETE	Light, Basic, Pro
+500 Requisições	1 Minuto	GET, POST, PATCH, DELETE	Advanced
+
+
+Criar tag para o Lead
+Limite de requisições por contato/lead
+
+Limite máximo	Período	Método HTTP	Plano
+24 Requisições	24 horas	POST	Light, Basic, Pro, Advanced
+Limite de requisições por conta
+
+Limite máximo	Período	Método HTTP	Plano
+15.000 Requisições	1 dia	POST	Light, Basic, Pro, Advanced
+
+
+
+Segmentações
+Limite de requisições da lista de segmentações
+
+Limite máximo	Período	Método HTTP	Plano
+120 Requisições	1 minuto	GET	Light, Basic, Pro
+240 Requisições	1 minuto	GET	Advanced
+
+
+Funis de Contatos
+Limite de requisições do lead
+
+Limite máximo	Período	Método HTTP	Plano
+24 Requisições	24 horas	GET, PUT	Light, Basic, Pro, Advanced
+Limite de requisições por conta
+
+Limite máximo	Período	Método HTTP	Plano
+1.000.000 Requisições	24 horas	GET, PUT	Light, Basic, Pro, Advanced
+
+
+Campos Personalizados
+Limite de requisições por conta
+
+Limite máximo	Período	Método HTTP	Plano
+1.000.000 Requisições	24 horas	GET, POST, PATCH, DELETE	Light, Basic, Pro, Advanced
+
+
+Webhooks
+Limite de requisições por conta
+
+Limite máximo	Período	Método HTTP	Plano
+1.000.000 Requisições	24 horas	GET, POST, PUT, DELETE	Light, Basic, Pro, Advanced
+
+
+Eventos
+Limite de requisições por lead
+
+Limite máximo	Período	Método HTTP	Plano
+120 Requisições	24 horas	POST	Light, Basic, Pro, Advanced
+Limite de requisições por conta
+
+Limite máximo	Período	Método HTTP	Plano
+120 Requisições	1 minuto	POST	Light, Basic, Pro
+500 Requisições	1 minuto	POST	Advanced
+
+
+Análise
+Limite de requisições para consultar estatísticas de e-mail marketing
+
+Limite máximo	Período	Método HTTP	Plano
+60 Requisições	1 hora	GET	Pro, Advanced
+Limite de requisições para consultar estatísticas de e-mail via fluxo de automação
+
+Limite máximo	Período	Método HTTP	Plano
+60 Requisições	1 hora	GET	Advanced
+Limite de requisições para consultar estatísticas do funil de vendas
+
+Limite máximo	Período	Método HTTP	Plano
+60 Requisições	1 hora	GET	Advanced
+Limite de requisições para consultar estatísticas dos ativos de conversão
+
+Limite máximo	Período	Método HTTP	Plano
+60 Requisições	1 hora	GET	Advanced
+
+
+Fluxos de automação
+Limite de requisições para consultar os fluxos de automação.
+
+Limite máximo	Período	Método HTTP	Plano
+40 Requisições	1 hora	GET	Light, Basic, Pro, Advanced
+Limite de requisições para consultar os dados de um fluxo de automação a partir de um id.
+
+Limite máximo	Período	Método HTTP	Plano
+1 Requisição	1 hora	GET	Light, Basic
+5 Requisições	1 hora	GET	Pro
+15 Requisições	1 hora	GET	Advanced
+Limite de requisições para inserir leads em um fluxo de automação.
+
+Limite máximo	Período	Método HTTP	Plano
+1 Requisição	1 hora	POST	Light, Basic
+10 Requisições	1 hora	POST	Pro
+100 Requisições	1 hora	POST	Advanced
+Limite de requisições para consultar os leads que iniciaram em um fluxo de automação.
+
+Limite máximo	Período	Método HTTP	Plano
+1 Requisição	1 hora	GET	Light, Basic
+3 Requisições	1 hora	GET	Pro
+12 Requisições	1 hora	GET	Advanced
+Limite de requisições para consultar os leads que encerraram em um fluxo de automação.
+
+Limite máximo	Período	Método HTTP	Plano
+1 Requisição	1 hora	GET	Light, Basic
+3 Requisições	1 hora	GET	Pro
+12 Requisições	1 hora	GET	Advanced
+Limite de requisições para consultar os leads que atingiram uma ação específica de um fluxo de automação.
+
+Limite máximo	Período	Método HTTP	Plano
+1 Requisição	1 hora	GET	Light, Basic
+3 Requisições	1 hora	GET	Pro
+12 Requisições	1 hora	GET	Advanced
+
+
+Emails
+Limite máximo	Período	Método HTTP	Plano
+60 Requisições	1 hora	GET	Light, Basic, Pro, Advanced
+
+
+Landing Page
+Limite máximo	Período	Método HTTP	Plano
+60 Requisições	1 hora	GET	Light, Basic, Pro, Advanced
+
+
+Pop-ups
+Limite máximo	Período	Método HTTP	Plano
+60 Requisições	1 hora	GET	Light, Basic, Pro, Advanced
+
+
+Formulários
+Limite máximo	Período	Método HTTP	Plano
+60 Requisições	1 hora	GET	Light, Basic, Pro, Advanced
+Erro: 429 "Too Many Requests"
+Ao projetar seu aplicativo pense em controlar o fluxo de solicitações de API para uma melhor produtividade sem exceder o máximo de requisições permitido que foram apresentados acima, caso contrário, você receberá um erro 429 - Too Many Requests.
+
+Exemplo
+
+{
+  "error": "'lead_limiter' rate limit exceeded for 86400 second(s) period for key 'lead@example.org'",
+  "max": 24,
+  "usage": 25,
+  "remaining_time": 43067
+}
+error: Detalhes sobre a causa que excedeu o limite de requisições permitido
+max: Número máximo de requisições permitido
+usage: Número máximo de requisições alcançado
+remaining_time: Período restante para envio de requisições (milissegundos)
+
+Erro: 414 "URI Too Long"
+Ao projetar seu aplicativo pense em controlar o tamanho da URL para não passar do limite de 8kb. Caso a URL passe do limite de 8kb de tamanho, você receberá um erro 414 URI Too Long.
+
+👍
+Dicas rápidas
+Assuma que sua aplicação irá competir por cotas, taxas e recursos de concorrência com outros aplicativos, defina limites de uso conservadores.
+Evite fazer chamadas de API simultâneas se o seu caso de uso não se beneficiar.
+Sempre que possível utilize requisições assíncronas para as APIs, assim você poderá lidar melhor com os limites e erros.
+
+Como migrar a API 1.x para API 2.0 do RD Station Marketing
+Caso você possua uma integração com o RD Station Marketing utilizando a API V1.2 ou 1.3, é necessário realizar a migração para a nova versão da API, isso deve-se pelo fato que a API antiga será descontinuada.
+
+Esse tutorial tem como objetivo auxiliar pessoas desenvolvedoras a migrar suas integrações da versão 1.x para a API V2, assim como seus novos recursos.
+
+Para lhe auxiliar nessa etapa criamos esse manual de migração para a nova API.
+
+Acesso rápido:
+Por que a API antiga está sendo descontinuada e uma nova foi criada?
+Como começar?
+Autenticando na nova API
+Como autorizar as requisições
+Migrando minha integração
+Como migrar eventos de conversão?
+Como migrar marcações de oportunidade?
+Como migrar marcações de Oportunidade Perdida (Lost)?
+Como migrar marcações de Oportunidade Ganha (Venda)?
+Como migrar a troca de estágio de funil?
+Como migrar webhooks?
+Por que a API antiga está sendo descontinuada e uma nova foi criada?
+A antiga API do RD Station Marketing está sendo descontinuada pois ela não é mais compatível com as melhorias que estamos implementando no produto como um todo e não oferecer possibilidades de melhorias. Outro ponto muito importante é a segurança, a nova versão da API trabalha com metodologias mais modernas que proporcionam maior segurança, privacidade e confiabilidade nos dados trafegados, utilizando o protocolo OAuth.
+
+Como começar?
+Antes de começar a migrar a integração, é importante entender um ponto: a nova versão da API tem um conceito diferente da versão antiga, pois na nova versão você cria um aplicativo para comunicar o seu sistema/plataforma com o RD Station Marketing.
+
+Na nova versão os tokens (Token Público e Token Privado) não são mais utilizados.
+
+A Autenticação para utilização da API do RD Station Marketing é baseada no protocolo de segurança OAuth2, o que significa que ela trabalha com tokens com prazo de expiração pré-determinados.
+
+Autenticando na API
+Criando um aplicativo para a sua integração.
+O aplicativo será responsável por autenticar sua conta do RD Station Marketing em nossa API e permitirá que a integração ocorra.
+
+Após criar o aplicativo você receberá as duas credenciais, que chamamos de client_id e client_secret que são utilizadas no processo de Autenticação da API.
+
+Veja como criar o aplicativo:
+
+➡️ Passo 1: Como criar um aplicativo na App Store e gerar as Credenciais (client_id e client_secret)
+
+Autenticando na nova API
+Com o aplicativo criado já é possível começar o desenvolvimento, o primeiro passo que difere da versão anterior é a forma de logar a sua integração na conta do RD Station Marketing, antes era utilizado os tokens da conta nas requisições para isso, na nova versão é necessário fazer o flow de autenticação OAuth utilizando o aplicativo criado na etapa anterior, abaixo o link da documentação assim como um passo a passo mostrando como é feito a autenticação.
+
+➡️ Autenticação da API do RD Station Marketing
+
+Como autorizar as requisições
+Para todos os endpoints é utilizado o access_token nos cabeçalhos das requisições como forma de autenticação de envios juntamente com o tipo de conteúdo enviado, que é JSON.
+
+Esses dois atributos sempre devem ir no cabeçalho da seguinte forma:
+
+Key	Value
+Authorization	Bearer access_token
+Content-Type	application/json
+Esse é um exemplo de como os parâmetros devem ser configurados no Header das suas requisições:
+
+cURL
+
+curl --request POST \
+     --url https://api.rd.services/platform/contacts \
+     --header 'accept: application/json' \
+     --header 'authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5yZC5zZXJ2aWNlcyIsInN1YiI6InlURlh3ZUxKbkJWVGxaeUk3VEVSQXhQa0pNYkVZT2NHZDVEUXpzcGFQOUlAY2xpZW50cyIsImF1ZCI6Imh0dHBzOi8vYXBwLnJkc3RhdGlvbi5jb20uYnIvYXBpL3YyLyIsImFwcF9uYW1lIjoiMjIxQiBCYWtlciBTdHJlZXQiLCJleHAiOjE2ODU1NTcxNTAsImlhdCI6MTY4NTQ3MDc1MCwic2NvcGUiOiIifQ.rHgZb-2373-4i8UzzhKAoFhJu4EMPTIwUf6GqHmCLDGTboAzF1AiBZFas-3yKy71WUE7whVXFXg664PwwT8Y18Ruv8ktoqbO0HaXebkZNxN4SxjRmtgcbaMgSxlH1NvwRXhbT6yFWOTzREcj_5zDm8EWs-7KeXe_3BCoD6NPbPpsHblMdVy4oKHwQCcFf8F-pXsWUOGv1_4jNnrONo_nfC8hzo8o7nNMBiZhHQy0BPcgC0u6zdTUakaUO9btX6SB3E_ZOn6Z_U5HSBM9ldTf-s61xmjzRobuUQQrrITkiKm2HMGoAHK_Ak4L97DlVtQMaeXUtdnEQ06Vb-7YIAGs-w' \
+     --header 'content-type: application/json'
+Abaixo pontuamos separadamente mudanças que são necessárias realizar no envio das requisições.
+
+Migrando minha integração
+A nova API oferece diversos novos recursos que podem ser utilizados seguindo as orientações desta documentação.
+
+Abaixo explicamos especificamente como adaptar as requisições dos recursos da API 1.x para o modelo da nova API.
+
+Como migrar eventos de conversão?
+O evento de conversão padrão registra um evento de conversão com o ícone do "Troféu" na linha do tempo do contato com todos os campos preenchidos na requisição.
+
+Documentação da nova API:
+➡️ Eventos de Conversão Padrão
+
+Confira abaixo a comparação completa das alterações da requisição para realizar o envio na nova API:
+
+Requisição API 1.x
+Informações da Requisição
+Endpoint	https://www.rdstation.com.br/api/1.3/conversions
+https://www.rdstation.com.br/api/1.2/conversions
+Payload padrão	
+{
+    "token_rdstation": "you-token",
+    "identificador": "Name of the conversion",
+    "email": "email@email.com",
+    "nome": "Name of Lead"
+  "cargo": "job title value",
+    "estado" "state of the contact",
+    "cidade": "city of the contact",
+  .....
+  "tags": [
+        "tag-1",
+        "tag-2"
+    ]
+}
+            
+Requisição Nova API
+Informações da Requisição
+Endpoint	https://api.rd.services/platform/events
+Payload padrão	
+                {
+"event_type": "CONVERSION",
+ "event_family":"CDP",
+ "payload": {
+  "conversion_identifier": "Name of the conversion",
+  "name": "Name of Lead",
+  "email": "email@email.com",
+  "job_title": "job title value",
+  "state": "state of the contact",
+  "city": "city of the contact",
+  "country": "country of the contact",
+   ......
+  "tags": ["tag-1", "tag-2"]
+ }
+}
+
+            
+Comparação das alterações dos campos/atributos enviados no payload
+API 1.x	Nova API
+token_rdstation	Não é necessário
+email / your-email / e-mail	email
+identificador	conversion_identifier
+nome / name / nombre	name
+empresa / company	company
+cargo / job_title	job_title
+telefone / personal_phone	personal_phone
+celular / mobile_phone	mobile_phone
+open_country	country
+estado	state
+open_state	state
+cidade	city
+open_city	city
+website	website
+twitter	twitter
+facebook	facebook
+campo não enviado	linkedin
+c_utmz	campo descontinuado, utilizar traffic_source
+traffic_source	traffic_source
+client_id	client_tracking_id
+tags	tags
+Observações importantes
+Campos adicionados na Nova API
+O campo event_family existente no payload novo deve possuir o valor padrão CDP.
+
+Campos personalizados
+Na api 1.x, os campos personalizados são informados no payload de conversão utilizando o nome do campo no RD Station Marketing, na nova API é necessário utilizar o identificador do campo personalizado sempre que você desejar inserir um valor no lead pelo evento de conversão.
+
+Para saber o identificador de um campo personalizado, pode-se fazer uma pesquisa no endpoint de campos dá conta que será retornando uma lista com todos os campos da conta, o atributo api_identifier é o que identifica o campo.
+
+Método: GET
+Endpoint:https://api.rd.services/platform/contacts/fields
+
+Exemplo de retorno na pesquisa de campos personalizados:
+
+JSON
+
+...  
+{  
+            "uuid": "55f3fd22-7c6c-4cf5-a9e3-3cbfb9635178",  
+            "label": {  
+                "pt-BR": "Tipo de Negociação",  
+                "default": "Tipo de Negociação"  
+            },  
+            "name": {  
+                "pt-BR": "Tipo de Negociação",  
+                "default": "Tipo de Negociação"  
+            },  
+            "api_identifier": "cf_tipo_de_negociacao",  
+            "custom_field": true,  
+            "validation_rules": {},  
+            "presentation_type": "TEXT_INPUT",  
+            "data_type": "STRING"  
+        },  
+...
+No exemplo acima um campo personalizado do RD Station Marketing com o nome Tipo de Negociação, retornou com o identificador cf_tipo_de_negociacao, esse identificador é que vou usar no meu payload quando precisar informar um valor no RD Station Marketing.
+
+Caso sejam enviados atributos no payload de uma conversão que não sejam um campo padrão ou um campo personalizado, essa informação não é gravada como dado de conversão.
+
+Veja como funciona a gestão de campos personalizados na nova API:
+
+Documentação da nova API:
+➡️ Campos personalizados
+
+Exemplo de requisição API 1.x vs Nova API
+API 1.x
+Método: POST
+Endpoint:https://www.rdstation.com.br/api/1.3/conversions
+Header: Content-Type: application/json
+Body:
+
+JSON
+
+{  
+ "token_rdstation": "9f19d4229e7cf73cd9a5ee465e1",  
+ "identificador": "Name of the conversion",  
+ "email": "[email@email.com](mailto:email@email.com)",  
+ "nome": "Name of Lead",  
+ "cargo": "CEO",  
+ "estado": "SC",  
+ "Tipo de Negociacao": "Test",  
+ "tags": ["tag-1", "tag-2"]  
+}
+Nova API
+Método: POST
+Endopint: https://api.rd.services/platform/events
+Header: Content-Type: application/json
+Authorization: Bearer acces_token
+
+Body:
+
+JSON
+
+{  
+  "event_type": "CONVERSION",  
+  "event_family":"CDP",  
+  "payload": {  
+    "conversion_identifier": "Name of the new conversion",  
+    "name": "Name of Lead",  
+    "email": "[email@email.com](mailto:email@email.com)",  
+    "job_title": "CEO",  
+    "state": "SC",  
+    "cf_tipo_de_negociacao":"New Test",  
+    "tags": ["tag-3", "tag-4"]  
+  }  
+}
+Como migrar marcações de oportunidade?
+O evento de Marcação de Oportunidade, registra a marcação de um contato como oportunidade no RD Station Marketing.
+
+Documentação da nova API:
+➡️ Evento de Marcação de Oportunidades
+
+Confira abaixo a comparação completa das alterações da requisição para realizar o envio na nova API:
+
+Requisição API 1.x
+Informações da Requisição
+Endpoint	https://www.rdstation.com.br/api/1.2/leads/LEAD_EMAIL
+Payload padrão	
+{
+    "auth_token": "PRIVATE_TOKEN",
+    "lead": {
+        "lifecycle_stage": ID_ESTAGIO,
+        "opportunity": TRUE_OU_FALSE
+    }
+            
+Requisição Nova API
+Informações da Requisição
+Endpoint	https://api.rd.services/platform/events
+Payload padrão	
+{
+    "event_type": "OPPORTUNITY",
+    "event_family": "CDP",
+    "payload": {
+        "email": "email@email.com",
+        "funnel_name": "default"
+    }
+}
+
+            
+Comparação das alterações dos campos/atributos enviados no payload
+API 1.x	Nova API
+auth_token	Não é necessário
+lifecycle_stage	Não é necessário
+opportunity	event_type
+Observações importantes
+Perceba que no nova API deve usar o texto OPPORTUNITY ao inves de true no campo que identifica qual evento realizar.
+O endpoint da nova API é fixo, não vai nenhum parâmetro, ao contrário da API 1.x onde era necessário informar o email do lead, agora essa informação fica no próprio payload.
+Na nova versão não é necessário informar o estágio do lead para marcá-lo como oportunidade como era na versão 1.x.
+O campo funnel_name existente no payload novo, atualmente só aceita o valor default.
+O campo event_family existente no payload novo deve possuir o valor padrão CDP.
+Exemplo de requisição API 1.x vs Nova API
+API 1.x
+Método: PUT
+Endpoint: https://www.rdstation.com.br/api/1.2/leads/[email@email.com](mailto:email@email.com)
+Header: Content-Type: application/json
+
+JSON
+
+{  
+"auth_token":"4e14....642",  
+  "lead": {  
+   "lifecycle_stage": 1,  
+   "opportunity": true  
+ }
+Nova API
+Método: POST
+Endpoint: https://api.rd.services/platform/events
+Header: Content-Type: application/json
+Authorization: Bearer acces_token
+
+JSON
+
+{
+ "event_type": "OPPORTUNITY",
+ "event_family":"CDP",
+   "payload": {
+       "email": "email@email.com",
+       "funnel_name": "default"
+   }
+} 
+Como migrar marcações de Oportunidade Perdida (Lost)?
+O evento de Marcação de Oportunidade Perdida, desmarca a oportunidade de um contato no RD Station Marketing.
+
+Documentação da nova API:
+➡️ Evento de Marcação de Oportunidade Perdida (Lost)
+
+Confira abaixo a comparação completa das alterações da requisição para realizar o envio na nova API:
+
+Requisição API 1.x
+Informações da Requisição
+Endpoint	https://www.rdstation.com.br/api/1.2/services/PRIVATE_TOKEN/generic
+Payload padrão	
+{
+    "status": "lost",
+    "lost_reason": "Motivo do lost",
+    "email": "EMAIL_DO_LEAD"
+}
+            
+Requisição Nova API
+Informações da Requisição
+Endpoint	https://api.rd.services/platform/events
+Payload padrão	
+{
+    "event_type": "OPPORTUNITY_LOST",
+    "event_family": "CDP",
+    "payload": {
+        "email": "email@email.com",
+        "funnel_name": "default",
+        "reason": "Lost reason"
+    }
+}
+
+            
+Comparação das alterações dos campos/atributos enviados no payload
+API 1.x	Nova API
+status	event_type
+lost_reason	reason
+email	email
+Observações importantes
+Perceba que no nova API deve usar o texto OPPORTUNITY_LOST ao inves de lost no campo que identifica qual evento realizar.
+O endpoint da nova API é fixo, não vai ter nenhum parâmetro, ao contrário da API 1.x onde era necessário informar token privado.
+O campo funnel_name existente no payload novo, atualmente só aceita o valor default.
+O campo event_family existente no payload novo deve possuir o valor padrão CDP.
+Exemplo de requisição API 1.x vs Nova API
+API 1.x
+Método: POST
+Endpoint: https://www.rdstation.com.br/api/1.2/services/4e14....642/generic
+Header: Content-Type: application/json
+
+Body:
+
+JSON
+
+{
+  "status": "lost",
+  "lost_reason": "Lost reason",
+  "email": "email@email.com"
+}
+Nova API
+Método: POST
+Endpoint: https://api.rd.services/platform/events
+Header: Content-Type: application/json
+Authorization: Bearer acces_token
+
+Body:
+
+JSON
+
+{  
+ "event_type": "OPPORTUNITY_LOST",  
+ "event_family":"CDP",  
+   "payload": {  
+       "email": "[email@email.com](mailto:email@email.com)",  
+       "funnel_name": "default",  
+       "reason":"Lost reason"  
+   }  
+}
+Como migrar marcações de Oportunidade Ganha (Venda)?
+O evento de Marcação de Oportunidade Ganha, registra uma venda em um contato no RD Station Marketing.
+
+Documentação da nova API:
+➡️ Evento de Marcação de Oportunidade Ganha
+
+Confira abaixo a comparação completa das alterações da requisição para realizar o envio na nova API:
+
+Requisição API 1.x
+Informações da Requisição
+Endpoint	https://www.rdstation.com.br/api/1.2/services/PRIVATE_TOKEN/generic
+Payload padrão	
+{
+    "status": "won",
+    "value": VALOR_DA_VENDA,
+    "email": "EMAIL_DO_LEAD"
+}
+            
+Requisição Nova API
+Informações da Requisição
+Endpoint	https://api.rd.services/platform/events
+Payload padrão	
+{
+    "event_type": "SALE",
+    "event_family": "CDP",
+    "payload": {
+        "email": "email@email.com",
+        "funnel_name": "default",
+        "value": 200
+    }
+}
+
+            
+Comparação das alterações dos campos/atributos enviados no payload
+API 1.x	Nova API
+status	event_type
+value	value
+email	email
+Observações importantes
+Perceba que no nova API deve usar o texto SALE ao inves de won no campo que identifica qual evento realizar.
+O endpoint da nova API é fixo, não vai nenhum parâmetro, ao contrário da API 1.x onde era necessário informar token privado.
+O campo funnel_name existente no payload novo, atualmente só aceita o valor default.
+O campo event_family existente no payload novo deve possuir o valor padrão CDP.
+Exemplo de requisição API 1.x vs Nova API
+API 1.x
+Método: POST
+Endpoint: https://www.rdstation.com.br/api/1.2/services/4e14....642/generic
+Header:Content-Type: application/json
+
+Body:
+
+JSON
+
+{  
+  "status": "won",  
+  "value":  200,  
+  "email": "[email@email.com](mailto:email@email.com)"  
+}
+Nova API
+Método:POST
+Endpoint:https://api.rd.services/platform/events
+Header: Content-Type: application/json
+Authorization: Bearer acces_token
+
+Body:
+
+JSON
+
+{  
+ "event_type": "SALE",  
+   "event_family":"CDP",  
+    "payload": {  
+      "email": "[email@email.com](mailto:email@email.com)",  
+	  "funnel_name": "default",  
+	  "value": 200  
+    }  
+}
+Como migrar a troca de estágio de funil?
+A API de Funis de Contatos permite que você manipule os estágios de funil de seus Contatos.
+
+Além disso, é possível consultar e atualizar o Contato como Oportunidade, consultar e atualizar o Dono do Lead, bem como consultar a pontuação de "Perfil" e "Interesse" do Lead Scoring.
+
+Documentação da nova API:
+➡️ Funis de Contatos
+
+Confira abaixo a comparação completa das alterações da requisição para realizar o envio na nova API:
+
+Requisição API 1.x
+Informações da Requisição
+Endpoint	https://www.rdstation.com.br/api/1.2/leads/LEAD_EMAIL
+Payload padrão	
+{
+    "auth_token": "PRIVATE_TOKEN",
+    "lead": {
+        "lifecycle_stage": ID_ESTAGIO,
+        "opportunity": TRUE_OU_FALSE
+    }
+}
+            
+Requisição Nova API
+Informações da Requisição
+Endpoint	https://api.rd.services/platform/contacts/email:LEAD_EMAIL/funnels/default
+Payload padrão	
+{
+  "lifecycle_stage": "Client",
+   "opportunity": true_false,
+   "contact_owner_email": "email@example.org"
+}
+
+            
+Comparação das alterações dos campos/atributos enviados no payload
+API 1.x	Nova API
+auth_token	Não é necessário
+lifecycle_stage	lifecycle_stage
+opportunity	opportunity
+--	contact_owner_email (opcional)
+Observações importantes
+O campo lifecycle_stage na nova API recebe a descrição do estágio ao invés de código, conforme de/para abaixo:
+
+API 1.x	Nova API
+0	Lead
+1	Qualified Lead
+2	Client
+Na nova versão é possível alterar o dono do lead pelo campo opcional contact_owner_email.
+
+Exemplo de requisição API 1.x vs Nova API (Estágio do funil)
+API 1.x
+Método: PUT
+Endpoint: https://www.rdstation.com.br/api/1.2/leads/[email@email.com](mailto:email@email.com)
+Header: Content-Type: application/json
+
+Body:
+
+JSON
+
+{  
+"auth_token":"4e14....642",  
+  "lead": {  
+   "lifecycle_stage": 1,  
+   "opportunity": true  
+ }
+Nova API
+Método: PUT
+Endpoint: https://api.rd.services/platform/contacts/email:[email@email.com](mailto:email@email.com)/funnels/default
+Header: Content-Type: application/json
+Authorization: Bearer acces_token
+
+Body:
+
+JSON
+
+{  
+  "lifecycle_stage": "Qualified Lead",  
+  "opportunity": true  
+}
+Como migrar webhooks?
+Os novos webhooks podem ser criados diretamente pela API, ao contrário da versão antiga que era necessário fazer esse passo diretamente pela interface do RD Station Marketing.
+
+Confira como fazer a gestão dos mesmos (criar, atualizar, deletar e consultar):
+
+Documentação da nova API:
+➡️ Webhooks
+
+Alterações do payload padrão
+A estrutura do payload das duas versões da API disponíveis atualmente (1.x e 2.0) são diferentes. Portanto, é importante adequar o seu sistema externo para consumir esses dados, conforme a versão do Webhook criado na sua conta.
+
+Confira abaixo o payload padrão enviado por cada uma das versões:
+
+API 1.x
+JSON
+
+{"leads":
+[{"id":"1",
+"uuid":"c2f3d2b3-......-eef38be32f7f",
+"email":"email@email.com",
+"name":"Lead Name",
+"company":"Company Name",
+"job_title":"Job",
+"bio":"This is my bio",
+"created_at":"2012-06-04T15:31:35-03:00",
+"opportunity":"false",
+"number_conversions":"3",
+"user": "email@example.com",
+"first_conversion": {
+"content": {
+"identificador":"ebook-abc",
+"nome":"Lead Name",
+"email_lead":"email@email.com",
+"telefone":"99999999",
+"empresa":"Company Name",
+"cargo":"IT"
+},
+"created_at":"2012-06-04T15:31:35-03:00",
+"cumulative_sum":"1",
+"source":"source 1",
+"conversion_origin": {
+"source": "source 1",
+"medium": "medium 1",
+"value": "value 1",
+"campaign": "campaign 1",
+"channel": "channel 1"
+}
+},
+"last_conversion": {
+"content": {
+"identificador":"webinar-abc",
+"email_lead":"suporte@resultadosdigitais.com.br"
+},
+"created_at":"2012-06-04T15:31:35-03:00",
+"cumulative_sum":"2",
+"source":"source 2"
+},
+"custom_fields": {},
+"website": "http://www.mywebsite.com",
+"personal_phone":"48 999999999",
+"mobile_phone":"48 999999999",
+"city":"Florianópolis",
+"state": "SC",
+"lead_stage": "Lead",
+"tags": ["tag 1", "tag 2"],
+"fit_score":"d",
+"interest":0
+}]
+}
+Nova API
+JSON
+
+{
+"event_type": "WEBHOOK.MARKED_OPPORTUNITY",
+"entity_type": "CONTACT",
+"event_identifier": "my-event-identifier",
+"timestamp": "2018-03-13T14:09:02.724-03:00",
+"event_timestamp": "2018-03-13T14:07:04.254-03:00",
+"contact": {
+"uuid":"c2f3d2b3-7250-4d27-97f4-eef38be32f7f",
+"email":"suporte@resultadosdigitais.com.br",
+"name":"Contact Name",
+"job_title":"Developer",
+"bio":"This is my bio",
+"website": "http://rdstation.com.br",
+"personal_phone":"48 30252598",
+"mobile_phone":"48 30252598",
+"city":"Florianópolis",
+"facebook": "Contact Facebook",
+"linkedin": "Contact Linkedin",
+"twitter": "Contact Twitter",
+"tags": ["tag 1", "tag 2"],
+"cf_custom_field_example": ["Option1", "Option2"],
+"company": {
+"name": "Company Example 0"
+},
+"funnel": {
+"name": "default",
+"lifecycle_stage": "Lead",
+"opportunity": false,
+"contact_owner_email": "owner@example.org",
+"interest": 20,
+"fit": 0,
+"origin": "Busca Paga | Google"
+}
+}
+}
+Comparação das alterações dos campos/atributos enviados no payload
+Existe uma diferença nos campos e atributos enviados, bem como, em sua nomenclatura.
+
+Confira a tabela abaixo para ver uma comparação entre todas as mudanças:
+
+API 1.x	Nova API
+id	Descontinuada (usar uuid)
+uuid	uuid
+email	email
+name	name
+job_title	job_title
+bio	bio
+company	company: { name }
+number_conversions	Descontinuada
+user	funnel: { contact_owner_email }
+first_conversion	Descontinuada
+last_conversion	event_identifier (quando gatilho for conversão)
+custom_fields	campos "cf_"
+website	website
+personal_phone	personal_phone
+mobile_phone	mobile_phone
+city	city
+state	state
+lead_stage	funnel: { lifecycle_stage }
+tags	tags
+fit_score	funnel: { fit }
+interest	funnel: { interest }
+first_conversion.source / last_conversion.source	funnel: { origin }
+Observações importantes
+Veja alguns detalhes importantes na mudança do payload padrão:
+
+first_conversion e last_conversion: Na versão antiga essa propriedade era enviada de forma fixa no pacote de dados do lead, na nova versão do webhook é enviado o estado atual do lead, então sempre que o gatilho de envio do webhook for conversão, o identificador que gerou o envio estará no atributo event_identifier, (que é o identificador que gerou o envio), já os dados são o do perfil do lead, que vai estar atualizado de acordo com a conversão, mas caso você precise desses dados, existe um endpoint de consulta de dados de conversão, basta fazer uma consulta após receber o lead.
+public_url: Por questões de segurança e compliance esse atributo não estará mais disponível, ou seja, não será permitido deixar informações do lead de maneira pública.
+custom_fields: Os campos personalizados não são enviados mais dentro de uma propriedade custom_fields como na versão anterior, agora eles ficam juntos dos dados do lead, identificados com o prefixo “cf_”, seguindo o padrão de identificadores dos campos personalizados, conforme explicado aqui.
+include_relations: O novo webhook permite que você defina se algumas informações farão parte do pacote de dados enviados a cada disparo, como por exemplo os dados de funil e empresa, para isso no momento de criação do webhook deve-se informar na propriedade include_relations COMPANY e CONTACT_FUNNEL, ambos opcionais.
+Mensagens de erro
+Usamos códigos HTTP convencionais nas respostas para indicar o sucesso ou a falha de uma solicitação da API. Em geral, os códigos no intervalo 2xx indicam sucesso, os códigos no intervalo 4xx indicam um erro que falhou dado a informação fornecida (por exemplo, um parâmetro obrigatório foi omitido, uma falha de carga, etc.) e os códigos no intervalo 5xx indicam um erro com nossos servidores (estes são raros).
+
+
+
+Códigos HTTP
+Código	Description
+400 (Bad request)	Malformed body request
+401 (Unauthorized)	Unauthorized request
+403 Forbidden	Forbidden request
+404 (Not found)	Resource Not Found
+415 (Unsupported Media Type)	Invalid Content-Type header
+429 Too Many Requests	API usage limit exceeded
+422 (Unprocessable Entity)	Invalid Data type
+500 (Internal Server Error)	Service temporarily unavailable
+
+
+Tipos de erros
+Os possíveis tipos de erro que darão feedback mais detalhado para pedidos inválidos:
+
+Tipos de erros relacionados à requisições
+Error type	Message
+UNAUTHORIZED	Invalid token.
+BAD_REQUEST	Could not parse the body of the request according to the provided Content-Type.
+UNSUPPORTED_MEDIA_TYPE	The payload is in a format not supported by this method on the target resource.
+RESOURCE_NOT_FOUND	The resource couldn't be found.
+Tipos de erro relacionados à validação
+Error type	Message
+CANNOT_BE_NULL	Cannot be null
+CANNOT_BE_BLANK	Can not be blank
+INVALID	It is not valid
+TAKEN	Already in use
+TOO_SHORT	Is too short (minimum 0 characters)
+TOO_LONG	Is too long (maximum 0 characters)
+EXCLUSION	Already in use
+INCLUSION	It is not included in the list
+MUST_BE_BOOLEAN	It must be boolean
+MUST_BE_STRING	It must be string
+MUST_BE_LESS_THAN_OR_EQUAL	It must less than or equal to
+MUST_BE_VALID_OPTION	It must be one of the valid options
+MUST_BE_STRING_ARRAY	It muast be an array of strings
+
+
+Exemplo de erros
+Unauthorized Request
+Se o token ou as credenciais forem inválidas, ou o code estiver expirado, ou o usuário não estiver autorizado.
+
+Status 401 Unauthorized
+
+Exemplo
+JSON
+
+{
+    "errors": [
+        {
+          "error_type": "UNAUTHORIZED",
+          "error_message": "Invalid token."
+        },
+        {
+          "error_type": "ACCESS_DENIED",
+          "error_message": "Wrong credentials provided."
+        },
+        {
+           "error_type": "EXPIRED_CODE_GRANT",
+           "error_message": "The authorization code grant has expired."
+        },
+        {
+          "error_type": "INVALID_REFRESH_TOKEN",
+          "error_message": "The provided refresh token is invalid or was revoked."
+        }
+    ]
+}
+
+Unable to load CDP Schema
+Se a chave gerada para a API Key for referente a uma conta do RD Station CRM e não do RD Station Marketing.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+    "errors": [
+        {
+            "error_type": "UNABLE_TO_LOAD_CDP_SCHEMA",
+            "error_message": "Unable to load schema for tenant_id '575000000001107348'"
+        }
+    ]
+
+Resource Not Found
+Se o recurso não existir no RD Station.
+
+Status 404 not found
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "error_type": "RESOURCE_NOT_FOUND",
+        "error_message": "Lead not found."
+    }
+}
+
+
+Invalid Content-Type Header
+Se o Content-Type não estiver configurado corretamente.
+
+Status 415 Unsupported Media Type
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "error_type": "UNSUPPORTED_MEDIA_TYPE",
+        "error_message": "The payload is in a format not supported by this method on the target resource."
+    }
+}
+
+
+Malformed Body Request
+Se a solicitação do corpo for mal formada de acordo com o cabeçalho Content-Type.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "error_type": "BAD_REQUEST",
+        "error_message": "Could not parse the body of the request according to the provided Content-Type."
+    }
+}
+
+
+Invalid format
+Se um formato inválido para um atributo for enviado.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "email": [
+            {
+                "error_type": "CANNOT_BE_NULL",
+                "error_message": "email cannot be null."
+            }
+        ],
+           "contact_owner_email": [
+      {
+        "error_type": "MUST_BE_STRING",
+        "error_message": "url must be string"
+      }
+             {
+        "error_type": "MUST_BE_LESS_THAN_OR_EQUAL",
+        "error_message": "url must less than or equal to 100"
+      },
+      {
+        "error_type": "INVALID_EMAIL_FORMAT",
+        "error_message": "contact_owner_email has an invalid format"
+      },
+      {
+        "error_type": "INVALID_USER",
+        "error_message": "The user {user} was not found in your account."
+      }
+        ],
+        "linkedin": [
+            {
+                "error_type": "INVALID_FORMAT",
+                "error_message": "linkedin must use only letters, numbers, '.', '-' and '_'"
+            }
+        ],
+        "name" : [
+          { "error_type": "CANNOT_BE_BLANK", "error_message": "Can not be blank" }
+        ]
+    }
+}
+
+
+Uppercase Tags
+Se for enviado tags com caracteres maiúsculos.
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "tags": [
+            {
+                "error_type": "VALUES_MUST_BE_LOWERCASE",
+                "error_message": "must not contain capital letters"
+            }
+        ]
+    }
+}
+
+
+Invalid data type
+Se a tag for enviada em uma string, em vez de uma array of strings.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+    "errors": [
+        {
+            "error_type": "INVALID_DATA_TYPE",
+            "error_message": "Must be of type 'SET'.",
+            "validation_rules": {
+                "data_type": "SET"
+            },
+            "path": "$.payload.tags"
+        }
+    ]
+}
+
+
+Invalid data type
+Se um tipo de dado inválido for enviado.
+
+Status 422 Unprocessable Entity
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "name": [
+            {
+                "error_type": "MUST_BE_STRING",
+                "error_message": "Name must be string."
+            }
+        ]
+    }
+}
+
+
+Read only fields
+Ao tentar atualizar um atributo que é somente leitura.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "error_type": "INVALID_FIELDS",
+        "error_message": "Payload contains fields that cannot be modified: (available_for_mailing)"
+    }
+}
+
+
+Inexistent fields
+Ao tentar atualizar um atributo que não existe.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "error_type": "INVALID_FIELDS",
+        "error_message": "Payload contains fields that do not exist: (attr)"
+    }
+}
+
+
+Conflicting field
+Ao usar o endpoint de PATCH UPSERT e um campo de Contato que identifica o Lead é usado corpo da requisição.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "error_type": "CONFLICTING_FIELD",
+        "error_message": "The payload contains an attribute that was used to identify the lead"
+    }
+}
+
+
+Inclusion
+Ao criar um campo personalizado "presentation_type": "MULTIPLE_CHOICE" e preencher o campo "data_type" com um valor diferente de "STRING[]".
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "data_type": [
+            {
+                "error_type": "INCLUSION",
+                "error_message": "invalid options, the valid options are: [STRING[]]"
+            }
+        ]
+    }
+}
+
+
+Email already in use
+Ao usar o endpoint de POST para criar contato e enviar o email de Lead já existente.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+    "errors": {
+        "error_type": "EMAIL_ALREADY_IN_USE",
+        "error_message": "email already in use"
+    }
+}
+
+
+Values must be unique
+Ao usar o endpoint de POST para criar uma tag para o lead pelo uuid/email e o lead já possui a tag.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+	"errors": {
+		"tags": [
+			{
+				"error_type": "VALUES_MUST_BE_UNIQUE",
+				"error_message": "must not contain duplicate values"
+			}
+		]
+	}
+}
+
+
+Required Parameter
+Ao usar o endpoint de GET para melhor Horário para Mensagem e não enviar um parâmetro obrigatório.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+  "errors": {
+    "error_type": "REQUIRED_PARAMETER",
+    "error_message": "Required parameter not informed"
+  }
+}
+
+
+Invalid Parameter
+Ao usar o endpoint de GET para melhor Horário para Mensagem e enviar um parâmetro fora do formato esperado.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+  "errors": {
+    "error_type": "INVALID_PARAMETER",
+    "error_message": "Value informed in the parameter is invalid or does not match the expected format"
+  }
+}
+
+
+Parameter Unknown
+Ao usar o endpoint de GET para melhor Horário para Mensagem e enviar um parâmetro desconhecido ou inexperado.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+  "errors": {
+    "error_type": "PARAMETER_UNKNOWN",
+    "error_message": "Unknown or unexpected parameter"
+  }
+}
+
+
+Date Out of Range
+Ao usar o endpoint de GET para melhor Horário para Mensagem e enviar o parâmetro de message_date com uma data que excede o limite mínimo 1 dia e máximo 7 dias.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+  "errors": {
+    "error_type": "DATE_OUT_OF_RANGE",
+    "error_message": "Entered date range exceeds limit"
+  }
+}
+
+
+Invalid Value
+Ao usar o endpoint de GET para melhor Horário para Mensagem e enviar um parâmetro inválido para essa requisição.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+  "errors": {
+    "error_type": "INVALID_VALUE",
+    "error_message": "Parameter informed is not contained in the list of valid attributes"
+  }
+}
+
+
+Account Requirement Missing
+Ao usar o endpoint de GET para melhor Horário para Mensagem e a conta em questão não é Pro ou Advanced.
+
+Status 403 Forbidden
+
+Exemplo
+JSON
+
+{
+  "errors": {
+    "error_type": "ACCOUNT_REQUIREMENT_MISSING",
+    "error_message": "The account is not part of the account group that has access to smart send."
+  }
+}
+
+
+Rate Limit Exceeded
+Ao ultrapassar o limite de requisições da API.
+
+Status 429 Too Many Requests
+
+Exemplo
+JSON
+
+{
+  "errors": {
+    "error_type": "RATE_LIMIT_EXCEDDED",
+    "error_message": "API usage limit exceeded"
+  }
+}
+
+
+Workflow Status Error
+Ao usar o endpoint de POST para Inserir leads em um fluxo e o valor enviado no parâmetro id for referente a um fluxo desativado ou inexistente.
+
+Status 400 Bad Request
+
+Exemplo
+JSON
+
+{
+  "errors": [
+    {
+      "error_type": "WORKFLOW_STATUS_ERROR",
+      "error_message": "Workflow must be activated or does not exist",
+      "validation_rules": {},
+      "path": "$.id"
+    }
+  ]
+}
+
+
+Service Unavailable
+Serviço indisponível temporariamente.
+
+Status 500 Internal Server Error
+
+Exemplo
+JSON
+
+{
+  "errors": {
+    "error_type": "SERVICE_UNAVAILABLE",
+    "error_message": "Service temporarily unavailable"
+  }
+}
+
+Enriquecimento de dados
+Este guia irá lhe mostrar como fazer a sua primeira chamada para a API do RD Station.
+
+Aprenda como fazer a integração de seu aplicativo para enriquecimento de dados usando as APIs RD Station.
+
+Por definição, um aplicativo de enriquecimento de dados deve ser capaz de, com base em algumas informações, retornar outros dados que serão úteis na qualificação do Contato ou para ativar fluxos de automação.
+
+Outro caso de uso que pode ser aplicado é quando o aplicativo externo mantém dados "enriquecedores" em segundo plano e, quando uma novo dado é descoberto ou atualizado, pode gerar também atualização de informações no RD Station.
+
+O processo principal esta resumido neste gráfico:
+
+Enrichment pt br
+A seguir nós iremos lhe mostrar como recuperar um único contato usando o endpoint da API utilizando o método GET com UUID. Para fazer isso, você será guiado pelo processo de autenticação para gerar um token de acesso, o qual você utilizará em todas as chamadas de nossa API. Em seguida, iremos fornecer o código para fazer a solicitação que retorna a informação principal formatada como JSON.
+
+Como gerar um token de autenticação
+Crie uma conta de teste acessando esse link.
+O token de autenticação deve ser obtido seguindo os passos descritos em Autenticação.
+Como usar Webhooks como um gatilho para o seu aplicativo
+Para conectar à sua conta RD Station siga estes passos: Clique em "Sua Conta" -> "Integrações" -> "Webhooks". Por fim, clique no botão Criar Webhook. Na tela que se abrir defina as seguintes configurações:
+
+O nome da sua integração. O objetivo aqui é criar um nome que o ajude para identificar a qual ferramenta essas informações estão sendo enviadas.
+A URL do seu aplicativo que receberá a notificação do RD Station com as informações do Contato.
+O gatilho que deve ativar o envio da notificação
+Neste caso, você pode solicitar que a notificação seja enviada em uma das duas situações abaixo:
+
+Nova conversão: Envie para seu aplicativo Contatos que realizarem alguma conversão no RD Station. Você pode selecionar quais conversões serão ou deixá-las em branco, neste caso a cada nova conversão as informações serão enviadas.
+
+ou
+
+Marcação de oportunidade: Envie os Leads marcados como oportunidade. Exemplo: envie o Contato do RD Station para o aplicativo somente quando estiver marcado como uma oportunidade manualmente ou através de um fluxo de automação.
+
+Como usar fluxos de automação como um gatilho para o seu aplicativo
+O fluxo de automação permitirá que você envie o Contato de acordo com as condições definidas pelo fluxo em si, enquanto que através da integração normal, você só pode escolher enviá-lo a cada nova conversão ou quando for marcado como uma oportunidade.
+
+Tudo o que você precisa é inserir no seu fluxo de automação a URL para qual deseja que as informações do contato sejam enviadas, usando a opção Enviar Leads para Integração.
+
+Esta URL é a do seu aplicativo que receberá a solicitação do RD Station com as informações do Contato. A requisição da URL é através de uma solicitação POST via HTTP.
+
+As informações serão enviadas em formato JSON, um exemplo das informações no JSON pode ser encontrada neste link.
+
+Como criar um aplicativo para receber um Contato do RD Station
+A criação do aplicativo que receberá os Contatos do RD Station deve atender aos seguintes requisitos:
+
+Ser capaz de receber um JSON no formato enviado pelo RD Station;
+Ser capaz de receber um parâmetro específico para identificar qual cliente está enviando a solicitação (também pode ser um domínio específico para cada cliente). A URL completa com os parâmetros deve ser fácil para o cliente obter e usar nos Webhooks ou Fluxos de Automação do RD Station ;
+Armazenar o UUID do Contato ( campo UUID do JSON, que é a chave primária para a API) e o email principal (usado como chave para outras aplicações no RD Station).
+Como utilizar a API para consultar informações de Contatos (GET)
+GET https://api.rd.services/platform/contacts/{uuid}
+Returns data about a specific Contact
+
+Request Parameter
+
+Field	Type	Description
+uuid	Type: String	The unique uuid associated to each RD Station Contact.
+Response Body Parameters
+
+Field	Type	Description
+uuid	String	The unique uuid associated to each RD Station Contact.
+name	String	Name of the Contact.
+email	String	Email of the Contact.
+bio	String	Notes about the Contact.
+website	String	Website of the Contact.
+job_title	String	Job title of the Contact.
+personal_phone	String	Phone of the Contact.
+mobile_phone	String	Mobile phone of the Contact.
+city	String	City of the Contact.
+state	String	State of the Contact.
+country	String	Country of the Contact.
+twitter	String	Twitter of the Contact.
+facebook	String	Facebook of the Contact.
+linkedin	String	Linkedin of the Contact.
+tags	ArrayStrings	Tags of the Contact.
+extra_emails	ArrayStrings	Extra emails of the Contact.
+legal_bases	ArrayObjects	Legal Bases of the Contact.
+links	ArrayObjects	The hyperlink list.
+Empty Fields For empty value fields the following behavior will be adopted:
+
+Field	Type
+String and Numbers	attributes will not be returned
+Array	an empty array will be returned []
+Boolean	Always true or false will be returned
+Example:
+
+{
+    "uuid": "cdbba2a8-8ccd-4228-9617-6b0257b32077",
+    "name": "RD Station Developer",
+    "email": "contact@example.com",
+    "job_title": "Developer",
+    "bio": "This documentation explains the RD Station API.",
+    "website": "https://developers.rdstation.com/",
+    "linkedin": "rd_station",
+    "personal_phone": "+55 48 3037-3600",
+    "city": "Florianópolis",
+    "state": "SC",
+    "country": "Brasil",
+    "tags": ["developer", "rdstation", "api"],
+    "extra_emails": ["contact2@example.com"],
+    "cf_custom_field_2": "custom field value2",
+    "legal_bases": [
+      {
+        "category": "communications",
+        "type": "consent",
+        "status": "granted"
+      }
+    ],
+    "links": [
+      {
+        "rel": "SELF",
+        "href": "https://api.rd.services/platform/contacts/uuid:cdbba2a8-8ccd-4228-9617-6b0257b32077",
+        "media": "application/json",
+        "type": "GET"
+      },
+      {
+        "rel": "SELF",
+        "href": "https://api.rd.services/platform/contacts/email:contact@example.com",
+        "media": "application/json",
+        "type": "GET"
+      },
+      {
+        "rel": "CONTACT.DELETE",
+        "href": "https://api.rd.services/platform/contacts/uuid:cdbba2a8-8ccd-4228-9617-6b0257b32077",
+        "media": "application/json",
+        "type": "DELETE"
+      },
+      {
+        "rel": "CONTACT.FUNNEL",
+        "href": "https://api.rd.services/platform/contacts/cdbba2a8-8ccd-4228-9617-6b0257b32077/funnels/{funnel_name}",
+        "media": "application/json",
+        "type": "GET"
+      },
+      {
+        "rel": "CONTACTS.EVENTS",
+        "href": "https://api.rd.services/platform/contacts/cdbba2a8-8ccd-4228-9617-6b0257b32077/events?event_type={event_type}",
+        "media": "application/json",
+        "type": "GET"
+      }
+    ]
+  }
+Como utilizar a API para atualizar informações de Contatos (PATCH)
+PATCH https://api.rd.services/platform/contacts/uuid:{uuid}
+Updates the properties of a Contact by UUID.
+
+Request Parameter
+
+Field	Type	Description
+uuid	Type: String	The unique uuid associated to each RD Station Contact.
+Response Body Parameters
+
+Field	Type	Description
+uuid	String	The unique uuid associated to each RD Station Contact.
+name	String	Name of the Contact.
+email	String	Email of the Contact.
+bio	String	Notes about the Contact.
+website	String	Website of the Contact.
+job_title	String	Job title of the Contact.
+personal_phone	String	Phone of the Contact.
+mobile_phone	String	Mobile phone of the Contact.
+city	String	City of the Contact.
+state	String	State of the Contact.
+country	String	Country of the Contact.
+twitter	String	Twitter of the Contact.
+facebook	String	Facebook of the Contact.
+linkedin	String	Linkedin of the Contact.
+tags	ArrayStrings	Tags of the Contact.
+extra_emails	ArrayStrings	Extra emails of the Contact.
+legal_bases	ArrayObjects	Legal Bases of the Contact.
+links	ArrayObjects	The hyperlink list.
+Empty Fields For empty value fields the following behavior will be adopted:
+
+Field	Type
+String and Numbers	attributes will not be returned
+Array	an empty array will be returned []
+Boolean	Always true or false will be returned
+Example:
+
+{
+    "uuid": "cdbba2a8-8ccd-4228-9617-6b0257b32077",
+    "name": "RD Station Developer",
+    "email": "contact@example.com",
+    "job_title": "Developer",
+    "bio": "This documentation explains the RD Station API.",
+    "website": "https://developers.rdstation.com/",
+    "linkedin": "rd_station",
+    "personal_phone": "+55 48 3037-3600",
+    "city": "Florianópolis",
+    "state": "SC",
+    "country": "Brasil",
+    "tags": ["developer", "rdstation", "api"],
+    "extra_emails": ["contact2@example.com"],
+    "cf_custom_field_2": "custom field value2",
+    "legal_bases": [
+      {
+        "category": "communications",
+        "type": "consent",
+        "status": "granted"
+      }
+    ],
+    "links": [
+      {
+        "rel": "SELF",
+        "href": "https://api.rd.services/platform/contacts/uuid:cdbba2a8-8ccd-4228-9617-6b0257b32077",
+        "media": "application/json",
+        "type": "GET"
+      },
+      {
+        "rel": "SELF",
+        "href": "https://api.rd.services/platform/contacts/email:contact@example.com",
+        "media": "application/json",
+        "type": "GET"
+      },
+      {
+        "rel": "CONTACT.DELETE",
+        "href": "https://api.rd.services/platform/contacts/uuid:cdbba2a8-8ccd-4228-9617-6b0257b32077",
+        "media": "application/json",
+        "type": "DELETE"
+      },
+      {
+        "rel": "CONTACT.FUNNEL",
+        "href": "https://api.rd.services/platform/contacts/cdbba2a8-8ccd-4228-9617-6b0257b32077/funnels/{funnel_name}",
+        "media": "application/json",
+        "type": "GET"
+      },
+      {
+        "rel": "CONTACTS.EVENTS",
+        "href": "https://api.rd.services/platform/contacts/cdbba2a8-8ccd-4228-9617-6b0257b32077/events?event_type={event_type}",
+        "media": "application/json",
+        "type": "GET"
+      }
+    ]
+  }
+Legal Bases
+
+Field	Type	Valid params
+category	String	communications
+type	String	pre_existent_contract, consent, legitimate_interest, judicial_process, vital_interest or public_interest
+status	String	granted or declined
+Como usar a API de campos personalizados para verificar e criar os campos necessários
+Para poder atualizar as informações principais, é necessário que os campos que estão sendo atualizados sejam devidamente criados no RD Station. Se eles não forem criados, ou não existirem, a informação não poderá ser usada para fins específicos (ex: segmentações, fluxos de automação ou lead scoring).
+
+Idealmente, no momento da configuração de integração, o sistema externo deve verificar a existência dos campos necessários para o enriquecimento de dados nos casos de uso mapeados e se não forem encontrados, o aplicativo deve criar esses campos sem a necessidade de configuração manual. Esses detalhes podem ser verificados na seção Campos personalizados.
+
+
+Updated 7 months ago
+
+Mensagens de erro
+
+Autenticação
+A Autenticação para utilização da API do RD Station Marketing é baseada no protocolo de segurança OAuth2, o que significa que ela trabalha com tokens com prazo de expiração pré-determinados.
+
+Como funciona a Autenticação?
+ℹ️
+As credenciais de autenticação dão acesso a apenas um produto RD Station escolhido. Para cada produto deverá ter suas próprias credenciais de acesso. Isso é válido para todas as credenciais, como client_id, client_secret e access_token
+
+Ao criar o seu aplicativo na RD Station App Store você receberá as duas credenciais, que chamamos de client_id e client_secret.
+
+Essas credenciais são utilizadas para gerar o code, que autoriza a conexão do aplicativo à uma conta específica do RD Station Marketing.
+
+O code será utilizado uma única vez para gerar os tokens: access_token e o refresh_token.
+
+Uma vez que os tokens tenham sido gerados, o access_token será utilizado no Header das requisições para autorizar as trocas de mensagens via API.
+
+Para manter o access_token válido, basta você utilizar o refresh_token como uma variável no script da integração para atualizar o access_token quando ele expirar.
+
+Passo a Passo para realizar a Autenticação
+Acesse as páginas abaixo para conferir o passo a passo com a explicação detalhada do processo de Autenticação:
+
+Passo 1: Como criar o aplicativo e gerar as Credenciais (client_id e client_secret)
+Passo 2: Como utilizar as Credenciais para gerar o code
+Passo 3: Como obter os tokens (access_token e refresh_token)
+Passo 4: Como utilizar o refresh_token para atualizar o access_token
+Ao concluir o passo 4, estará autorizado para operar a API e saberá como atualizar o seu token.
+
+Passo 1: Como criar um aplicativo na App Store e gerar as Credenciais (client_id e client_secret)
+###[Passo 1 de 4]
+
+A App Store possibilita criar dois tipos de aplicativo, Aplicativo Privado e Aplicativo Público:
+
+Aplicativo Privado
+Aplicativo ou integração privada é aquela que somente os clientes irão visualizar, por exemplo, pode ser somente para melhorar o fluxo de trabalho de sua própria empresa ou de um cliente seu que utilize RD Station.
+
+Aplicativo Público
+É quando você criou uma solução e quer que ela fique visível para todos os clientes do RD Station Marketing, por meio da nossa App Store.
+Outro detalhe importante é que você não precisa deixar a sua app/integração pública para ela funcionar para os seus clientes.
+
+Você escolhe o que melhor se encaixa as suas necessidades!
+
+📘
+Todos os aplicativos nascem de forma privada por padrão, para tornar um app público será necessario submetê-lo ao processo de aprovação.
+Crie uma conta RD Station Marketing
+Você precisa de uma conta RD Station Marketing para cadastrar um aplicativo na App Store, escolha qual das opções abaixo mais se enquadra com a sua necessidade.
+
+Aplicativo Privado - Para uso interno
+Para este cenário você pode usar as suas credenciais de acesso ao RD Station Marketing ou criar uma nova conta.
+
+Aplicativo Público - Para Tech Partners
+A conta de parceria é destinada aos Tech Partners servindo como um ambiente de testes, e caso você já seja um cliente RD Station Marketing, não correrá o risco de prejudicar a usabilidade da conta usada por sua empresa. Para isto, entre com contato conosco: 💬 Faça parte do ecossistema RD Station
+
+Criando seu aplicativo
+Acesse o App Publisher, e faça login com a sua conta RD Station.
+Você também pode encontrar o link do App Publisher no menu superior.
+
+Você será redirecionado para nossa área de criação e gerenciamento de aplicativos.
+Clique em "Quero criar um aplicativo", escreva o nome do seu aplicativo e escolha a opção "Aplicativo privado". Por fim clique em "Criar app".
+
+
+Preencha as informações adicionais sobre o aplicativo:
+
+
+Seu aplicativo pode ser disponibilizado em três idiomas: português, inglês e espanhol.
+Caso necessário, você também pode adicionar mais de uma url de callback para qual o seu app irá responder.
+
+O que é uma URL de Callback?
+
+Uma URL de callback é um endereço que você irá fornecer para receber respostas de eventos específicos. É usado para que um aplicativo possa enviar informações ou dados para outro aplicativo ou serviço, permitindo que eles se comuniquem e tomem ações com base nessas informações.
+
+Melhores práticas para sua URL de Callback
+
+Certifique-se que seu endereço contém http
+Caso deseje adicionar mais de uma url de callback, separe os endereços com uma quebra de linha:
+
+https://callback_url1.com.br
+https://callback_url2.com.br
+https://callback_url3.com.br
+Por fim, clique em "Salvar e avançar" para criar seu app.
+
+🚧
+Certifique-se que o nome do aplicativo que está criando não foi usado anteriormente e não é um nome genérico. Caso você tente cadastrar um aplicativo com o mesmo nome de um já existente, o sistema irá te avisar.
+Gerando o seu client_id e client_secret
+Assim que seu aplicativo é criado, automaticamente geramos para você as informações de client_id e client_secret que serão usadas para o desenvolvimento da sua integração.
+
+Salve essas informações juntamente da sua url de callback para uso futuro.
+
+
+Localizando o seu client_id, client_secret e url de callback
+Se você já tem um aplicativo criado, mas precisa consultar as informações referentes ao client_id, client_secret e url de callback, acesse a App Store com a sua conta de tech partner, clique em Meus apps e encontre o seu aplicativo cadastrado.
+
+Clique nos três pontos para abrir o menu, escolha "Obter credenciais". Você será redirecionado para a área em que poderá localizar as informações necessárias:
+
+
+Ainda tem dúvidas?
+Assista o tutorial em vídeo e confira todos os detalhes para criar um aplicativo:
+
+
+Updated 7 months ago
+
+Próximo passo:
+Agora que você tem as credenciais (client_id, client_secret e url de callback) você pode seguir para o próximo passo para utilizá-las para obter ocode:
+Passo 2: Como utilizar as Credenciais para gerar o code
+###[Passo 2 de 4]
+
+No passo anterior, você criou o aplicativo na App Store e obteve as credenciais. Neste passo, vamos utilizar as credenciais client_id e redirect_uri para obter o code.
+
+O objetivo dessa etapa é autorizar o aplicativo (criado no passo 1) a se conectar com a conta desejada do RD Station Marketing.
+
+1. Compondo a URL de autorização
+Você deve substituir os parâmetros client_id e redirect_uri da URL de autorização indicada abaixo, pelas credenciais obtidas no passo anterior:
+
+URL de autorização
+
+https://api.rd.services/auth/dialog?client_id=client_id&redirect_uri=redirect_uri&state=state
+💡
+O parâmetro redirect_uri deve ser substituído pela URL de Callback cadastrada no aplicativo criado no passo 1.
+Se você estiver realizando esse passo manualmente, você pode substituir os parâmetros utilizando o Gerador de URL de autorização abaixo para criar sua URL:
+
+Gerador de URL de autorização
+
+Campo	Valor	Descrição
+Client Id:	
+insira aqui o seu client_id
+client_id do aplicativo
+Redirect Uri:	
+insira aqui a sua redirect_uri
+redirect_uri do aplicativo (callback)
+State:	
+insira aqui o state
+(Opcional) Param extra para a URL de callback
+URL de autenticação:
+https://api.rd.services/auth/dialog?client_id=&redirect_uri=&state=
+Atenção: Certifique-se de que a sua url de callback foi inserida por completo (exatamente como foi cadastrada no aplicativo), pois aqui é feita uma comparação de strings entre a url de callback inserida na sua app e a redirect uri.
+
+📘
+O parâmetro "state" é usado como um mecanismo de segurança para garantir a integridade da resposta de autenticação ao usar o OAuth e prevenir ataques CSRF.
+Ele é determinado ao configurar a URL de autorização e, ao gerar o code, o servidor retorna esse parâmetro na resposta, permitindo comparar esse valor recebido com o valor originalmente gerado.
+
+Exemplo de URL de autorização
+Veja um exemplo de como ficaria a URL de autorização após substituir o client_id e redirect_uri pelas credenciais geradas por um aplicativo.
+
+Credenciais de exemplo:
+
+Campo
+
+Valor
+
+client_id	68956445-3421-4a0f-a0dd-3142a97621f4
+client_secret	81f840006c994d71a87d0b4fa6e2f0a2
+url_callback	https://www.rdstation.com/contato
+URL de autorização atualizada com as credenciais:
+
+URL de autorização atualizada
+
+https://api.rd.services/auth/dialog?client_id=68956445-3421-4a0f-a0dd-3142a97621f4&redirect_uri=https://www.rdstation.com/contato
+2. Autorizando o aplicativo
+Após gerar a URL de autorização, é necessário acessá-la para obter o code.
+
+Ao acessar/ser redirecionado para a URL de autorização, o usuário poderá selecionar qual conta do RD Station Marketing deseja integrar e será exibida a caixa de permissões para confirmar a autorização, conforme mostrado a imagem abaixo:
+
+
+Se o redirecionamento for feito corretamente, o code será retornado em uma URL com a estrutura similar:
+
+URL com o code
+
+https://yourapp.org/auth/callback?code={code}
+❗️
+As atualizações no Aplicativo levam até 1 hora para serem refletidas.
+Se a URL de Callback for atualizada e estiver ocorrendo um erro ao tentar gerar o code, é necessário aguardar esse tempo para utilizá-la.
+
+Se você estiver criando um aplicativo privado (para uso interno):
+Pode realizar essa etapa acessando a URL de autorização pela barra de endereço do seu navegador para ser redirecionado para a sua conta do RD Station Marketing, autorizar a conexão e obter o code.
+
+Se você estiver criando um aplicativo público (para os seus clientes):
+Sua aplicação precisa redirecionar o navegador do usuário para a URL de autorização que você construiu. Para isso, pode exibir um botão que diz: "Conectar Nome do app" com a URL de autorização para que o usuário seja ser redirecionado para a conta do RD Station Marketing e obtenha o code.
+
+🚧
+Esse processo só precisa ser feito uma vez
+O code expira em seu primeiro uso ou após 60 minutos, pois a sua única função no processo de Autenticação é solicitar o access_token e refresh_token.
+
+Após utilizá-lo para gerar os tokens ele não será mais necessário para a utilização da API.
+
+Ainda ficou com dúvida? Leia a nossa receita (:
+
+Gerando sua URL de autenticação
+Open Recipe
+
+Updated 6 months ago
+
+Próximo passo:
+Agora que você tem ocode, você pode seguir para o próximo passo para utilizá-lo para obter oaccess_tokene orefresh_token:
+
+Passo 3: Como obter os tokens (access_token e refresh_tokenPasso 3: Como obter os tokens (access_token e refresh_token)
+post
+https://api.rd.services/auth/token?token_by=code
+
+###[Passo 3 de 4]
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+
+Obtendo os tokens
+Uma vez recebido o parâmetro code, só falta obter o access_token e refresh_token.
+
+Para isso, você vai utilizar o client_id e client_secret obtidos ao criar o App (passo 1) e o code obtido no passo anterior no envio da sua requisição.
+
+❗️
+O code tem duração de 1 hora.
+Por isso, esse passo precisa ser realizado antes que ele expire. Se o code tiver expirado, você receberá o erro "EXPIRED_CODE_GRANT".
+
+Objetivo dos tokens recebidos neste passo
+O access_token é utilizado para autorizar suas requisições. Ele possui data de expiração pré-determinada definida pelo atributo expires_in em segundos, que é de 86400 segundos (24 Horas).
+O refresh_token é utilizado para obter um novoaccess_token quando ele expirar. O refresh_token não expira.
+👍
+Agora que você obteve os tokens, o CODE não é mais necessário.
+Apenas será necessário trabalhar com o refresh_token recebido nesta etapa, para gerar um novo access_token.
+
+Você pode utilizar o recurso de "Try It" desta página para obter os seus tokens ou se basear para desenvolver a sua aplicação!
+
+Body Params
+client_id
+string
+Defaults to CLIENT_ID
+client_id do aplicativo
+
+CLIENT_ID
+client_secret
+string
+Defaults to CLIENT_SECRET
+client_secret do aplicativo
+
+CLIENT_SECRET
+code
+string
+Defaults to CODE
+code recebido na URL de callback
+
+CODE
+Response
+
+200
+200
+
+Response body
+object
+access_token
+string
+expires_in
+integer
+Defaults to 0
+refresh_token
+string
+Updated 7 months ago
+
+Próximo passo:
+Agora que você tem o access_token e refresh_token, você já está autorizado para realizar a troca de mensagens via API.
+
+Siga para o próximo passo para saber como atualizar o access_tokenPasso 4: Como utilizar o refresh_token para atualizar o access_token
+post
+https://api.rd.services/auth/token
+
+###[Passo 4 de 4]
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+
+Após gerar os tokens, você deverá utilizar o refresh_token para atualizar o access_token a cada 24 horas; após o recebimento do access_token.
+
+Renovando o access_token
+Para isso, você vai utilizar o client_id e client_secret obtidos ao criar o App (passo 1) e o refresh_token obtido ao gerar os tokens (passo 3) no envio da sua requisição.
+
+📘
+A sua aplicação pode armazenar o refresh_token em uma variável e criar uma função condicional para verificar se o access_token retornou “200” (ok!). Caso sim, a integração continua ocorrendo. Caso não, ou seja, se apontou algum erro, você cria uma função para criar um novo access_token (utilizando o refresh_token).
+Você pode utilizar o recurso de "Try It" desta página para atualizar o access_token ou se basear para desenvolver a sua aplicação!
+
+Body Params
+client_id
+string
+Defaults to CLIENT_ID
+client_id do aplicativo
+
+CLIENT_ID
+client_secret
+string
+Defaults to CLIENT_SECRET
+client_secret do aplicativo
+
+CLIENT_SECRET
+refresh_token
+string
+Defaults to REFRESH_TOKEN
+refresh_token retornado na criação do token
+
+REFRESH_TOKEN
+Responses
+
+200
+200
+
+Response body
+object
+access_token
+string
+expires_in
+integer
+Defaults to 0
+refresh_token
+string
+
+401
+401
+
+Updated 7 months ago
+
+Próximo passo:
+Siga para o passo abaixo para saber criar um fluxo de verificação para atualizar o refresh_token para atualizar o access_token quando ele expirar:
+
+Como criar um fluxo de verificação e renovação do token
+Did this page help you?
+
+Como criar um fluxo de verificação e renovação do token
+O refresh_token deve ser utilizado para atualizar o access_token, no entanto, o access_token não deve ser atualizado em todas as requisições da sua aplicação, mas sim, somente quando ele expirar.
+
+Não é recomendado enviar o refresh_token em todas as requisições em termos de eficiência, consumo e infraestrutura da aplicação, pois o access_token só precisa ser atualizado a cada 24 horas.
+
+Enviar apenas o access_token, que é necessário para autorizar as requisições, melhora a eficiência das requisições, reduz o consumo de recursos, facilita a escalabilidade da infraestrutura e melhora a segurança geral da aplicação.
+
+Sendo assim, você pode armazenar o refresh_token em uma variável e criar uma função condicional para verificar se o access_token retornou “200” (ok!).
+
+Caso sim: a integração continua ocorrendo.
+Caso não: ou seja, se apontou algum erro, você cria uma função para criar um novo access_token (utilizando o refresh_token).
+Configure sua aplicação para verificar se o access_token é válido
+1) Crie uma variável para armazenar o refresh_token, que será atualizada conforme necessário e então, implemente uma função para verificar a validade do access_token:
+
+Faça uma solicitação à API, incluindo o access_token na autenticação.
+Verifique a resposta da API: se for 200 (ou qualquer status diferente de 401) o token ainda é válido; se for 401, o token expirou.
+2) Se o access_token estiver expirado, implemente uma função para renová-lo usando o refresh_token:
+
+Faça uma solicitação incluindo o refresh_token, o client_id e o client_secret.
+Obtenha um novo access_token
+3) Utilize a função de verificação da validade do access_token sempre que precisar fazer uma solicitação protegida à API.
+
+Se o token estiver válido, faça a solicitação normalmente.
+Se o token estiver expirado, chame a função de renovação do token para obter um novo access_token antes de fazer a solicitação.
+Fluxo de verificação e renovação do token
+Este é um exemplo básico para demonstrar o fluxo de verificação e renovação do token.
+
+Você precisará adaptá-lo às suas necessidades específicas, como as bibliotecas/frameworks que está usando e as etapas reais de autenticação e obtenção de tokens do provedor de serviços OAuth.
+
+Python
+
+import requests
+
+# Variáveis de configuração
+client_id = 'SEU_CLIENT_ID'
+client_secret = 'SEU_CLIENT_SECRET'
+token_url = 'https://api.rd.services/auth/token'
+api_url = 'https://api.rd.services/platform/contacts' # Exemplo de rota da API de Contatos. Pode ser substituída por qualquer rota. Se necessário, adicione o Body da requisição, conforme instruído na documentação dessa API.
+
+# Variável para armazenar o refresh token
+refresh_token = None
+
+def verificar_validade_token(access_token):
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = requests.get(api_url, headers=headers)
+    
+    if response.status_code == 200:
+        print('Token válido.')
+    elif response.status_code == 401:
+        print('Token expirado. Renovando...')
+        renovar_token()
+    else:
+        print('Erro na verificação do token.')
+        
+def renovar_token():
+    global refresh_token
+    
+    data = {
+        'grant_type': 'refresh_token',
+        'refresh_token': refresh_token,
+        'client_id': client_id,
+        'client_secret': client_secret
+    }
+    
+    response = requests.post(token_url, data=data)
+    
+    if response.status_code == 200:
+        token_data = response.json()
+        access_token = token_data['access_token']
+        refresh_token = token_data['refresh_token']  # Atualiza o refresh token, se um novo for fornecido
+        print('Token renovado com sucesso.')
+        print('Novo access token:', access_token)
+    else:
+        print('Erro na renovação do token.')
+
+# Exemplo de utilização
+
+# Etapa de autorização e obtenção do código de autorização
+# ...
+
+# Troca do código de autorização por tokens
+# ...
+
+# Armazena o refresh token
+refresh_token = 'SEU_REFRESH_TOKEN'
+
+# Faz a primeira verificação da validade do access token
+access_token = 'SEU_ACCESS_TOKEN'
+verificar_validade_token(access_token)
+
+# Exemplo de solicitação à API protegida
+# ...
+
+# A partir deste ponto, sempre que fizer uma solicitação à API protegida,
+# verifique a validade do access token usando a função verificar_validade_token(access_token).
+# Se o token estiver expirado, a função renovar_token() será chamada automaticamente para renová-lo.
+Updated 7 months ago
+
+Como utilizar o access_token para autorizar suas requisições
+Após obter o access_token, ele será utilizado para autorizar a troca de mensagens via API.
+
+Para isso, ele deverá ser enviado no Cabeçalho ("Header") de cada requisição para a API Pública.
+
+O seu Header deve conter, obrigatoriamente, os seguintes parâmetros:
+
+Header	Required
+Authorization: Bearer access_token	Required on client request
+Content-Type: application/json	Required on client request
+Esse é um exemplo de como os parâmetros devem ser configurados no Header das suas requisições:
+
+cURL
+
+curl --request POST \
+     --url https://api.rd.services/platform/contacts \
+     --header 'accept: application/json' \
+     --header 'authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5yZC5zZXJ2aWNlcyIsInN1YiI6InlURlh3ZUxKbkJWVGxaeUk3VEVSQXhQa0pNYkVZT2NHZDVEUXpzcGFQOUlAY2xpZW50cyIsImF1ZCI6Imh0dHBzOi8vYXBwLnJkc3RhdGlvbi5jb20uYnIvYXBpL3YyLyIsImFwcF9uYW1lIjoiMjIxQiBCYWtlciBTdHJlZXQiLCJleHAiOjE2ODU1NTcxNTAsImlhdCI6MTY4NTQ3MDc1MCwic2NvcGUiOiIifQ.rHgZb-2373-4i8UzzhKAoFhJu4EMPTIwUf6GqHmCLDGTboAzF1AiBZFas-3yKy71WUE7whVXFXg664PwwT8Y18Ruv8ktoqbO0HaXebkZNxN4SxjRmtgcbaMgSxlH1NvwRXhbT6yFWOTzREcj_5zDm8EWs-7KeXe_3BCoD6NPbPpsHblMdVy4oKHwQCcFf8F-pXsWUOGv1_4jNnrONo_nfC8hzo8o7nNMBiZhHQy0BPcgC0u6zdTUakaUO9btX6SB3E_ZOn6Z_U5HSBM9ldTf-s61xmjzRobuUQQrrITkiKm2HMGoAHK_Ak4L97DlVtQMaeXUtdnEQ06Vb-7YIAGs-w' \
+     --header 'content-type: application/json'
+Se o access_token for é válido, a API retornará sucesso 2xx e processará a solicitação, conforme as suas especificações.
+
+Se o access_token estiver expirado ou mesmo inválido, a API retornará um erro deUnauthorized Request e será necessário atualizar o access_token para enviar as requisições.
+
+Como revogar o acesso de um token
+post
+https://api.rd.services/auth/revoke
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Existem algumas razões pelas quais você pode precisar revogar o acesso de um aplicativo à conta de um usuário, por isso, o acesso dos clientes com Autenticação do tipo OAuth pode ser revogado sempre que necessário.
+
+Ao revogar o acesso, os tokens (access_token e refresh_token) se tornarão inválidos e resultarão em uma solicitação401 (Unauthorized).
+
+Para isso, você vai utilizar ovalor do token e o tipo do token no envio da sua requisição.
+
+Você pode utilizar o recurso de "Try It" desta página para revogar o acesso dos tokens ou se basear para desenvolver a sua aplicação!
+
+Form Data
+token
+string
+Defaults to TOKEN
+valor do token
+
+TOKEN
+token_type_hint
+string
+Defaults to TOKEN_TYPE
+O tipo de token que você está revogando (refresh_token ou access_token)
+
+TOKEN_TYPE
+Response
+
+200
+200
+
+Response body
+object
+Erros relacionados à Autenticação
+Se o token ou as credenciais forem inválidas, ou o code estiver expirado, ou o usuário não estiver autorizado a requisição retornará o erro Status 401 Unauthorized.
+
+Abaixo explicamos alguns cenários de erros relacionados à Autenticação e como contorná-los.
+
+
+Exemplos de erros relacionados a UNAUTHORIZED Request
+
+Erro "Invalid token."
+Essa mensagem indica que o token utilizado no Header da requisição para autorizar a requisição é inválido.
+
+Exemplo
+JSON
+
+{
+  "error_type": "UNAUTHORIZED",
+  "error_message": "Invalid token."
+}
+O erro ocorre quando é utilizado no Header da requisição qualquer token que não tenha seja um access_token válido.
+
+Como contornar o erro:
+É necessário realizar o processo de Autenticação seguindo as orientações da página Autenticação da API do RD Station Marketing.
+
+Caso já tenha iniciado o processo, identifique em qual passo parou e continue o processo até gerar o access_token e refresh_token.
+
+
+
+Erro "Wrong credentials provided."
+Essa mensagem indica que o client_id ou client_secret estão incorretos ao utilizá-los na requisição para gerar os tokens (access_token e refresh_token) ou na requisição para atualizar o access_token.
+
+JSON
+
+{
+  "error_type": "ACCESS_DENIED",
+  "error_message": "Wrong credentials provided."
+}
+Como contornar o erro:
+Acesse o seu aplicativo seguindo as instruções do Passo 1: Como criar um aplicativo na App Store e gerar as Credenciais (client_id e client_secret) e verifique se as credenciais geradas estão sendo utilizadas corretamente na requisição.
+
+
+
+Erro "O parâmetro redirect_uri não contém um valor válido."
+Essa mensagem indica que a URL de Callback cadastrada no aplicativo ainda não foi refletida ou está incorreta.
+
+JSON
+
+{
+  "error_type": "ACCESS_DENIED",
+  "error_message": "O parâmetro redirect_uri não contém um valor válido."
+}
+Quando a URL de Callback é atualizada no aplicativo, pode ser necessário esperar 1 hora para que a alteração seja refletida e ela possa ser utilizada.
+
+Como contornar o erro:
+Aguarde 1 hora após ter atualizado a URL de Callback e tente novamente. Caso o erro persista, verifique se a URL está correta e foi cadastrada corretamente e no formato "https://callback_url1.com.br", conforme orientamos na página Passo 1: Como criar um aplicativo na App Store e gerar as Credenciais (client_id e client_secret).
+
+
+
+Erro "The authorization code grant has expired."
+Essa mensagem indica que o code utilizado na requisição para atualizar o access_token e refresh_token expirou.
+
+JSON
+
+{
+  "error_type": "EXPIRED_CODE_GRANT",
+  "error_message": "The authorization code grant has expired."
+}
+O code expira em seu primeiro uso ou após 60 minutos, pois a sua única função no processo de Autenticação é solicitar o access_token e refresh_token.
+
+Como contornar o erro:
+É necessário recomeçar o processo de Autenticação a partir do Passo 2: Como utilizar as Credenciais para gerar o code e gerar um novo code.
+
+
+
+Erro "The access token is invalid or has expired."
+Essa mensagem indica que o access_token utilizado para autorizar a requisição expirou.
+
+JSON
+
+{
+  "error_description": "The access token is invalid or has expired",
+  "error_message": "error": "invalid_token"
+}
+O access_token possui data de expiração pré-determinada definida pelo atributo expires_in em segundos, que é de 86400 segundos (24 Horas).
+
+Como contornar o erro:
+É necessário utilizar o refresh_token para atualizar o access_token seguindo o Passo 1: Como criar o aplicativo e gerar as Credenciais (client_id e client_secret) e utilizar o novo access_token para autorizar as requisições.
+
+
+
+Erro "The provided refresh token is invalid or was revoked."
+Essa mensagem indica que o refresh_token utilizado na requisição para atualizar o access_token é inválido ou foi revogado.
+
+JSON
+
+{
+  "error_type": "INVALID_REFRESH_TOKEN",
+  "error_message": "The provided refresh token is invalid or was revoked."
+}
+Esse comportamento pode ocorrer em dois casos:
+
+O refresh_token obtido no Passo 3: Como obter os tokens (access_token e refresh_token) foi copiado e utilizado incorretamente na requisição;
+O refresh_token foi revogado seguindo as orientações da página Como revogar o acesso de um token.
+Como contornar o erro:
+Caso não tenha salvo corretamente o refresh_token ou ele tenha sido revogado, é necessário recomeçar o processo de Autenticação a partir do Passo 2: Como utilizar as Credenciais para gerar o code até gerar um novo refresh_token.
+
+
+
+Erro "The access token is missing"
+Essa mensagem indica que o access_token não foi enviado no Header da requisição.
+
+JSON
+
+{
+  "error": "invalid_request",
+  "error_description": "The access token is missing"
+}
+Como contornar o erro:
+O access_token deve ser utilizado para autorizar a troca de mensagens via API. Portanto, ele deverá ser enviado no Cabeçalho ("Header") de cada requisição para a API Pública.
+
+Para saber como utilizá-lo, siga as orientações da página Como utilizar o access_token para autorizar suas requisições.
+FAQ de Autenticação
+Como soluciono os erros de UNAUTHORIZED REQUEST?
+
+Todos os possíveis erros relacionados á Autenticação (UNAUTHORIZED REQUEST) e a sua solução estão detalhados na página Erros relacionados à Autenticação.
+
+Como obtenho as credenciais client_id e client_secret?
+
+As credenciais são geradas ao criar um aplicativo no App Publisher, que é a nossa área de criação e gerenciamento de aplicativos.
+
+Para obter as credenciais siga as instruções da página Passo 1: Como criar um aplicativo na App Store e gerar as Credenciais (client_id e client_secret).
+
+Não possuo URL de Callback. O que fazer?
+
+A URL de callback serve unicamente para obter o code no processo de Autenticação da API.
+
+Como ela só é utilizada uma vez, caso você não tenha uma URL de callback, ela pode ser criada por um sistema rápido de webhook mockup, como o beeceptor.com assim, obterá esse valor uma única vez e poderá cadastrar no aplicativo.
+
+Por que está ocorrendo um erro ao gerar o code?
+
+Alguns dos possíveis motivos que geram o erro ao gerar o code são:
+
+Os parâmetros client_id e redirect_uri (URL de Callback) foram preenchidos incorretamente na URL de autorização. Saiba mais no tópico 1. Compondo a URL de autorização;
+A URL de Callback não é válida ou não foi cadastrada no formato correto, que é "https://callback_url1.com.br";
+A atualização realizada no aplicativo ainda não foi refletida no sistema, então é necessário aguardar 1 hora para tentar gerar o code.
+Por que o code está expirando?
+
+O code expira em seu primeiro uso ou após 60 minutos, pois a sua única função no processo de Autenticação é solicitar o access_token e refresh_token.
+
+Caso o code tenha expirado, é necessário recomeçar o processo de Autenticação a partir do Passo 2: Como utilizar as Credenciais para gerar o code e gerar um novo code.
+
+Por que o access_token está expirando?
+
+O access_token possui data de expiração pré-determinada definida pelo atributo expires_in em segundos, que é de 86400 segundos (24 Horas).
+
+Para mantê-lo válido, deve ser utilizado o refresh_token, cujo seu objetivo é obter um novo access_token quando ele expirar. O refresh_token não expira.
+
+Caso ele tenha expirado, é necessário utilizar o refresh_token para atualizar o access_token seguindo o Passo 1: Como criar o aplicativo e gerar as Credenciais (client_id e client_secret) e utilizar o novo access_token para autorizar as requisições.
+
+Como manter o access_token da minha integração válido (não deixar que ele expire)?
+
+Para manter o access_token válido, você pode criar um fluxo de verificação e renovação do token, para armazenar o refresh_token em uma variável e criar uma função condicional para verificar se o access_token retornou “200” (ok!).
+
+Caso sim: a integração continua ocorrendo.
+Caso não: ou seja, se apontou algum erro, você cria uma função para criar um novo access_token (utilizando o refresh_token).
+Para saber mais sobre o fluxo de verificação, confira as informações da página Como criar um fluxo de verificação e renovação do token
+
+Qual token preciso utilizar para autorizar as requisições?
+
+Para consumir a API do RD Station Marketing é necessário realizar a Autenticação, que é baseada no protocolo de segurança OAuth2, o que significa que ela trabalha com tokens com prazo de expiração pré-determinados.
+
+Ao realizar a Autenticação, será obtido o access_token e refresh_token, que serão utilizados para autorizar as requisições.
+
+Para saber como realizar a Autenticação, siga as orientações da página Autenticação da API do RD Station Marketing.
+
+Por que está ocorrendo um erro de CORS Policy no envio das requisições?
+
+As APIs do RD Station Marketing que utilizam o access_token para autorizar as requisições permite somente requisições partindo do backend da sua aplicação. Isso ocorre, pois o token aplicado nessa API não pode ser exposto no navegador, visto que ele permite a consulta de informações privadas dos contatos de sua conta.
+
+O único endpoint que aceita requisições partindo do frontend é o de eventos de conversão via API key, que gera uma conversão padrão na conta.
+
+Veja mais detalhes sobre a API Key na página Evento de Conversão via API Key Contatos
+No RD Station todos os registros de pessoas são referidos como Contatos, independentemente de serem classificados como Leads, Leads Qualificados ou Clientes a partir de uma perspectiva de vendas.
+
+Ao criar um Contato ele pode ser qualificado com um conjunto de campos padrão, como email, nome, cargo, empresa, cidade, estado, etc.. O campo padrão chave de identificação dos contatos dentro do RD Station é o "email" deste Contato, que sempre será único.
+
+Além disso, é possível adicionar informações adicionais ao Contato a partir do preenchimento de Campos Personalizados criados para a sua conta. Os campos personalizados podem ser lidos e gravados como os campos padrão.
+
+O objetivo dessa API é possibilitar a gestão de informações de Contatos em uma conta do RD Station, para isso, fornecemos algumas rotas que proporcionam flexibilidade de integração com a sua solução.
+
+Observe os detalhes sobre cada uma das APIs:
+- Criar contato
+Apenas cria um novo contato na Base de Leads; se o contato já existir, ocorrerá o erro EMAIL_ALREADY_IN_USE.
+Não há o registro de um Evento de Conversão no histórico do contato.
+As tags enviadas na requisição são acrescidas no contato.
+
+- Atualizar contato pelo uuid/email
+Cria ou atualiza um contato existente na Base de Leads.
+Não há o registro de Evento de Conversão no histórico do contato.
+Caso o contato já exista, as Tags inseridas no contato são substituídas pelas novas tags enviadas na requisição.
+
+Atenção: Ao atualizar o contato pelo email, o parâmetro "email" não deve ser enviado no Body.
+
+- Criar uma tag para o lead pelo uuid/email
+Apenas atualiza um contato já existente na Base de Leads; se o contato não existir, ocorrerá o erro RESOURCE_NOT_FOUND.
+Não há o registro de Evento de Conversão no histórico do contato.
+As Tags enviadas são acumuladas no Perfil do Lead, ou seja, são acrescentadas em adição às tags existentes.
+
+📘
+Como registrar conversões:
+Se o seu objetivo for criar ou atualizar o contato com um Evento de Conversão, você pode utilizar os seguintes métodos:
+
+Eventos padrão
+Evento de Conversão via API Key
+Bases Legais
+A API de Contatos aceita a atualização de Bases Legais:
+
+Campo	Tipo	Parâmetros válidos	Descrição
+category	String	communications	A única categoria aceita é "communications".
+type	String	pre_existent_contract, consent, legitimate_interest, judicial_process, vital_interest or public_interest	Qual base legal autoriza o tratamento de dados pessoais.
+status	String	granted or declined	Valores aceitos: "granted" para confirmar o consentimento e "declined" para indicar que o consentimento foi recusado.
+Saiba mais sobre os conceitos de Bases Legais aqui.
+
+Consultar contato pelo uuid/email
+get
+https://api.rd.services/platform/contacts/{identifier}:{value}
+
+Retorna dados padrão e personalizados de um contato específico.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Essa API possibilita consultar os Contatos de forma unitária, utilizando o uuid ou email do Lead.
+
+Para consultar todos os Contatos da sua Base de Leads:
+
+Utilize a API de Consultar contatos de uma segmentação para obter todos os Contatos da segmentação "Todos os contatos da Base de Leads"
+Utilize o endereço de email dos Contatos obtidos na consulta anterior para realizar uma consulta detalhada dos dados de contatos específicos com a API de Consultar contato pelo uuid/email.
+
+🚧
+O campo "Empresa" não é retornado pela API de Contatos e Segmentações.
+O valor preenchido no campo pode ser obtido somente pelo payload disparado pelos Webhooks: Webhooks MKT payload
+
+Path Params
+identifier
+string
+enum
+required
+Identificador (uuid/email) associado a cada contato do RD Station.
+
+
+uuid
+Allowed:
+
+uuid
+
+email
+value
+string
+required
+Valor do identificador.
+
+Responses
+
+200
+Success
+
+Response body
+object
+uuid
+string
+UUID único do contato gerado no RD Station para controle e gerenciamento
+
+name
+string
+Nome do contato
+
+email
+string
+Email do contato
+
+job_title
+string
+Cargo do contato
+
+birthdate
+string
+Data de Aniversário
+
+bio
+string
+Anotações sobre o contato
+
+website
+string
+Site do contato
+
+personal_phone
+string
+Telefone do contato
+
+mobile_phone
+string
+Telefone do contato
+
+city
+string
+Cidade do contato
+
+state
+string
+Estado do contato
+
+country
+string
+País do contato
+
+twitter
+string
+Twitter do contato
+
+facebook
+string
+Facebook do contato
+
+linkedin
+string
+LinkedIn do contato
+
+tags
+array of strings
+Tags do contato
+
+extra_emails
+array of strings
+E-mails extras do contato
+
+legal_bases
+array of objects
+Bases legais do contato
+
+object
+category
+string
+type
+string
+status
+string
+links
+array of objects
+Lista de hiperlinks
+
+object
+rel
+string
+href
+string
+media
+string
+type
+string
+
+401
+Unauthorized
+
+
+404Criar contato
+post
+https://api.rd.services/platform/contacts
+
+Apenas cria um novo contato na Base de Leads; se o contato já existir, ocorrerá o erro EMAIL_ALREADY_IN_USE.
+Não há o registro de um Evento de Conversão no histórico do contato.
+As tags enviadas na requisição são acrescidas no contato.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+name
+string
+Nome do contato
+
+email
+string
+required
+Email do contato
+
+job_title
+string
+Cargo do contato
+
+birthdate
+string
+Data de Aniversário
+
+bio
+string
+Anotações sobre contato
+
+website
+string
+Site do contato
+
+personal_phone
+string
+Telefone do contato
+
+mobile_phone
+string
+Telefone do contato
+
+city
+string
+Cidade do contato
+
+state
+string
+Estado do contato
+
+country
+string
+País do contato
+
+twitter
+string
+Twitter do contato
+
+facebook
+string
+Facebook do contato
+
+linkedin
+string
+LinkedIn do contato
+
+tags
+array of strings
+Tags do contato
+
+
+ADD string
+legal_bases
+array of objects
+Bases legais do contato
+
+
+ADD object
+Responses
+
+200
+Success
+
+Response body
+object
+uuid
+string
+UUID único do contato gerado no RD Station para controle e gerenciamento
+
+name
+string
+Nome do contato
+
+email
+string
+Email do contato
+
+job_title
+string
+Cargo do contato
+
+birthdate
+string
+Data de Aniversário
+
+bio
+string
+Anotações sobre o contato
+
+website
+string
+Site do contato
+
+personal_phone
+string
+Telefone do contato
+
+mobile_phone
+string
+Telefone do contato
+
+city
+string
+Cidade do contato
+
+state
+string
+Estado do contato
+
+country
+string
+País do contato
+
+twitter
+string
+Twitter do contato
+
+facebook
+string
+Facebook do contato
+
+linkedin
+string
+LinkedIn do contato
+
+tags
+array of strings
+Tags do contato
+
+extra_emails
+array of strings
+E-mails extras do contato
+
+legal_bases
+array of objects
+Bases legais do contato
+
+object
+category
+string
+type
+string
+status
+string
+links
+array of objects
+Lista de hiperlinks
+
+object
+rel
+string
+href
+string
+media
+string
+type
+string
+
+400
+Bad Request
+
+
+401
+Unauthorized
+
+
+Not Found
+Atualizar contato pelo uuid/email
+patch
+https://api.rd.services/platform/contacts/{identifier}:{value}
+
+Cria ou atualiza um contato existente na Base de Leads.
+Não há o registro de Evento de Conversão no histórico do contato.
+Caso o contato já exista, as Tags inseridas no contato são substituídas pelas novas tags enviadas na requisição.
+
+Atenção: Ao atualizar o contato pelo email, o parâmetro "email" não deve ser enviado no Body.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+identifier
+string
+enum
+required
+Identificador (uuid/email) associado a cada contato do RD Station.
+
+
+uuid
+Allowed:
+
+uuid
+
+email
+value
+string
+required
+Valor do identificador.
+
+Body Params
+name
+string
+Nome do contato
+
+email
+string
+Email do contato
+
+job_title
+string
+Cargo do contato
+
+birthdate
+string
+Data de Aniversário
+
+bio
+string
+Anotações sobre contato
+
+website
+string
+Site do contato
+
+personal_phone
+string
+Telefone do contato
+
+mobile_phone
+string
+Telefone do contato
+
+city
+string
+Cidade do contato
+
+state
+string
+Estado do contato
+
+country
+string
+País do contato
+
+twitter
+string
+Twitter do contato
+
+facebook
+string
+Facebook do contato
+
+linkedin
+string
+LinkedIn do contato
+
+tags
+array of strings
+Tags do contato
+
+
+ADD string
+legal_bases
+array of objects
+Bases legais do contato
+
+
+ADD object
+Responses
+
+200
+Success
+
+Response body
+object
+uuid
+string
+UUID único do contato gerado no RD Station para controle e gerenciamento
+
+name
+string
+Nome do contato
+
+email
+string
+Email do contato
+
+job_title
+string
+Cargo do contato
+
+birthdate
+string
+Data de Aniversário
+
+bio
+string
+Anotações sobre o contato
+
+website
+string
+Site do contato
+
+personal_phone
+string
+Telefone do contato
+
+mobile_phone
+string
+Telefone do contato
+
+city
+string
+Cidade do contato
+
+state
+string
+Estado do contato
+
+country
+string
+País do contato
+
+twitter
+string
+Twitter do contato
+
+facebook
+string
+Facebook do contato
+
+linkedin
+string
+LinkedIn do contato
+
+tags
+array of strings
+Tags do contato
+
+extra_emails
+array of strings
+E-mails extras do contato
+
+legal_bases
+array of objects
+Bases legais do contato
+
+object
+category
+string
+type
+string
+status
+string
+links
+array of objects
+Lista de hiperlinks
+
+object
+rel
+string
+href
+string
+media
+string
+type
+string
+
+401
+Unauthorized
+
+
+404
+Not Found
+
+Excluir contato pelo uuid/email
+delete
+https://api.rd.services/platform/contacts/{identifier}:{value}
+
+Deleta um contato específico.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+identifier
+string
+enum
+required
+Identificador (uuid/email) associado a cada contato do RD Station.
+
+
+uuid
+Allowed:
+
+uuid
+
+email
+value
+string
+required
+Valor do identificador.
+
+Responses
+204
+No Content
+
+
+404
+Not Found
+
+Updated 7 months ago
+
+Atualizar contato pelo uuid/email
+Criar uma tag para o lead pelo uuid/email
+post
+https://api.rd.services/platform/contacts/{identifier}:{value}/tag
+
+Apenas atualiza um contato já existente na Base de Leads; se o contato não existir, ocorrerá o erro RESOURCE_NOT_FOUND.
+Não há o registro de Evento de Conversão no histórico do lead.
+As Tags enviadas são acumuladas no Perfil do Lead, ou seja, são acrescentadas em adição às tags existentes.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+identifier
+string
+enum
+required
+Identificador (uuid/email) associado a cada contato do RD Station.
+
+
+uuid
+Allowed:
+
+uuid
+
+email
+value
+string
+required
+Valor do identificador.
+
+Body Params
+tags
+array of strings
+required
+Tags para o contato
+
+
+ADD string
+Responses
+
+200
+Success
+
+Response body
+object
+uuid
+string
+name
+string
+email
+string
+job_title
+string
+bio
+string
+website
+string
+linkedin
+string
+personal_phone
+string
+city
+string
+state
+string
+country
+string
+tags
+array of strings
+extra_emails
+array of strings
+legal_bases
+array of objects
+object
+category
+string
+type
+string
+status
+string
+links
+array of objects
+object
+rel
+string
+href
+string
+media
+string
+type
+string
+
+401
+Unauthorized
+
+
+404
+Not Found
+
+Updated 7 months ago
+
+Excluir contato pelo uuid/email
+Consultar eventos associado ao contato
+Did this page help you? Consultar eventos associado ao contato
+get
+https://api.rd.services/platform/contacts/{uuid}/events
+
+Retorna uma lista de eventos associados ao contato.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Instruções de uso
+Essa API exibe, por padrão, um limite de 10 conversões por página.
+Para visualizar todas as conversões, é necessário utilizar os Query Params para paginação, seguindo as regras abaixo:
+
+Nome	Descrição
+order	Campo a ser ordenado. O único valor aceito é "created_at"
+direction	Ordenação da lista. "asc" ou "desc", padrão é "asc"
+page	Número atual da página
+Exemplo de como consultar as conversões mais recentes:
+
+JSON
+
+https://api.rd.services/platform/contacts/{UUID}/events?event_type=CONVERSION&order=created_at:desc&page=1
+Path Params
+uuid
+string
+required
+O uuid exclusivo associado a cada contato do RD Station.
+
+Query Params
+event_type
+string
+enum
+required
+O tipo de evento que você deseja consultar (CONVERSION ou OPPORTUNITY)
+
+
+CONVERSION
+Allowed:
+
+CONVERSION
+
+OPPORTUNITY
+Responses
+
+200
+Success
+
+Response body
+array of objects
+object
+event_type
+string
+O tipo de evento (CONVERSION ou OPPORTUNITY)
+
+event_family
+string
+Identificador interno do RDSM
+
+event_identifier
+string
+Identificador do evento
+
+event_timestamp
+string
+Data/hora de criação do evento, utilizando o formato UTC
+
+payload
+object
+Dados do contato
+
+
+payload object
+
+401
+Unauthorized
+
+
+404
+Not Found
+
+Campos personalizados
+Endpoints para gerenciar a informação de Campos na sua conta do RD Station.
+
+Ao criar uma conta no RD Station Marketing, alguns campos são apresentados como padrão para serem utilizados na captação de leads, eles podem ser conferidos aqui.
+
+Caso queira capturar outras informações dos seus leads, você pode criar Campos Personalizados.
+
+Os Campos Personalizados criados na conta e podem ser preenchidos ao editar o Lead manualmente, em Importações e em todas as ferramentas de captura de leads.
+
+Como identificar se um campo é padrão ou personalizado
+Ao consultar os campos personalizados, serão listados todos os campos da sua conta. É possível diferenciar os campos da seguinte forma:
+
+Campo padrão	Campo personalizado
+custom_field	false	true
+❗️
+Atenção: Os campos padrão não podem ser excluídos.
+Palavras reservadas/restritas
+Alguns termos são considerados restritos e não podem ser utilizados no parâmetro “Name” ao criar um Campo personalizado, pois já estão sendo utilizados pelo rdsm. Caso sejam enviados na requisição, ocorrerá o erro “error_message": "invalid options”.
+
+Opções restritas
+_is, _rd_experiment_content_id, account_id, address, already_received_email, asset_id, available_for_mailing, bio, birthdate, c_utmz, cargo, celular, channel, cidade, city, city_id, client_id, client_tracking_id, clusters_ids, company, company_address, company_id, company_name, company_phone, company_sector_id, company_site, company_size, conversion_domain, conversion_id, conversion_identifier, conversion_payload, conversion_url, conversions_sum, country, created_at, ddd-celular, device, e-mail, email, email_lead, employer_identification_number, empresa, endereco-da-empresa, endereco-empresa, estado, estado, facebook, firstname, funnel_uuid, google_analytics_client_id, id, id_bigint, id_old, identificador, import_token, internal_source, ip, job_title, last_conversion_date, last_visit_date, lead_id, leads_manager_id, legacy_id, lifecycle_stage,linkedin, mobile_phone, name, nombre, nome, nomecompleto, numero-de-funcionarios, numero_funcionarios, open_city, open_country, open_state, opportunity, opt-in email, país, personalphone, pg_tags, phone, picture, primeiro_nome, private_token, retries, site, size, social_conversion_source, state, state_id, tags, telefone, token_rdstation, traffic_campaign, traffic_channel, traffic_medium, traffic_source, traffic_source_id, traffic_term, traffic_value, twitter, uf, updated_at, user_agent, user_id, uuid, website, your-email, your-name, zip_code, cf_order_id, cf_order_total_items, cf_order_status, cf_order_payment_method, cf_order_payment_amount, cf_order_product_id, cf_order_product_sku, cf_cart_id, cf_cart_total_items, cf_cart_status, cf_cart_product_id, cf_cart_product_sku
+Campos padrão do RD Station Marketing
+Todas as contas do RD Station Marketing possuem alguns campos apresentados como padrão para serem utilizados na captação de leads. Os campos admitem diferentes tipos de respostas, essa definição toma como base o que é solicitado para o usuário.
+
+Identificador do campo	Tipo do campo	Descrição
+email	string	E-mail do contato
+name	string	Nome do contato
+job_title	string	Cargo do contato
+state	string	Estado do contato
+city	string	Cidade do contato
+country	string	País do contato
+personal_phone	string	Telefone do contato
+mobile_phone	string	Celular do contato
+twitter	string	Twitter do contato
+facebook	string	Facebook do contato
+linkedin	string	Linkedin do contato
+website	string	Site do contato
+company_name	string	Nome da empresa do contato
+company_site	string	Site da empresa do contato
+company_address	string	Endereço da empresa do contato
+tags	array of strings	Tags que podem ser adicionadas ao contato
+legal_bases	array of objects	Bases Legais do contato
+Os campos padrão não podem ser excluídos da conta ou modificados.
+
+Consultar campo personalizado
+get
+https://api.rd.services/platform/contacts/fields
+
+Retorna os campos e seus atributos. Um campo pode ser default ou customizado: - Default: campos padrões que representam as informações básicas do Contato do RD Station. - Custom: campos que representam informações exclusivas do contato de acordo com sua organização e que foram criados pelos usuários do RD Station.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Responses
+
+200
+Success
+
+Response body
+object
+fields
+array of objects
+object
+uuid
+string
+O uuid exclusivo associado a cada campo do RD Station
+
+api_identifier
+string
+Identificador exclusivo para referenciar este campo para chamadas de terminais do contato. O 'api identifier' de um campo não pode ser alterado posteriormente. Deve iniciar com o prefixo: cf_.
+
+custom_field
+boolean
+Ele é definido como 'false' para campos padrão e 'true' para campos personalizados.
+
+data_type
+string
+O tipo de dados do campo. Os valores possíveis são 'BOOLEAN', 'STRING', 'STRING[]' e 'INTEGER'.
+
+name
+object
+Nome do campo no RD Station
+
+
+name object
+label
+object
+Label do campo nos formulários do RD Station
+
+
+label object
+presentation_type
+string
+enum
+O tipo do campo
+
+TEXT_INPUT EMAIL_INPUT COMBO_BOX URL_INPUT TEXT_AREA RADIO_BUTTON PHONE_INPUT NUMBER_INPUT CHECK_BOX MULTIPLE_CHOICE
+
+validation_rules
+object
+As regras de validação do campo.
+
+
+validation_rules object
+
+401
+Unauthorized
+
+Criar campo personalizado
+post
+https://api.rd.services/platform/contacts/fields
+
+O campo api_identifier deve ser preenchido seguindo a estrutura: cf_nome_do_campo
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+api_identifier
+string
+required
+Identificador exclusivo para referenciar este campo para chamadas de terminais do contato. O 'api_identifier' de um campo não pode ser alterado posteriormente
+
+data_type
+string
+enum
+required
+Tipo de dados para o qual o valor do campo deve ser formatado
+
+
+STRING
+Allowed:
+
+STRING
+
+INTEGER
+
+BOOLEAN
+
+STRING[]
+name
+object
+required
+Nome do campo no RD Station
+
+
+name object
+label
+object
+required
+Label do campo nos formulários do RD Station
+
+
+label object
+presentation_type
+string
+enum
+required
+O tipo do campo nos formulários
+
+
+TEXT_INPUT
+
+Show 10 enum values
+validation_rules
+object
+As regras de validação do campo
+
+
+validation_rules object
+Responses
+
+201
+Created
+
+Response body
+object
+uuid
+string
+O uuid associado a cada campo do RD Station
+
+api_identifier
+string
+Identificador exclusivo para referenciar este campo para chamadas de terminais do contato. O 'api identifier' de um campo não pode ser alterado posteriormente. Deve iniciar com o prefixo: cf_.
+
+custom_field
+boolean
+Ele é definido como 'false' para campos padrão e 'true' para campos personalizados.
+
+data_type
+string
+O tipo de dados do campo. Os valores possíveis são 'BOOLEAN', 'STRING', 'STRING[]' e 'INTEGER'.
+
+name
+object
+Nome do campo no RD Station
+
+default
+string
+pt-BR
+string
+label
+object
+Label do campo nos formulários do RD Station
+
+default
+string
+pt-BR
+string
+presentation_type
+string
+enum
+O tipo do campo
+
+TEXT_INPUT EMAIL_INPUT COMBO_BOX URL_INPUT TEXT_AREA RADIO_BUTTON PHONE_INPUT NUMBER_INPUT CHECK_BOX MULTIPLE_CHOICE
+
+validation_rules
+object
+As regras de validação do campo.
+
+valid_options
+array of objects
+Opções do campo
+
+object
+value
+string
+label
+object
+
+label object
+
+400
+Bad Request
+
+Atualizar campo personalizado
+patch
+https://api.rd.services/platform/contacts/fields/{uuid}
+
+Atualizar campo personalizado.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+uuid
+string
+required
+O uuid exclusivo associado a cada campo do RD Station.
+
+Body Params
+data_type
+string
+enum
+required
+Tipo de dados para o qual o valor do campo deve ser formatado
+
+
+STRING
+Allowed:
+
+STRING
+
+INTEGER
+
+BOOLEAN
+
+STRING[]
+name
+object
+required
+Nome do campo no RD Station
+
+
+name object
+label
+object
+required
+Label do campo nos formulários do RD Station
+
+
+label object
+presentation_type
+string
+enum
+required
+O tipo do campo nos formulários
+
+
+TEXT_INPUT
+
+Show 10 enum values
+validation_rules
+object
+As regras de validação do campo.
+
+
+validation_rules object
+Responses
+
+200
+Success
+
+Response body
+object
+uuid
+string
+O uuid associado a cada campo do RD Station
+
+api_identifier
+string
+Identificador exclusivo para referenciar este campo para chamadas de terminais do contato. O 'api identifier' de um campo não pode ser alterado posteriormente. Deve iniciar com o prefixo: cf_.
+
+custom_field
+boolean
+Ele é definido como 'false' para campos padrão e 'true' para campos personalizados.
+
+data_type
+string
+O tipo de dados do campo. Os valores possíveis são 'BOOLEAN', 'STRING', 'STRING[]' e 'INTEGER'.
+
+name
+object
+Nome do campo no RD Station
+
+default
+string
+pt-BR
+string
+label
+object
+Label do campo nos formulários do RD Station
+
+default
+string
+pt-BR
+string
+presentation_type
+string
+enum
+O tipo do campo
+
+TEXT_INPUT EMAIL_INPUT COMBO_BOX URL_INPUT TEXT_AREA RADIO_BUTTON PHONE_INPUT NUMBER_INPUT CHECK_BOX MULTIPLE_CHOICE
+
+validation_rules
+object
+As regras de validação do campo.
+
+valid_options
+array of objects
+Opções do campo
+
+object
+value
+string
+label
+object
+
+label object
+
+400
+Bad Request
+
+Excluir campo personalizado
+delete
+https://api.rd.services/platform/contacts/fields/{uuid}
+
+Excluir um campo personalizado.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+uuid
+string
+required
+O uuid exclusivo associado a cada campo do RD Station.
+
+Responses
+204
+No Content
+
+
+404
+Not Found
+
+Updated 7 months agoFunis de Contatos
+Dentro da estratégia de marketing de conteúdo existem estágios importantes, afinal nem todos os seus contatos possuem o mesmo interesse ou estão na mesma fase de relacionamento com seu produto e/ou empresa.
+
+Esses estágios e a transição entre eles formam o que chamamos de funil de vendas, que também pode ser chamado funil do Marketing, no qual o volume de pessoas que chegam no topo (visitantes) vai diminuindo ao longo do processo de venda até se tornarem clientes, no fundo do funil.
+
+Essa API possibilita que você manipule os estágios de funil de seus Contatos, atualmente eles podem ser classificados como:
+
+Lead
+Lead Qualificado
+Cliente
+Além disso, é possível consultar e atualizar o Contato como Oportunidade, consultar e atualizar o Dono do Lead, bem como consultar a pontuação de "Perfil" e "Interesse" do Lead Scoring.
+
+Consultar pelo UUID/email do contato
+get
+https://api.rd.services/platform/contacts/{identifier}:{value}/funnels/default
+
+
+Retorna uma lista de Funis associados ao contato.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+identifier
+string
+enum
+required
+Identificador (uuid/email) associado a cada contato do RD Station.
+
+
+uuid
+Allowed:
+
+uuid
+
+email
+value
+string
+required
+Valor do identificador.
+
+Response
+
+200
+Success
+
+Response body
+object
+lifecycle_stage
+string
+O estágio no funil ao qual o contato pertence. Opções válidas: 'Lead', 'Qualified Lead' e 'Client'
+
+opportunity
+boolean
+Indica se o contato é uma oportunidade ou não no funil
+
+contact_owner_email
+string
+O e-mail do usuário responsável pelo contato
+
+fit
+integer
+A pontuação de ajuste do contato no funil atual
+
+interest
+integer
+A pontuação de interesse do contato no funil atual
+Atualizar pelo UUID/email do contato
+put
+https://api.rd.services/platform/contacts/{identifier}:{value}/funnels/default
+
+
+Atualiza as informações do funil associado ao contato.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+identifier
+string
+enum
+required
+Identificador (uuid/email) associado a cada contato do RD Station.
+
+
+uuid
+Allowed:
+
+uuid
+
+email
+value
+string
+required
+Valor do identificador.
+
+Body Params
+lifecycle_stage
+string
+O estágio no funil ao qual o contato pertence. Opções válidas: 'Lead', 'Qualified Lead' e 'Client'
+
+opportunity
+boolean
+Indica se o contato é uma oportunidade ou não no funil
+
+
+contact_owner_email
+string
+O e-mail do usuário responsável pelo contato. Pode ser definido como 'null' para desassociar o proprietário atual
+
+Responses
+
+200
+Success
+
+Response body
+object
+lifecycle_stage
+string
+O estágio no funil ao qual o contato pertence. Opções válidas: 'Lead', 'Qualified Lead' e 'Client'
+
+opportunity
+boolean
+Indica se o contato é uma oportunidade ou não no funil
+
+contact_owner_email
+string
+O e-mail do usuário responsável pelo contato
+
+fit
+integer
+A pontuação de ajuste do contato no funil atual
+
+interest
+integer
+A pontuação de interesse do contato no funil atual
+
+
+400
+Bad Request
+
+Segmentações
+A segmentação é um filtro que seleciona os leads da sua base que possuem informações específicas, criando uma lista dinâmica. Com isso, é possível criar e realizar ações de Marketing direcionadas, de acordo com suas necessidades dentro do RD Station Marketing.
+
+Com essa API, você poderá listar todas as segmentações existentes na sua conta RD Station Marketing e navegar até a lista de todos os leads existentes na segmentação selecionada.
+
+Com isso, você conseguirá consultar e extrair os Contatos da sua Base de Leads.
+
+Para saber como obter os resultados corretos com essa API, é necessário consultar as informações da página de Mais informações.
+
+Consultar segmentações
+get
+https://api.rd.services/platform/segmentations
+
+Retorna uma lista de segmentações da conta.
+Saiba como personalizar a consulta aqui.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Responses
+
+200
+Success
+
+Response body
+object
+segmentations
+array of objects
+object
+id
+integer
+Identificador único da segmentação
+
+name
+string
+Nome da segmentação
+
+standard
+boolean
+Informa se a segmentação é padrão para a plataforma assim que você cria uma conta no RDSM
+
+created_at
+string
+Data de criação da segmentação
+
+updated_at
+string
+Data da última atualização da segmentação
+
+process_status
+string
+Status do processo da segmentação
+
+links
+array of objects
+Lista de hiperlinks.
+
+object
+rel
+string
+href
+string
+media
+string
+type
+string
+
+401
+Unauthorized
+
+Updated 7 months ago
+
+Segmentações
+Consultar contatos de uma segmentação
+Did this p
+
+Consultar contatos de uma segmentação
+get
+https://api.rd.services/platform/segmentations/{id}/contacts
+
+Retorna uma lista de contatos associados a uma segmentação.
+Saiba como personalizar a consulta aqui.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+Identificador exclusivo da segmentação
+
+Responses
+
+200
+Success
+
+Response body
+object
+contacts
+array of objects
+object
+uuid
+string
+O uuid exclusivo associado a cada contato do RD Station.
+
+name
+string
+Nome do contato
+
+email
+string
+Email do contato
+
+last_conversion_date
+string
+Data da última conversão do contato
+
+created_at
+string
+Data de criação do contato
+
+links
+array of objects
+Lista de hiperlinks.
+
+object
+rel
+string
+href
+string
+media
+string
+type
+string
+
+401
+Unauthorized
+
+
+404
+Not Found
+
+Paginação
+A api deve aceitar os parâmetros page e page_size em path_params (?page=1&page_size=25)
+O valor padrão do parâmetro page deve ser 1 e do page_size deve ser 25
+O tamanho máximo do parâmetro page_size definido é 125 e caso seja excedido um erro é retornado
+Os headers pagination-total-rows, pagination-page-size e pagination-page devem ser retornados
+Ordenação
+A api deve aceitar o parâmetro order (?order=name:desc)
+A ordenação aceita asc ou desc, caso não seja informado o valor default é asc
+Os campos aceitos para ordenação das segmentações são: last_conversion_date
+Segmentações Padrão
+São todas aquelas segmentações que já estavam previamente configuradas no RD Station Marketing
+As Segmentações "Todos os contatos da base de Leads", "Clientes (estágio no funil)" e "Leads (estágio no funil)" são exemplos de Segmentações Padrão.
+As segmentações padrão tem o campo standard marcado como true e nas personalizadas o campo standard é nulo
+Busca por nome
+A api deve aceitar o parâmetro search em path_params (?search=name)
+Importante: As Segmentações Padrão não são retornadas pela busca
+Lista das segmentações padrão:
+
+JSON
+
+{
+        "contacts": [
+            {
+                "id": 4,
+                "name": "Clientes (estágio no funil)",
+                "standard": true,
+                "created_at": "2021-12-24T11:52:12.046-03:00",
+                "updated_at": "2021-12-24T11:52:12.046-03:00",
+                "process_status": "processed",
+                "links": [
+                    {
+                        "rel": "SEGMENTATIONS.CONTACTS",
+                        "href": "https://api.rd.services/platform/segmentations/4/contacts",
+                        "media": "application/json",
+                        "type": "GET"
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "name": "Leads (estágio no funil)",
+                "standard": true,
+                "created_at": "2021-12-24T11:52:12.013-03:00",
+                "updated_at": "2021-12-24T11:52:12.013-03:00",
+                "process_status": "processed",
+                "links": [
+                    {
+                        "rel": "SEGMENTATIONS.CONTACTS",
+                        "href": "https://api.rd.services/platform/segmentations/2/contacts",
+                        "media": "application/json",
+                        "type": "GET"
+                    }
+                ]
+            },
+            {
+                "id": 5,
+                "name": "Oportunidades",
+                "standard": true,
+                "created_at": "2021-12-24T11:52:12.062-03:00",
+                "updated_at": "2021-12-24T11:52:12.062-03:00",
+                "process_status": "processed",
+                "links": [
+                    {
+                        "rel": "SEGMENTATIONS.CONTACTS",
+                        "href": "https://api.rd.services/platform/segmentations/5/contacts",
+                        "media": "application/json",
+                        "type": "GET"
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "name": "Leads Qualificados (estágio no funil)",
+                "standard": true,
+                "created_at": "2021-12-24T11:52:12.030-03:00",
+                "updated_at": "2021-12-24T11:52:12.030-03:00",
+                "process_status": "processed",
+                "links": [
+                    {
+                        "rel": "SEGMENTATIONS.CONTACTS",
+                        "href": "https://api.rd.services/platform/segmentations/3/contacts",
+                        "media": "application/json",
+                        "type": "GET"
+                    }
+                ]
+            },
+            {
+                "id": 1,
+                "name": "Todos os contatos da base de Leads",
+                "standard": true,
+                "created_at": "2021-12-24T11:52:12.030-03:00",
+                "updated_at": "2021-12-24T11:52:12.030-03:00",
+                "process_status": "processed",
+                "links": [
+                    {
+                        "rel": "SEGMENTATIONS.CONTACTS",
+                        "href": "https://api.rd.services/platform/segmentations/1/contacts",
+                        "media": "application/json",
+                        "type": "GET"
+                    }
+                ]
+            }
+        ]
+      }
+Updated 7 mont Fluxos de automação
+A Automação de Marketing tem o principal objetivo de criar uma experiência personalizada em escala por meio de ações automatizadas de acordo com interações e informações fornecidas pelos seus leads.
+
+Com essa API, é possível consultar os dados e ações dos seus fluxos, identificar os Leads que iniciaram, receberam determinada ação, e encerraram um fluxo, bem como, inserir Leads em fluxos.
+Consultar fluxos de automação
+get
+https://api.rd.services/platform/workflows
+
+Retorna uma lista com os fluxos de automação
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+page_size
+string
+Número de resgistros retornados por página
+
+page
+string
+Número atual da página
+
+ids
+array of strings
+IDs dos fluxos de automação retornados
+
+
+ADD string
+order
+array of strings
+Tipos de ordenação dos resultados
+
+
+ADD string
+Responses
+
+200
+Success
+
+Response body
+object
+wokflows
+array of objects
+object
+id
+string
+Identificador único do fluxo de automação
+
+name
+string
+Nome do fluxo de automação
+
+user_email_created
+string
+E-mail do usuário autor do fluxo de automação
+
+created_at
+string
+Data de criação do fluxo de automação
+
+user_email_updated
+string
+E-mail do último usuário editor do fluxo de automação
+
+updated_at
+string
+Data da última atualização do fluxo de automação
+
+
+Consultar dados de um fluxo a partir de um id
+get
+https://api.rd.services/platform/workflows/{id}
+
+Retorna informações das ações de um fluxo de automação
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Tabela com as descrições do parâmetro action:
+
+Ação	Descrição
+SDEMA	Enviar email
+WTDEL	Esperar
+ADTAG	Adicionar tags
+WTFIX	Esperar e agendar hora
+CDEMA	Dividir caminho por email do fluxo
+MKOPP	Marcar Oportunidade
+CDSEG	Dividir caminho por segmentação
+NTEMA	Notificar email
+CGLST	Alterar estágio dos Leads
+RMTAG	Remover tags
+SLOWN	Alterar responsável pelos Leads
+SDPWH	Enviar Leads para Integração
+NTOWN	Notificar responsável pelos Leads
+OWROU	Distribuir Leads entre os responsáveis
+ADLTW	Adicionar Lead a outros fluxos
+UNOPP	Desmarcar Oportunidade
+MKSAL	Marcar Venda
+RMLFW	Remover Lead de outros fluxos
+TWFLW	Seguir no Twitter
+JNPTH	Unir caminho
+SDWPP	Enviar WhatsApp
+CDWTD	Esperar e agendar data e hora
+TSTAB	Teste A/B
+ASLLB	Adicionar Base Legal
+RMLLB	Remover Base Legal
+CRMOP	Criar Oportunidade no CRM
+Path Params
+id
+string
+required
+ID do fluxo de automação
+
+Responses
+
+200
+success
+
+Response body
+object
+workflow_info
+object
+id
+string
+Identificador único do fluxo de automação
+
+name
+string
+Nome do fluxo de automação
+
+status
+string
+Status de ativação do fluxo
+
+created_at
+string
+Data de criação do fluxo de automação
+
+updated_at
+string
+Data da última atualização do fluxo de automação
+
+actions
+array of objects
+object
+id
+string
+Identificador da ação
+
+type
+string
+Sigla da ação
+
+
+404
+not found
+
+Updated 7 months ago
+
+Inserir leads em um fluxo
+post
+https://api.rd.services/platform/workflows/{id}/leads
+
+Permite inserir leads num fluxo de automação
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+📘
+O limite de leads por requisição será de acordo com as definições da tabela abaixo
+Limites de leads por requisição	Plano
+10 leads por request	Light, Basic
+25 leads por request	Pro
+50 leads por request	Advanced
+Path Params
+id
+string
+required
+Identificador exclusivo do fluxo de automação
+
+Body Params
+leads
+array of strings
+required
+E-mail do lead
+
+
+ADD string
+Responses
+
+200
+Success
+
+Response body
+object
+leads_added
+array of strings
+Lista de leads adicionados com sucesso
+
+leads_not_found
+array of strings
+Lista de leads não encontrados
+
+
+400
+not found
+
+
+Email
+A funcionalidade de Email possibilita que você se comunique de forma efetiva com os contatos capturados para despertar o interesse, aumentar o engajamento e criar um relacionamento.
+
+Para isso, é possível realizar o envio de campanhas para grupos de contatos definidos de acordo com as informações que você tem e enviar mensagens direcionadas para esse público.
+
+Com essa API, é possível consultar todas as campanhas listadas na conta e os detalhes do disparo da campanha.
+
+Listar todos os emails
+get
+https://api.rd.services/platform/emails
+
+Consultar lista de emails
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+page_size
+string
+Número de resgistros retornados por página
+
+page
+string
+Número atual da página
+
+query
+string
+Busca pelo nome do email
+
+ids
+array of integers
+IDs dos emails retornados
+
+
+ADD integer
+types
+array of strings
+Tipo dos emails retornados
+
+
+ADD string
+Responses
+
+200
+success
+
+Response body
+object
+items
+array of objects
+object
+id
+integer
+ID do email
+
+name
+string
+Nome do email
+
+created_at
+string
+Data da criação do email
+
+updated_at
+string
+Data da atualização do email
+
+send_at
+string | null
+Data do envio do email
+
+leads_count
+integer | null
+Quantidade de leads do email
+
+status
+string | null
+Status da campanha
+
+type
+string
+Tipo do email
+
+is_predictive_sending
+boolean | null
+Informa se a campanha tem envio preditivo
+
+sending_is_imminent
+boolean | null
+Informa se o envio é iminente
+
+behavior_score_info
+object | null
+Behavior score dos leads de email
+
+
+behavior_score_info object | null
+campaign_id
+integer | null
+ID da campanha
+
+component_template_id
+integer | null
+ID do componente do template de email
+
+total
+integer
+O total de e-mails
+
+
+401
+Unauthorized
+
+Updated 7 months ago
+
+EmailBuscar email por id
+get
+https://api.rd.services/platform/emails/{id}
+
+Consultar um email a partir de um id
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+integer
+required
+ID do email a ser buscado
+
+Responses
+
+200
+success
+
+Response body
+object
+id
+integer
+ID do email
+
+name
+string
+Nome do email
+
+created_at
+string
+Data da criação do email
+
+updated_at
+string
+Data da atualização do email
+
+send_at
+string | null
+Data do envio do email
+
+leads_count
+integer | null
+Quantidade de leads do email
+
+status
+string | null
+Status da campanha
+
+type
+string
+Tipo do email
+
+is_predictive_sending
+boolean | null
+Informa se a campanha tem envio preditivo
+
+sending_is_imminent
+boolean | null
+Informa se o envio é iminente
+
+behavior_score_info
+object | null
+Behavior score dos leads de email
+
+disengaged
+boolean
+Informa se estão selecionados leads desengajados
+
+engaged
+boolean
+Informa se estão selecionados leads engajados
+
+indeterminate
+boolean
+Informa se estão selecionados leads indeterminados
+
+campaign_id
+integer | null
+ID da campanha
+
+component_template_id
+integer | null
+ID do componente do template de email
+
+
+401
+Unauthorized
+
+Landing Pages
+Landing Page é uma página de conversão que possui todos os elementos voltados à conversão do visitante em Lead, oportunidade ou cliente.
+
+Com essa API, é possível consultar as informações das Landing Pages criadas na conta, como o identificador interno, o identificador de conversão (slug da landing page), status da publicação, entre outras informações.
+
+Consultar landing pages
+get
+https://api.rd.services/platform/landing_pages
+
+Retorna uma lista com todas as landing pages de uma conta
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+page_size
+integer
+Número de registros retornados por página
+
+page
+integer
+Número atual da página
+
+search
+string
+Busca pelo título da landing page
+
+ids
+array of integers
+IDs das landing pages retornadas
+
+
+ADD integer
+order
+array of strings
+Tipos de ordenação dos resultados
+
+
+ADD string
+Responses
+
+200
+Success
+
+Response body
+array of objects
+object
+id
+integer
+Identificador único da landing page
+
+title
+string
+Título da Landing Page
+
+created_at
+string
+Data de criação da landing page
+
+upated_at
+string
+Data da última atualização da landing page
+
+conversion_identifier
+string
+Identificador da conversão
+
+status
+string
+Status de publicação da landing page
+
+has_active_experiment
+boolean
+Informa se a landing page possui um teste A/B ativo
+
+had_experiment
+boolean
+Informa se a landing page já possuiu um teste A/B
+
+
+401
+Unauthorized
+
+Pop-ups
+Essa funcionalidade possibilita exibir pop-ups e botão de whatsapp em seu site para destacar seus materiais, promoções e avisos em páginas selecionadas e capturar as informações do contato automaticamente pelo RD Station Marketing.
+
+Os pop-ups podem ser de dois tipos:
+Rolagem: tem o objetivo de oferecer um conteúdo rico ou direcionar o seu visitante para alguma página específica do seu site. Ele é exibido quando o visitante desce a barra de rolagem até 50% da página.
+
+Saída: tem o objetivo de recuperar o visitante quando ele está prestes a deixar a sua página sem finalizar a compra ou deixar um contato para que você possa enviar um material rico. Ele é exibido no seu site quando o visitante tentar sair da página.
+
+Botão de Whatsapp: tem o objetivo de possibilitar que os visitantes do seu site entrem em contato com a sua empresa pelo WhatsApp para tirar dúvidas, pedir orçamentos ou saber mais sobre os seus produtos e serviços. Os dados que ele cadastrar no formulário ficarão salvos em sua base de leads, para que você possa manter o relacionamento com esses leads por email ou automação. O Botão de WhatsApp é um botão flutuante que é exibido no canto da tela no momento em que o visitante entra em seu site.
+
+Com essa API, é possível consultar as informações dos Pop-ups e Botões de Whatsapp criados na conta, como o identificador interno, o identificador de conversão, o gatilho para exibição, status da publicação, entre outras informações.
+
+Updated 7 months ago
+
+Consultar landing pagesConsultar pop-ups
+get
+https://api.rd.services/platform/popups
+
+Retorna uma lista com todos os pop-ups de uma conta
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+page_size
+integer
+Número de registros retornados por página
+
+page
+integer
+Número atual da página
+
+search
+string
+Busca pelo título do pop-up
+
+ids
+array of integers
+IDs dos pop-ups retornados
+
+
+ADD integer
+order
+array of strings
+Tipos de ordenação dos resultados
+
+
+ADD string
+trigger
+array of strings
+Tipo de trigger dos popups retornados
+
+
+ADD string
+Responses
+
+200
+success
+
+Response body
+array of objects
+object
+id
+integer
+required
+Identificador único do pop-up
+
+title
+string
+required
+Título do Pop-up
+
+created_at
+string
+required
+Data de criação do pop-up
+
+updated_at
+string
+required
+Data da última atualização do pop-up
+
+conversion_identifier
+string
+required
+Identificador da conversão
+
+status
+string
+required
+Status de publicação do pop-up
+
+trigger
+string
+required
+Gatilho para exibição do pop-up
+
+
+401
+Unauthorized
+
+Updated 7 months ago
+
+Pop-upsFormulários
+A funcionalidade de Formulários possibilita criar formulários personalizados para insiro-los em páginas do seu site para capturar informações importantes de seus visitantes e convertê-los em Leads no RD Station Marketing.
+
+Com essa API, é possível consultar as informações dos Formulários criadas na conta, como o identificador interno, o identificador de conversão, status da publicação, entre outras informações.
+
+Updated 7 months ago
+
+Consultar pop-ups
+Consultar formulários
+Did this page help you?
+Consultar formulários
+get
+https://api.rd.services/platform/embeddables
+
+Retorna uma lista com todos os formulários de uma conta
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Query Params
+page_size
+integer
+Número de registros retornados por página
+
+page
+integer
+Número atual da página
+
+search
+string
+Busca pelo título do formulário
+
+ids
+array of integers
+IDs dos formulários retornados
+
+
+ADD integer
+order
+array of strings
+Tipos de ordenação dos resultados
+
+
+ADD string
+Responses
+
+200
+success
+
+Response body
+array of objects
+object
+id
+integer
+required
+Identificador único do formulário
+
+title
+string
+required
+Título do formulário
+
+created_at
+string
+required
+Data de criação do formulário
+
+upated_at
+string
+Data da última atualização do formulário
+
+conversion_identifier
+string
+required
+Identificador da conversão
+
+status
+string
+rAnálise
+As APIs de Análise fornecem dados estatísticos que possibilitam analisar o desempenho e eficiência das suas estratégias de marketing, para que você tenha mais autonomia e liberdade para construir suas análises e relatórios.
+
+Elas ajudam você e sua equipe a integrar os dados estatísticos do RD Station Marketing com a sua solução, automatizando processos para criar uma experiência mais fluida de análise de resultados em outras plataformas.
+
+Com essa API você pode consultar Estatísticas de:
+
+E-mail Marketing
+Email via Fluxo de Automação
+Funil de Vendas
+Ativos de Conversão
+🚧
+API disponível apenas para os planos Pro e Advanced.
+Updated 7 months ago
+
+Consultar formulárioConsultar Estatísticas de E-mail Marketing
+get
+https://api.rd.services/platform/analytics/emails
+
+O objetivo desta API é fornecer os indicadores de engajamento e performance das campanhas de Email Marketing enviadas no período consultado, que irão te auxiliar a analisar a eficiência das suas campanhas.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+API disponível apenas para os planos Pro e Advanced.
+🚧
+Plano Advanced não tem limite de consulta. Já o plano Pro tem limite de consulta dos últimos 45 dias.
+📘
+Obs: A API de Estatísticas de E-mail Marketing retorna dados a partir de Agosto de 2021. Os dados são consolidados, sempre até o dia anterior à data da análise (D-1) e disponibilizados no padrão UTC.
+Query Params
+start_date
+string
+Data de início a ser consultada. (yyyy-mm-dd)
+
+end_date
+string
+Data de término a ser consultada. (yyyy-mm-dd)
+
+campaign_id
+array of integers
+Filtro para o Id do asset (opcional)
+
+
+ADD integer
+Responses
+
+200
+Success
+
+Response body
+object
+account_id
+integer
+O id associado a cada conta do RD Station
+
+query_date
+object
+O período de tempo usado para buscar os dados
+
+start_date
+date
+end_date
+date
+emails
+array of objects
+object
+campaign_id
+integer
+Id da campanha
+
+campaign_name
+string
+Nome da campanha de e-mail
+
+send_at
+date-time
+Data de envio do e-mail
+
+contacts_count
+integer
+Quantidade de contatos selecionados
+
+email_dropped_count
+integer
+Total de e-mails descartados
+
+email_delivered_count
+integer
+Total de e-mails entregues
+
+email_bounced_count
+integer
+Total de e-mails de rejeitados
+
+email_opened_count
+integer
+Total de aberturas únicas por lead
+
+email_clicked_count
+integer
+Total de cliques únicos por lead
+
+email_unsubscribed_count
+integer
+Total não inscrito
+
+email_spam_reported_count
+integer
+Total reportado como spam
+
+email_delivered_rate
+float
+Taxa de entrega
+
+email_opened_rate
+float
+Taxa de abertura em comparação com o número de e-mails entregues
+
+email_clicked_rate
+float
+Taxa de cliques em comparação com o número de e-mails entregues
+
+email_spam_reported_rate
+float
+Taxa de spam em comparação com o número de e-mails entregues
+
+
+400
+Bad Request
+
+
+401
+Unauthorized or Forbidden
+
+Consultar Estatísticas de Email via Fluxo de Automação
+get
+https://api.rd.services/platform/analytics/workflow_emails
+
+O objetivo desta API é fornecer os indicadores de engajamento e performance dos emails enviados por meio de fluxos de automação no período consultado, que irão te auxiliar a analisar a eficiência dos seus fluxos e emails.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+API disponível apenas para os planos Pro e Advanced.
+🚧
+Plano Advanced não tem limite de consulta. Já o plano Pro tem limite de consulta dos últimos 45 dias.
+📘
+Obs: A API de Estatísticas de Fluxo de Automação retorna dados a partir de Janeiro de 2022. Os dados são consolidados e disponibilizados no padrão UTC.
+Query Params
+start_date
+string
+Data de início a ser consultada. (yyyy-mm-dd)
+
+end_date
+string
+Data de término a ser consultada. (yyyy-mm-dd)
+
+workflow_id
+array of strings
+Filtro para o Id do asset (opcional)
+
+
+ADD string
+Responses
+
+200
+Success
+
+Response body
+object
+account_id
+integer
+O id associado a cada conta do RD Station
+
+query_date
+object
+O período de tempo usado para buscar os dados
+
+start_date
+date
+end_date
+date
+workflow_email_statistics
+array of objects
+object
+workflow_id
+string
+Id da automação
+
+workflow_name
+string
+Nome da automação
+
+workflow_action_id
+string
+Id do email de automação
+
+workflow_created_at
+date
+Data de criação do fluxo
+
+workflow_updated_at
+date
+Data da última atualização do fluxo
+
+email_name
+string
+Nome da campanha enviada pela automação
+
+email_dropped_count
+integer
+Total de e-mails descartados
+
+email_delivered_count
+integer
+Total de e-mails entregues
+
+email_bounced_unique_count
+integer
+Total de e-mails de rejeitados
+
+email_opened_unique_count
+integer
+Total de aberturas únicas por lead
+
+email_clicked_unique_count
+integer
+Total de cliques únicos por lead
+
+email_unsubscribed_count
+integer
+Total não inscrito
+
+email_spam_reported_count
+integer
+Total reportado como spam
+
+email_delivered_rate
+float
+Taxa de entrega
+
+email_opened_rate
+float
+Taxa de abertura em comparação com o número de e-mails entregues
+
+email_clicked_rate
+float
+Taxa de cliques em comparação com o número de e-mails entregues
+
+email_spam_reported_rate
+float
+Taxa de spam em comparação com o número de e-mails entregues
+
+
+400
+Bad Request
+
+
+401
+Unauthorized or Forbidden
+
+Updated 7 months ago
+
+Consultar Estatísticas de E-mail Marketing
+Consultar Estatísticas do Funil de Vendas
+get
+https://api.rd.services/platform/analytics/funnel
+
+O objetivo desta API é fornecer os dados funil de vendas com as quantidades de visitantes, leads, oportunidades e vendas cumulativo referente ao período consultado, a fim de trazer mais clareza com relação a performance do seu funil de vendas.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+API disponível somente para plano Advanced.
+📘
+Obs: A API de Estatísticas de Funil de Vendas retorna dados a partir de Junho de 2022.
+Query Params
+start_date
+string
+Data de início a ser consultada. (yyyy-mm-dd)
+
+end_date
+string
+Data de término a ser consultada. (yyyy-mm-dd)
+
+grouped_by
+string
+enum
+Filtro para agrupamento do período de análise, opções são: daily, weekly e monthly. Requisições sem esse campo preenchido retornam dados diários.
+
+
+daily
+Allowed:
+
+daily
+
+weekly
+
+monthly
+Responses
+
+200
+Success
+
+Response body
+object
+account_id
+integer
+O id associado a cada conta do RD Station
+
+query_date
+object
+O período de tempo usado para buscar os dados
+
+start_date
+date
+end_date
+date
+grouped_by
+string
+Filtro para agrupamento do período de análise, opções são: daily,weekly e monthly. Requisições sem esse campo preenchido retornam dados diários
+
+funnel
+array of objects
+object
+reference_day
+string
+required
+Dia de referência do funil
+
+visitors_count
+integer
+required
+Total de visitantes (usuários - GA)
+
+contacts_count
+integer
+required
+Total de contatos
+
+qualified_contacts_count
+integer
+required
+Total contatos qualificados
+
+opportunities_count
+integer
+required
+Total de oportunidades
+
+sales_count
+integer
+required
+Total de vendas
+
+
+400
+Bad Request
+
+
+401
+Unauthorized or Forbidden
+
+Consultar Estatísticas dos Ativos de Conversão
+get
+https://api.rd.services/platform/analytics/conversions
+
+O objetivo desta API é fornecer os indicadores de conversão para ativos de marketing, a fim de trazer mais clareza com relação a performance do seu ativo.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+API disponível apenas para os planos Pro e Advanced.
+🚧
+Plano Advanced não tem limite de consulta. Já o plano Pro tem limite de consulta dos últimos 45 dias. Para ambos os planos o prazo de atualização dos dados é de até 24 horas.
+📘
+Obs: A API de Estatísticas de Ativos de Conversão retorna dados a partir de Junho de 2022 para Landing Pages e a partir de Outubro de 2022 para Forms e Pop-ups. Os dados são consolidados e disponibilizados no padrão UTC.
+Query Params
+start_date
+string
+Data de início a ser consultada. (yyyy-mm-dd)
+
+end_date
+string
+Data de término a ser consultada. (yyyy-mm-dd)
+
+assets_type[]
+array of strings
+Filtros para tipo do ativo, opções disponíveis: LandingPage, Popup e Forms
+
+
+ADD string
+asset_id
+array of integers
+Filtro para o Id do asset (opcional)
+
+
+ADD integer
+Responses
+
+200
+Success
+
+Response body
+object
+account_id
+integer
+O id associado a cada conta do RD Station
+
+query_date
+object
+O período de tempo usado para buscar os dados
+
+start_date
+date
+end_date
+date
+assets_type
+array of strings
+Filtro para tipo do ativo: LandingPage
+
+conversions
+array of objects
+object
+asset_id
+integer
+Id do evento de conversão
+
+asset_identifier
+string
+Identificador do evento de conversão
+
+asset_type
+string
+Tipo do evento de conversão
+
+asset_created_at
+date-time
+Data de criação do evento
+
+asset_updated_at
+date-time
+Ultima atualização no evento
+
+visits_count
+integer
+Total de visitas no evento
+
+conversions_count
+integer
+Total conversões no evento
+
+conversion_rate
+float
+Taxa de conversão no evento
+
+
+400
+Bad Request
+
+
+401
+Unauthorized or Forbidden
+
+Updated 7 months agoCampanhas
+As APIs do Gerenciador de Campanhas permitem consultar as campanhas criadas no App e os itens incluídos nessas campanhas. Através das APIs de Análise é possível visualizar os dados estatísticos dos itens incluídos no agrupamento, possibilitando analisar o desempenho e eficiência das suas campanhas de marketing digital, para que você tenha mais autonomia e liberdade para organizar e construir suas análises.
+
+Com essa API você pode consultar Estatísticas dos seguintes itens adicionados na campanha:
+
+E-mail Marketing
+Email via Fluxo de Automação
+Ativos de Conversão
+Updated 7 months ago
+
+Consultar Estatísticas dos Ativos de Conversão Consultar campanhas
+get
+https://api.rd.services/platform/campaigns
+
+Retorna uma lista com todas as campanhas criadas no App Gerenciador de Campanhas
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+Nota: API disponível apenas para os planos Pro e Advanced.
+Query Params
+start_date
+string
+Data de início a ser consultada. (yyyy-mm-dd)
+
+end_date
+string
+Data de término a ser consultada. (yyyy-mm-dd)
+
+page_size
+string
+Número de registros retornados por página (máx:50)
+
+page
+string
+Número da página atual
+
+order
+string
+Ordenação dos resultados (name/updated_at/created_at):(desc/asc)
+
+ids
+string
+Ids das campanhas separados por vírgulas
+
+search
+string
+Nome da campanha desejada
+
+Responses
+
+200
+Success
+
+Response body
+object
+campaigns
+array of objects
+object
+id
+number
+name
+string
+status
+string
+created_at
+string
+updated_at
+string
+total_items
+number
+user
+object
+
+user object
+links
+array of objects
+object
+rel
+string
+href
+string
+media
+string
+method_type
+string
+
+400
+BadRequest
+
+Consultar detalhes de uma campanha
+get
+https://api.rd.services/platform/campaigns/{id}
+
+Retorna uma campanha específica criada no App Gerenciador de Campanhas
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+Nota: API disponível apenas para os planos Pro e Advanced.
+Path Params
+id
+string
+required
+Responses
+
+200
+Success
+
+Response body
+object
+campaign
+object
+created_at
+string
+id
+number
+links
+array of objects
+object
+href
+string
+media
+string
+method_type
+string
+rel
+string
+name
+string
+status
+string
+total_items
+number
+updated_at
+string
+user
+object
+
+user object
+
+401
+Unauthorized
+
+Consultar itens de uma campanha
+get
+https://api.rd.services/platform/campaigns/{id}/items
+
+Retorna os itens presentes em uma campanha específica criada no App Gerenciador de Campanhas
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+Nota: API disponível apenas para os planos Pro e Advanced.
+Path Params
+id
+string
+required
+Query Params
+page_size
+string
+Número de registros retornados por página (máx:50)
+
+page
+string
+Número da página atual
+
+order
+string
+Ordenação dos resultados (added_at/item_type):(asc/desc)
+
+ids
+string
+Ids(platform_item_id) dos itens separados por vírgulas
+
+item_type
+string
+Tipo do item (email, form, landing_page, popup, workflow)
+
+Responses
+
+200
+Success
+
+Response body
+object
+items
+array of objects
+object
+added_at
+string
+campaign_item_id
+string
+item_type
+string
+links
+array of objects
+object
+href
+string
+media
+string
+method_type
+string
+rel
+string
+platform_item_id
+string
+
+400
+BadRequest
+
+
+401
+Unauthorized
+
+
+404
+Not found
+Evento de Conversão Padrão
+Esse evento registra uma conversão padrão no Perfil do Lead, cujo identificador da conversão é o valor customizado atribuído ao atributo conversion_identifier.
+
+Ele cria ou atualiza o Lead registrando campos padrão e personalizados e é recomendado para:
+
+Registrar eventos de conversãoe
+Integrar os seus formulários com o RD Station Marketing.
+Assim, terá o registro do evento de conversão com o ícone do "Troféu" na linha do tempo do contato com todos os detalhes preenchidos no momento da conversão:
+
+
+Com o registro da conversão, você conseguirá:
+
+Acompanhar o registro de novas conversões na Base de Leads;
+Contabilizar o número de Leads e novos Leads no Dashboard;
+Contabilizar as conversões em Análises e Relatórios;
+Registrar e personalizar a Origem do Lead e das conversões;
+Preencher e atualizar campos padrão e personalizados;
+Segmentar os Leads que receberam as conversões para envio de Email Marketing;
+Segmentar os campos preenchidos pelo Lead na conversão realizada;
+Utilizar os eventos de conversão na entrada de Fluxos de Automação;
+Registrar visitas do Lead Tracking;
+Habilitar e desabilitar o Lead para recebimento de Emails;
+Registrar Tags;
+Criar Empresas;
+Registrar Bases Legais;
+Utilizar como Gatilho de Webhooks;
+Receber notificações de novos Leads e novas conversões a partir da configuração de notificações no RD Station Marketing.
+📘
+O tamanho do body das requisições nessa rota possui um limite de 0,2Mb.
+Bases Legais
+Esse tipo de evento aceita a atualização de Bases Legais:
+
+Campo	Tipo	Parâmetros válidos	Descrição
+category	String	communications	A única categoria aceita é "communications".
+type	String	pre_existent_contract, consent, legitimate_interest, judicial_process, vital_interest or public_interest	Qual base legal autoriza o tratamento de dados pessoais.
+status	String	granted or declined	Valores aceitos: "granted" para confirmar o consentimento e "declined" para indicar que o consentimento foi recusado.
+Saiba mais sobre os conceitos de Bases Legais aqui.
+
+Updated 7 months ago
+
+Consultar itens de uma campanhaEvento de conversão padrão
+post
+https://api.rd.services/platform/events?event_type=conversion
+
+O evento de conversão pode ser utilizado para criar e atualizar contatos na Base de Leads. O RD Station Marketing considera o valor do atributo conversion_identifier como identificador do evento customizado. Esse evento é registrado sempre que ocorre uma conversão.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+event_type
+string
+required
+Defaults to CONVERSION
+O event_type diferencia tipo do evento. Para o evento de conversão, deve ser enviado como "CONVERSION"
+
+CONVERSION
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+
+payload object
+Responses
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+
+400
+400
+
+Eventos de Qualificação do Contato
+Os eventos de Qualificação do Contato são definidos pelas transições de um Contato em um funil do RD Station. Esses eventos são:
+
+Evento de Marcação de Oportunidade;
+Evento de Marcação de Oportunidade Ganha;
+Evento de Marcação de Oportunidade Perdida;
+🚧
+Esse tipo de evento não aceita Campos Personalizados (parâmetro cf_custom_field_api_identifier)
+❗️
+Estes eventos não criam um novo contato e requer a existência de um contato prévio para serem processados.
+Para criar o contato, pode ser utilizado o Evento de Conversão Padrão e, alguns minutos depois, enviar o evento de qualificação do contato.
+
+Updated 7 months ago
+
+Evento de conversão padrão
+Evento de Marcação de Oportunidade
+Did this page help you?
+Evento de Marcação de Oportunidade
+post
+https://api.rd.services/platform/events?event_type=opportunity
+
+O evento de Marcação de Oportunidade, registra a marcação de um contato como oportunidade no RD Station Marketing. Este evento não cria um novo contato e requer a existência de um contato prévio para serem processados.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+❗️
+Este evento não registra campos personalizados e não cria um novo contato. Ele requer a existência de um contato prévio na Base de Leads para ser processado.
+Para criar o contato e registrar campos personalizados, pode ser utilizado o Evento de Conversão Padrão e, alguns minutos depois, enviar o evento de qualificação do contato.
+
+Body Params
+event_type
+string
+required
+Defaults to OPPORTUNITY
+O event_type diferencia tipo do evento. Para o evento de oportunidade, deve ser enviado como "OPPORTUNITY"
+
+OPPORTUNITY
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 7 months ago
+
+Eventos de Qualificação do Contato
+
+
+Evento de Marcação de Oportunidade Ganha
+post
+https://api.rd.services/platform/events?event_type=sale
+
+O evento de Marcação de Oportunidade Ganha, registra um contato como oportunidade ganha no RD Station Marketing. Este evento não cria um novo contato e requer a existência de um contato prévio para serem processados.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+❗️
+Este evento não registra campos personalizados e não cria um novo contato. Ele requer a existência de um contato prévio na Base de Leads para ser processado.
+Para criar o contato e registrar campos personalizados, pode ser utilizado o Evento de Conversão Padrão e, alguns minutos depois, enviar o evento de qualificação do contato.
+
+Body Params
+event_type
+string
+required
+Defaults to SALE
+O event_type diferencia tipo do evento. Para o evento de oportunidade ganha, deve ser enviado como "SALE"
+
+SALE
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+Evento de Marcação de Oportunidade Perdida
+post
+https://api.rd.services/platform/events?event_type=opportunity_lost
+
+O evento de Marcação de Oportunidade Perdida, registra um contato como oportunidade perdida no RD Station Marketing. Este evento não cria um novo contato e requer a existência de um contato prévio para serem processados.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+❗️
+Este evento não registra campos personalizados e não cria um novo contato. Ele requer a existência de um contato prévio na Base de Leads para ser processado.
+Para criar o contato e registrar campos personalizados, pode ser utilizado o Evento de Conversão Padrão e, alguns minutos depois, enviar o evento de qualificação do contato.
+
+Body Params
+event_type
+string
+required
+Defaults to OPPORTUNITY_LOST
+O event_type diferencia tipo do evento. Para o evento de oportunidade perdida, deve ser enviado como "OPPORTUNITY_LOST"
+
+OPPORTUNITY_LOST
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 7 months ago
+
+Evento de MarcEventos de E-commerce
+Os Eventos de E-commerce são responsáveis por descrever o comportamento de um contato no processo de compra de produtos em um E-commerce.
+
+Por meio desses eventos é possível indicar quando um contato fecha um pedido ou até mesmo abandona um carrinho, informando quais os produtos envolvidos no processo.
+
+
+❗️
+Os eventos de Ecommerce serão melhor aproveitados ao usar o RD Station Marketing para Ecommerce junto do plano Pro ou Advanced, solicite a migração no Fale conosco da RD Station.
+
+Lista de Eventos
+Evento	Descrição
+ECOMMERCE_CHECKOUT_STARTED	Início do processo de checkout
+ECOMMERCE_CART_ABANDONED	Carrinho abandonado após período de inatividade
+ECOMMERCE_ORDER_PLACED	Pedido finalizado (antes do pagamento)
+ECOMMERCE_ORDER_PAID	Pagamento confirmado
+ECOMMERCE_ORDER_FULFILLED	Pedido parcialmente ou totalmente enviado ao cliente
+ECOMMERCE_SHIPMENT_DELIVERED	Entrega realizada ao cliente
+ECOMMERCE_ORDER_CANCELLED	Pedido cancelado pelo cliente ou pela loja
+ECOMMERCE_ORDER_REFUNDED	Pedido parcialmente ou totalmente reembolsado
+
+Bases Legais
+Esse tipo de evento aceita a atualização de Bases Legais:
+
+Campo	Tipo	Parâmetros válidos	Descrição
+category	String	communications	A única categoria aceita é "communications".
+type	String	pre_existent_contract, consent, legitimate_interest, judicial_process, vital_interest or public_interest	Qual base legal autoriza o tratamento de dados pessoais.
+status	String	granted or declined	Valores aceitos: "granted" para confirmar o consentimento e "declined" para indicar que o consentimento foi recusado.
+Saiba mais sobre os conceitos de Bases Legais aqui.
+
+
+Validação dos Produtos
+Os eventos que contêm produtos (como ECOMMERCE_CHECKOUT_STARTED, ECOMMERCE_ORDER_PLACED ou ECOMMERCE_CART_ABANDONED) não realizam validação automática contra o catálogo de produtos ativos na conta.
+
+Essa escolha foi feita para garantir maior flexibilidade e tolerância a inconsistências temporárias de catálogo. Isso significa que:
+• Produtos referenciados nos eventos não precisam existir previamente no feed de catálogo configurado.
+• O envio do evento não será bloqueado mesmo que os atributossku, product_ids e variant_id não estejam no catálogo.
+
+
+Comportamento Específico: ECOMMERCE_CART_ABANDONED
+O evento ECOMMERCE_CART_ABANDONED permite indicar que um cliente iniciou uma jornada de compra e abandonou o processo antes de concluir o pedido. Esse evento é fundamental para ações de remarketing, como e-mails automáticos de recuperação de carrinho.
+
+O sistema permite utilizar os produtos enviados no evento de carrinho abandonado para preencher dinamicamente blocos de produto nos modelos de e-mails. Para que isso funcione corretamente, é necessário atender aos seguintes requisitos:
+
+A conta precisa ter configurado a funcionalizade de Sincronização de Catálogo Personalizado.
+→ Consulte o guia de ajuda: Sincronizar catálogo personalizado de produtos no RD Station Marketing para Ecommerce
+O evento deve conter a lista de produtos abandonados, com seus respectivos atributos product_id, variant_id e sku.
+Os produtos referenciados devem estar listados no catálogo de produtos configurado na conta.
+O catálogo deve conter um preço atualizado e estoque para esses produtos.
+
+⚠️
+Se um produto não for encontrado no catálogo ou não possuir um preço válido, ele não será exibido no e-mail de recuperação de carrinho.
+
+
+Esse comportamento visa garantir que apenas produtos com informações completas sejam exibidos, evitando e-mails com blocos vazios ou dados inconsistentes.
+
+Boas Práticas
+Mantenha a sincronização do seu catálogo sempre que possível.
+Evite enviar eventos com produtos que ainda não estão disponíveis no catálogo personalizado.
+Prefira que os identificadores product_id, variant_id e sku estejam consistentes entre os sistemas que geram os eventos e o sistema que lista os seus produtos para o catálogo personalizado.
+Teste seus e-mails com dados reais para garantir a exibição correta dos produtos.
+Links Úteis
+Sincronizar catálogo personalizado de produtos no RD Station Marketing para Ecommerce
+Como criar fluxo de abandono de carrinho no seu ecommerce
+Updated 7 months ago
+
+Evento de Marcação de Oportunidade Perdida
+Evento de Checkout Iniciado
+Did this page help you?Evento de Checkout Iniciado
+post
+https://api.rd.services/platform/events?event_type=ECOMMERCE_CHECKOUT_STARTED
+
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+event_type
+string
+required
+Defaults to ECOMMERCE_CHECKOUT_STARTED
+O event_type diferencia tipo do evento. Para o evento de checkout iniciado, deve ser enviado como "ECOMMERCE_CHECKOUT_STARTED"
+
+ECOMMERCE_CHECKOUT_STARTED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 7 months ago
+
+Eventos de E-commerceEvento de Carrinho Abandonado
+post
+https://api.rd.services/platform/events?event_type=ECOMMERCE_CART_ABANDONED
+
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+
+Body Params
+event_type
+string
+required
+Defaults to ECOMMERCE_CART_ABANDONED
+O event_type diferencia tipo do evento. Para o evento de carrinho abandonado, deve ser enviado como "ECOMMERCE_CART_ABANDONED"
+
+ECOMMERCE_CART_ABANDONED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 6 months ago
+
+Evento de Checkout Iniciado
+Evento de Pedido Realizado
+Did this page help you?
+Evento de Pedido Realizado
+post
+https://api.rd.services/platform/events?event_type=ECOMMERCE_ORDER_PLACED
+
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+event_type
+string
+required
+Defaults to ECOMMERCE_ORDER_PLACED
+O event_type diferencia tipo do evento. Para o evento de pedido realizado, deve ser enviado como "ECOMMERCE_ORDER_PLACED"
+
+ECOMMERCE_ORDER_PLACED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 7 months ago
+
+Evento de CarrinhoEvento de Pedido Pago
+post
+https://api.rd.services/platform/events?event_type=ECOMMERCE_ORDER_PAID
+
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+event_type
+string
+required
+Defaults to ECOMMERCE_ORDER_PAID
+O event_type diferencia tipo do evento. Para o evento de pedido pago, deve ser enviado como "ECOMMERCE_ORDER_PAID"
+
+ECOMMERCE_ORDER_PAID
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+stringEvento de Pedido Cancelado
+post
+https://api.rd.services/platform/events?event_type=ECOMMERCE_ORDER_CANCELLED
+
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+event_type
+string
+required
+Defaults to ECOMMERCE_ORDER_CANCELLED
+O event_type diferencia tipo do evento. Para o evento de pedido cancelado, deve ser enviado como "ECOMMERCE_ORDER_CANCELLED"
+
+ECOMMERCE_ORDER_CANCELLED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 7 months agoEventos de Pedido Reembolsado
+post
+https://api.rd.services/platform/events?event_type=ECOMMERCE_ORDER_REFUNDED
+
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+
+Body Params
+event_type
+string
+required
+Defaults to ECOMMERCE_ORDER_REFUNDED
+O event_type diferencia tipo do evento. Para o evento de pedido reembolsado, deve ser enviado como "ECOMMERCE_ORDER_REFUNDED"
+
+ECOMMERCE_ORDER_REFUNDED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 6 months ago
+
+Evento de Pedido Canceladoventos de Pedido Enviado
+post
+https://api.rd.services/platform/events?event_type=ECOMMERCE_ORDER_FULFILLED
+
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+
+Body Params
+event_type
+string
+required
+Defaults to ECOMMERCE_ORDER_FULFILLED
+O event_type diferencia tipo do evento. Para o evento de pedido enviado, deve ser enviado como "ECOMMERCE_ORDER_FULFILLED"
+
+ECOMMERCE_ORDER_FULFILLED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+
+Evento de Pedido Entregue
+post
+https://api.rd.services/platform/events?event_type=ECOMMERCE_SHIPMENT_DELIVERED
+
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+
+Body Params
+event_type
+string
+required
+Defaults to ECOMMERCE_SHIPMENT_DELIVERED
+O event_type diferencia tipo do evento. Para o evento de pedido entregue, deve ser enviado como "ECOMMERCE_SHIPMENT_DELIVERED"
+
+ECOMMERCE_SHIPMENT_DELIVERED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 6 months ago
+
+
+Eventos de E-commerce (Descontinuados)
+Descontinuação dos eventos ORDER_PLACED, ORDER_PLACED_ITEM, CART_ABANDONED e CART_ABANDONED_ITEM
+
+Como parte da evolução do RD Station Marketing para Ecommerce os seguites eventos estão sendo descontinuados:
+
+Evento	Novo Evento	Consideração
+ORDER_PLACED	ECOMMERCE_ORDER_PLACED	Mapeamento direto de acordo com os campos definido no payload
+ORDER_PLACED_ITEM	ECOMMERCE_ORDER_PLACED	Este evento foi unificado, agora payload completo inclui os produtos no campo items.
+CART_ABANDONED	ECOMMERCE_CART_ABANDONED	Mapeamento direto de acordo com os campos definido no payload
+CART_ABANDONED_ITEM	ECOMMERCE_CART_ABANDONED	Este evento foi unificado, agora payload completo inclui os produtos no campo items.
+Cronograma de Descontinuação
+Anúncio de Descontinuação: 01 de maio de 2025
+Fim do Suporte (Data Limite para Migração): 31 de dezembro de 2025
+
+Após a data limite, o envio desses eventos será rejeitado pela API. Além disso, a funcionalidades específicas para estes eventos, como timeline, segmentação e automação de marketing serão removidas.
+
+Como Migrar
+Atualize seu cliente de integração para utilizar os novos nomes de evento.
+Revise o payload enviado, utilizando os novos formatos e campos esperados.
+Consulte a documentação dos novos eventos para mais detalhes sobre cada tipo de evento e exemplos de payload.
+
+
+Os Eventos de E-commerce são responsáveis por descrever o comportamento de um contato no processo de compra de produtos em um E-commerce.
+
+Por meio desses eventos é possível indicar quando um contato fecha um pedido ou até mesmo abandona um carrinho, informando quais os produtos envolvidos no processo.
+
+Os eventos disponíveis são:
+
+Evento de Fechamento de Pedido:
+Registra os dados do pedido sempre que ocorre o fechamento de pedido em uma plataforma de e-commerce:
+
+
+Esse evento pode ser segmentado pelas condições: E-commerce > Pedido realizado
+
+Evento de Fechamento de Pedido com um Item específico:
+Registra os dados do item do pedido sempre que ocorre o fechamento de pedido com um item específico em uma plataforma de e-commerce:
+
+
+Esse evento pode ser segmentado pelas condições: E-commerce > Pedido realizado - item
+
+Evento de Abandono de Carrinho:
+Registra os dados do carrinho do cliente sempre que ocorre o abandono de carrinho em uma plataforma de e-commerce:
+
+
+Esse evento pode ser segmentado pelas condições: E-commerce > Carrinho abandonado
+
+Evento de Abandono de um Item do Carrinho:
+Registrada os dados dos itens do carrinho sempre que ocorre o abandono de carrinho com um item específico em uma plataforma de e-commerce:
+
+
+Esse evento pode ser segmentado pelas condições: E-commerce > Carrinho abandonado - item
+
+📘
+Para marcar o contato como Oportunidade, Oportunidade Ganha ou Perdida, utilize os Eventos de Qualificação do Contato.
+🚧
+Esse tipo de evento não aceita Campos Personalizados (parâmetro cf_custom_field_api_identifier)
+Como registrar os campos nos detalhes do Lead
+Todos os dados enviados nos Eventos de E-commerce são registrados como Dados de Conversão no Perfil do Lead.
+
+No entanto, para que esses campos sejam registrados como Dados do Lead na coluna de detalhes do Lead e possam ser segmentados, utilizados como variáveis de email e enviados para plataformas integradas com o RD Station Marketing, é necessário criar Campos Personalizados para registrar esses dados.
+
+Para isso, basta acessar o menu Converter > Campos Personalizados do RD Station Marketing e criar campos do tipo "Campo aberto - texto" com os seguintes nomes:
+
+Parâmetro da requisição que o campo é referente	Nome do campo
+cf_order_id	Order ID
+cf_order_total_items	Order Total Items
+cf_order_status	Order Status
+cf_order_payment_method	Order Payment Method
+cf_order_payment_amount	Order Payment Amount
+cf_order_product_id	Order Product ID
+cf_order_product_sku	Order Product Sku
+cf_cart_id	Cart ID
+cf_cart_total_items	Cart Total Items
+cf_cart_status	Cart Status
+cf_cart_product_id	Cart Product ID
+cf_cart_product_sku	Cart Product Sku
+O "Nome do campo" precisa, obrigatoriamente, ser escrito conforme a coluna. Mas o "Enunciado do campo", que é utilizado em segmentações e em formulários, por exemplo, pode ser personalizado com o nome que desejar.
+
+Bases Legais
+Esse tipo de evento aceita a atualização de Bases Legais:
+
+Campo	Tipo	Parâmetros válidos	Descrição
+category	String	communications	A única categoria aceita é "communications".
+type	String	pre_existent_contract, consent, legitimate_interest, judicial_process, vital_interest or public_interest	Qual base legal autoriza o tratamento de dados pessoais.
+status	String	granted or declined	Valores aceitos: "granted" para confirmar o consentimento e "declined" para indicar que o consentimento foi recusado.
+Saiba mais sobre os conceitos de Bases Legais aqui.
+
+Updated 7 months ago
+
+Evento de Pedido Entregue
+Evento de Fechamento de Pedido
+post
+deprecated
+https://api.rd.services/platform/events?event_type=order_placed
+
+
+O RD Station Marketing considera sempre o valor do atributo event_type ORDER_PLACED como identificador deste evento customizado. Esse evento é registrado sempre que ocorre o fechamento de pedido em uma plataforma de e-commerce.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+Esse tipo de evento não aceita Campos Personalizados (parâmetro cf_custom_field_api_identifier)
+Body Params
+event_type
+string
+required
+Defaults to ORDER_PLACED
+O event_type diferencia tipo do evento. Para o evento de pedido realizado, deve ser enviado como "ORDER_PLACED"
+
+ORDER_PLACED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 6 months ago
+
+Eventos de E-commerce (Descontinuados)
+Evento de Fechamento de Evento de Fechamento de Pedido com um Item específico
+post
+deprecated
+https://api.rd.services/platform/events?event_type=order_placed_item
+
+
+O RD Station Marketing considera sempre o valor do atributo event_type ORDER_PLACED_ITEM como identificador do evento customizado. Esse evento é registrado sempre que ocorre o fechamento de pedido com um item específico em uma plataforma de e-commerce.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+Esse tipo de evento não aceita Campos Personalizados (parâmetro cf_custom_field_api_identifier)
+Body Params
+event_type
+string
+required
+Defaults to ORDER_PLACED_ITEM
+O event_type diferencia tipo do evento. Para o evento de item de pedido realizado, deve ser enviado como "ORDER_PLACED_ITEM"
+
+ORDER_PLACED_ITEM
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 6 months agoEvento de Abandono de Carrinho
+post
+deprecated
+https://api.rd.services/platform/events?event_type=cart_abandoned
+
+
+O RD Station Marketing considera sempre o valor do atributo event_type CART_ABANDONED como identificador do evento customizado. Esse evento é registrado sempre que ocorre o abandono de carrinho em uma plataforma de e-commerce.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+Esse tipo de evento não aceita Campos Personalizados (parâmetro cf_custom_field_api_identifier)
+Body Params
+event_type
+string
+required
+Defaults to CART_ABANDONED
+O event_type diferencia tipo do evento. Para o evento de carrinho abandonado, deve ser enviado como "CART_ABANDONED"
+
+CART_ABANDONED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 6 months agovento de Abandono de um Item do Carrinho
+post
+deprecated
+https://api.rd.services/platform/events?event_type=cart_abandoned_item
+
+
+O RD Station Marketing considera sempre o valor do atributo event_type CART_ABANDONED_ITEM como identificador do evento customizado. Esse evento é registrado sempre que ocorre o abandono de carrinho com um item específico em uma plataforma de e-commerce.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+Esse tipo de evento não aceita Campos Personalizados (parâmetro cf_custom_field_api_identifier)
+
+Body Params
+event_type
+string
+required
+Defaults to CART_ABANDONED_ITEM
+O event_type diferencia tipo do evento. Para o evento de item de carrinho abandonado, deve ser enviado como "CART_ABANDONED_ITEM"
+
+CART_ABANDONED_ITEM
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 6 months ago
+
+Evento de Abandono de CarrinhoEventos de Chat
+Os eventos de chat possibilitam avisar o RD Station sempre que um contato inicia ou termina uma conversa via chat. Assim sendo, os apps integrados precisam apenas disparar as chamadas a API do RD Station no momento desejado.
+
+🚧
+Esse tipo de evento não aceita Campos Personalizados (parâmetro cf_custom_field_api_identifier)
+Bases Legais
+Esse tipo de evento aceita a atualização de Bases Legais:
+
+Campo	Tipo	Parâmetros válidos	Descrição
+category	String	communications	A única categoria aceita é "communications".
+type	String	pre_existent_contract, consent, legitimate_interest, judicial_process, vital_interest or public_interest	Qual base legal autoriza o tratamento de dados pessoais.
+status	String	granted or declined	Valores aceitos: "granted" para confirmar o consentimento e "declined" para indicar que o consentimento foi recusado.
+Saiba mais sobre os conceitos de Bases Legais aqui.
+
+Updated 7 months ago
+
+Evento de Abandono de um Item do Carrinho
+Evento de Início da ConversaEvento de Início da Conversa
+post
+https://api.rd.services/platform/events?event_type=chat_started
+
+O RD Station Marketing considera sempre o valor do atributo event_type CHAT_STARTED como identificador do evento customizado. Esse evento é registrado sempre que ocorre o início de uma conversa em um chat.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+event_type
+string
+required
+Defaults to CHAT_STARTED
+O event_type diferencia tipo do evento. Para o evento de início de chat, deve ser enviado como "CHAT_STARTED"
+
+CHAT_STARTED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Evento de Término da Conversa
+post
+https://api.rd.services/platform/events?event_type=chat_finished
+
+O RD Station Marketing considera sempre o valor do atributo event_type CHAT_FINISHED como identificador do evento customizado. Esse evento é registrado sempre que ocorre o término de uma conversa em um chat.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+event_type
+string
+required
+Defaults to CHAT_FINISHED
+O event_type diferencia tipo do evento. Para o evento de término de chamada, deve ser enviado como "CHAT_FINISHED"
+
+CHAT_FINISHED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 7 months agoEventos de Chamada
+Os eventos de chamada possibilitam avisar o RD Station sempre que um contato termina uma ligação.
+
+🚧
+Esse tipo de evento não aceita Campos Personalizados (parâmetro cf_custom_field_api_identifier)
+Bases Legais
+Esse tipo de evento aceita a atualização de Bases Legais:
+
+Campo	Tipo	Parâmetros válidos	Descrição
+category	String	communications	A única categoria aceita é "communications".
+type	String	pre_existent_contract, consent, legitimate_interest, judicial_process, vital_interest or public_interest	Qual base legal autoriza o tratamento de dados pessoais.
+status	String	granted or declined	Valores aceitos: "granted" para confirmar o consentimento e "declined" para indicar que o consentimento foi recusado.
+Saiba mais sobre os conceitos de Bases Legais aqui.
+
+Updated 7 months ago
+
+Evento de Término da Conversa
+Evento de Chamada Concluída
+Did this page help you?
+Evento de Chamada Concluída
+post
+https://api.rd.services/platform/events?event_type=call_finished
+
+O RD Station Marketing considera o valor do atributo event_type CALL_FINISHED como identificador do evento customizado. Esse evento é registrado sempre que uma chamada é concluída.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+event_type
+string
+required
+Defaults to CALL_FINISHED
+O event_type diferencia tipo do evento. Para o evento de término de chamada, deve ser enviado como "CALL_FINISHED"
+
+CALL_FINISHED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 7 months ago
+
+Eventos de ChamadaEventos de Mídia
+Os eventos de mídia possibilitam avisar o RD Station sempre que um contato começa ou termina de consumir uma mídia (áudio ou vídeo).
+
+🚧
+Esse tipo de evento não aceita Campos Personalizados (parâmetro cf_custom_field_api_identifier)
+Bases Legais
+Esse tipo de evento aceita a atualização de Bases Legais:
+
+Campo	Tipo	Parâmetros válidos	Descrição
+category	String	communications	A única categoria aceita é "communications".
+type	String	pre_existent_contract, consent, legitimate_interest, judicial_process, vital_interest or public_interest	Qual base legal autoriza o tratamento de dados pessoais.
+status	String	granted or declined	Valores aceitos: "granted" para confirmar o consentimento e "declined" para indicar que o consentimento foi recusado.
+Saiba mais sobre os conceitos de Bases Legais aqui.
+
+Updated 7 months ago
+
+Evento de Chamada Concluída
+Evento de Início do Evento de Início do Playback de uma Mídia
+post
+https://api.rd.services/platform/events?event_type=media_playback_started
+
+
+O RD Station Marketing considera sempre o valor do atributo event_type MEDIA_PLAYBACK_STARTED como identificador do evento customizado. Esse evento é registrado sempre que ocorre o início do playback de uma mídia.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+event_type
+string
+required
+Defaults to MEDIA_PLAYBACK_STARTED
+O event_type diferencia tipo do evento. Para o evento de início de reprodução de mídia, deve ser enviado como "MEDIA_PLAYBACK_STARTED"
+
+MEDIA_PLAYBACK_STARTED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 7 months agoEvento de Término do Playback de uma Mídia
+post
+https://api.rd.services/platform/events?event_type=media_playback_stopped
+
+
+O RD Station Marketing considera sempre o valor do atributo event_type MEDIA_PLAYBACK_STOPPED como identificador do evento customizado. Esse evento é registrado sempre que ocorre o término do playback de uma mídia.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+event_type
+string
+required
+Defaults to MEDIA_PLAYBACK_STOPPED
+O event_type diferencia tipo do evento. Para o evento de parada de reprodução de mídia, deve ser enviado como "MEDIA_PLAYBACK_STOPPED"
+
+MEDIA_PLAYBACK_STOPPED
+event_family
+string
+required
+Defaults to CDP
+O event_family é definido para fins de processamento. Atualmente, é aceito apenas "CDP" como opção válida
+
+CDP
+payload
+object
+required
+
+payload object
+Response
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+Updated 7 months ago
+Batch de Eventos
+O endpoint de grupo de eventos permite que o RD Station receba mais de um evento ao mesmo tempo. Isso permite que eventos de pedido fechado e os itens que foram inclusos no pedido sejam enviados por meio de apenas uma chamada para a API.
+
+📘
+O tamanho do body das requisições nessa rota possui um limite de 0,2Mb.
+POST https://api.rd.services/platform/events/batch
+Request body parameters
+Field
+
+Type
+
+Required
+
+Description
+
+event_type
+
+String
+
+true
+
+O event_type diferencia o tipo do evento. As opções aceitas são: CONVERSION, OPPORTUNITY, SALE, OPPORTUNITY_LOST, CHAT_STARTED, CHAT_FINISHED, CALL_FINISHED, MEDIA_PLAYBACK_STARTED, MEDIA_PLAYBACK_STOPPED, ECOMMERCE_CHECKOUT_STARTED, ECOMMERCE_CART_ABANDONED, ECOMMERCE_ORDER_PLACED, ECOMMERCE_ORDER_PAID, ECOMMERCE_ORDER_FULFILLED, ECOMMERCE_SHIPMENT_DELIVERED, ECOMMERCE_ORDER_CANCELLED e ECOMMERCE_ORDER_REFUNDED.
+
+Serão aceitos os eventos de e-commerce (descontinuados) até 31 de dezembro de 2025. São eles: ORDER_PLACED, ORDER_PLACED_ITEM, CART_ABANDONED e CART_ABANDONED_ITEM.
+
+event_family
+
+String
+
+true
+
+O event_family é definido para fins de processamento.Atualmente, é aceito apenas "CDP" como opção válida.
+
+payload
+
+Object
+
+true
+
+O payload contendo os atributos do event_type relacionado, conforme definido acima.
+
+Request body example
+
+[
+  {
+    "event_type" : "#type",
+    "event_family" : "CDP",
+    "payload": {
+      /* ... */
+    }
+  },
+  {
+    "event_type" : "#type",
+    "event_family" : "CDP",
+    "payload": {
+      /* ... */
+    }
+  },
+  {
+    "event_type" : "#type",
+    "event_family" : "CDP",
+    "payload":
+    {
+      /* ... */
+    }
+  },
+  /* ... */
+]
+Request response example
+Success | Code: 200
+
+{
+    "event_batch_uuid": "UUID of the batch",
+    "events":[
+	     { "event_uuid":"Event UUID" },
+	     { "event_uuid":"Event UUID" },
+	     { "event_uuid":"Event UUID" },
+       /* ... */
+     ]
+}
+The event uuid array is organized according to the the order of the array sent in the request payload.
+Updated 7 months ago
+
+Evento de Término do Playback de uma Mídia
+Evento de Conversão via API Key
+A API key método envolve o uso de chaves exclusivas para autenticar e controlar o acesso aos recursos da API, garantindo segurança e identificação do aplicativo que está realizando as requisições.
+
+É uma forma fácil de fornecer acesso seguro de um sistema a uma Web API.
+
+Com a API Key é muito mais simples para enviar eventos de conversão e integrar os seus formulários com o RD Station Marketing, pois as "chaves" são estáticas, curtas e não expiram. Você faz a chamada informando a API Key e pronto, obtém a resposta, sem fluxos adicionais, sem refresh, etc.
+
+Ou seja, a chave será válida até que você revogue o seu acesso.
+
+📘
+Por que usar Chaves de API
+As APIs 1.2 e 1.3 são modelos de autenticação simples, quando comparado com o OAuth. Porém, com a API 2.0, além de recursos novos, você também poderá utilizar as Chaves de API.
+
+As chaves de API não são tão seguras quanto a autenticação via OAuth, mas elas ajudam a identificar o aplicativo ou projeto que está chamando uma API de uma forma mais simples.
+
+As integrações de formulário, por exemplo, contam com os recursos das APIs 1.2 e 1.3, e com a utilização das Chaves de API, você passará a ter total controle na criação, ativação e desativação dos tokens.
+
+Bases Legais
+Esse tipo de evento aceita a atualização de Bases Legais:
+
+Campo	Tipo	Parâmetros válidos	Descrição
+category	String	communications	A única categoria aceita é "communications".
+type	String	pre_existent_contract, consent, legitimate_interest, judicial_process, vital_interest or public_interest	Qual base legal autoriza o tratamento de dados pessoais.
+status	String	granted or declined	Valores aceitos: "granted" para confirmar o consentimento e "declined" para indicar que o consentimento foi recusado.
+Saiba mais sobre os conceitos de Bases Legais aqui.
+
+O que ela faz
+Cria e atualiza contatos na Base de Leads, registrando um evento de conversão com campos padrão e/ou personalizados.
+
+Casos de utilização
+Integrações de formulário de conversão;
+Sistemas internos que enviam conversões para o RD Station Marketing.
+Requisitos
+Para utilizar esse recurso, você precisa:
+
+Criar um App na Appstore do RD Station Marketing;
+Gerar a sua chave;
+E utilizar a chave na sua requisição.
+Passo a passo para utilizar a API Key
+Confira aqui todos os detalhes sobre:
+
+Como gerar a sua API Key
+Como enviar os eventos de conversão
+Updated 7 months ago
+
+Batch de Eventos
+Segurança da API Key
+Did this page help you?Segurança da API Key
+❗
+Segurança da Chave de API
+As Chaves de API concedem acesso total à sua conta do RD Station Marketing e devem ser protegidas da mesma forma que uma senha.
+
+Existem alguns cenários comuns que devem ser levados em conta ao trabalhar com Chaves de API, veja cada uma delas abaixo:
+
+Cada integração deve ter a própria Chave de API
+Nomeie cada Chave corretamente, para saber qual delas funciona com cada aplicativo. Se uma Chave de API específica for comprometida, você poderá desativá-la sem desativar o acesso às demais integrações.
+
+Não exponha suas Chaves ao público
+Tenha cuidado para que suas Chaves não sejam expostas em capturas de tela, vídeos ou documentação de ajuda. Vale lembrar que desfocar os dados em uma imagem nem sempre é o suficiente, o melhor é recortar parte da imagem removendo completamente os dados.
+
+Compartilhamento de Chave
+Caso seja necessário compartilhar uma Chave, nossa recomendação é que você gere uma nova Chave e rotule-a de forma correspondente para poder desativá-la, se necessário. Nunca envie a Chave de API por email, pois, caso a conta de email seja invadida por hackers, eles poderão enviar conversões para a conta do RD Station Marketing.
+
+Acesso a lista de Chaves
+O acesso à lista de Chaves é determinado pela função da pessoa usuária que gerou a Chave de API. Para saber mais sobre as permissões e perfil de cada usuário, acesse suas configurações.
+Autenticação API Key
+Passo a passo para criar sua Chave
+O processo de Autenticação da API Key consiste em criar uma chave única; que não expira para autorizar o envio das requisições.
+
+Para criar a sua chave, siga os passos abaixo:
+
+Acesse a App Publisher na App store do RD Station Marketing e, na página de gerenciamento, faça o login na conta desejada.
+Clique em Gerar chave de API:
+
+Se for a primeira Chave criada na conta, o sistema automaticamente irá exibir a Chave criada. Se já existir outras Chaves criadas na conta, elas serão exibidas em uma lista e você deve clicar em Gerar chave de API para criar uma nova chave. Pronto! A sua Chave está criada.
+
+Clique na coluna NOME DA CHAVE para atribuir um nome único para a Chave. Isso irá te auxiliar na hora de gerenciar e localizar as Chaves.
+Escolha se a Chave criada ficará ativa ou inativa clicando no botão de ATIVO/INATIVO.
+Copie o código da Chave para enviá-lo via Query String pelo parâmetro api_key do script do formulário para autorizar o envio de requisições para o RD Station Marketing.que irá utilizar para integrações de conversões com RD Station Marketing.
+⚠️
+Informações importantes
+A Chave de API suporta apenas eventos de conversão;
+Você poderá criar até 5 Chaves;
+Não é possível realizar a exclusão de Chaves, permitimos somente ativação e desativação;
+Não é necessário a implementação do protocolo OAuth para a utilização das Chaves de API;
+O usuário do RD Station Marketing precisa ter o perfil de acesso de Gestor ou Dono para acessar a tela de gerenciamento de Chaves da API.
+Updated 7 months ago
+
+Próximo passo:
+Próximo passo:
+Confira como enviar requisições para registrar um Evento de Conversão Padrão utilizando a API Key.
+
+Conversão via API Key
+Conversão via API Key
+post
+https://api.rd.services/platform/conversions
+
+O evento de conversão pode ser utilizado para criar e atualizar contatos na Base de Leads. O RD Station Marketing considera o valor do atributo conversion_identifier como identificador da conversão.
+Esse evento é registrado sempre que ocorre uma conversão.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+
+Query Params
+api_key
+string
+required
+Body Params
+event_type
+string
+required
+Defaults to CONVERSION
+O tipo de evento que diferencia o evento. Para o evento de conversão deve ser enviado como "CONVERSION".
+
+CONVERSION
+event_family
+string
+required
+Defaults to CDP
+A família do evento para fins de processamento. Atualmente aceita apenas "CDP" como opção válida.
+
+CDP
+payload
+object
+required
+
+payload object
+Headers
+Content-Type
+string
+required
+Defaults to application/json
+application/json
+Responses
+
+200
+200
+
+Response body
+object
+event_uuid
+string
+
+400
+400
+
+Catálogo de produtos
+Temos o prazer de apresentar as APIs de Catálogo de Produtos, uma ferramenta poderosa para você gerenciar seus catálogos de produtos de forma eficiente e integrada. Com elas, você terá total controle sobre a criação, edição, consulta e remoção dos seus catálogos.
+
+O que você pode fazer com as APIs?
+As APIs de Catálogo de Produtos oferecem as seguintes funcionalidades:
+
+Consultar Catálogos: Recupere os detalhes de seus catálogos cadastrados
+Criar Catálogos: Adicione novos catálogos de produtos à sua conta
+Editar Catálogos: Atualize as informações de catálogos existentes
+Remover Catálogos: Exclua catálogos que não são mais necessários
+Detalhes do Catálogo
+Cada catálogo deve conter as seguintes informações obrigatórias:
+
+Nome: Um nome descritivo para o seu catálogo.
+URL: O endereço de onde os produtos serão consumidos.
+Formato: O formato dos dados dos produtos, podendo ser JSON ou XML.
+Opcionalmente, você pode incluir usuário e senha para autenticação básica HTTP, caso seu catálogo exija essa camada de segurança.
+
+Formatos dos catálogos
+Para garantir a compatibilidade e a correta interpretação dos dados, os padrões para os formatos JSON e XML estão detalhadamente documentados em nosso portal do desenvolvedor:
+
+Documentação: https://github.com/ResultadosDigitais/ecommerce-devportal
+Recomendamos fortemente a consulta a essa documentação para garantir a correta formatação dos seus dados.
+
+Importante: Limitações Atuais
+Para otimizar a performance e a experiência de uso, observe as seguintes limitações no momento:
+
+Um catálogo por conta: No momento, cada conta poderá cadastrar apenas 1 catálogo
+Conflito com Integração Nativa: Você só poderá cadastrar, editar ou remover catálogos se não estiver utilizando uma integração nativa em sua conta (exemplo: shopify, tray, vtex, etc).Listar catálogos
+get
+https://api.rd.services/platform/catalog_feeds
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Responses
+
+200
+200
+
+Response body
+array of objects
+object
+id
+integer
+Defaults to 0
+name
+string
+url
+string
+status
+string
+format
+string
+created_at
+string
+updated_at
+string
+credentials
+string
+
+400
+400
+
+
+409
+409
+
+Updated 7 months agoConsultar catálogo por id
+get
+https://api.rd.services/platform/catalog_feeds/{CATALOG_FEED_ID}
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+CATALOG_FEED_ID
+int32
+required
+ID do catálogo
+
+Responses
+
+200
+200
+
+Response body
+object
+id
+integer
+Defaults to 0
+name
+string
+url
+string
+status
+string
+format
+string
+created_at
+string
+updated_at
+string
+credentials
+string
+
+404
+404
+Cadastrar catálogo
+post
+https://api.rd.services/platform/catalog_feeds
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+name
+string
+required
+Defaults to Meu catálogo
+Nome do catálogo
+
+Meu catálogo
+url
+string
+required
+Defaults to https://meusite.com/catalogo.json
+URL do catálogo
+
+https://meusite.com/catalogo.json
+format
+string
+enum
+required
+Defaults to json
+Formato do catálogo
+
+
+json
+Allowed:
+
+xml
+
+json
+
+google_shopping
+username
+string
+Usuário da autenticação básica
+
+password
+string
+Senha da autenticação básica
+
+Responses
+
+200
+200
+
+Response body
+object
+id
+integer
+Defaults to 0
+name
+string
+url
+string
+status
+string
+format
+string
+created_at
+string
+updated_at
+string
+credentials
+string
+
+400
+400
+
+
+409
+409
+
+Updated 7 months ago
+
+Deletar catálogo
+delete
+https://api.rd.services/platform/catalog_feeds/{CATALOG_FEED_ID}
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+CATALOG_FEED_ID
+int32
+required
+ID do catálogo
+
+Headers
+accept
+string
+enum
+Defaults to application/json
+Generated from available response content types
+
+
+text/plain
+Allowed:
+
+application/json
+
+text/plain
+Responses
+
+204
+204
+
+Response body
+json
+
+400
+400
+
+
+404
+404
+
+
+409
+409
+
+Updated 7 months ago
+
+Atualizar catálogo
+Introdução e re
+Atualizar catálogo
+patch
+https://api.rd.services/platform/catalog_feeds/{CATALOG_FEED_ID}
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+CATALOG_FEED_ID
+int32
+required
+ID do catálogo
+
+Body Params
+name
+string
+required
+Defaults to Meu catálogo
+Nome do catálogo
+
+Meu catálogo
+url
+string
+required
+Defaults to https://meusite.com/catalogo.json
+URL do catálogo
+
+https://meusite.com/catalogo.json
+format
+string
+enum
+required
+Defaults to json
+Formato do catálogo
+
+
+json
+Allowed:
+
+xml
+
+json
+
+google_shopping
+username
+string
+Usuário da autenticação básica
+
+password
+string
+Senha da autenticação básica
+
+Responses
+
+200
+200
+
+Response body
+object
+id
+integer
+Defaults to 0
+name
+string
+url
+string
+status
+string
+format
+string
+created_at
+string
+updated_at
+string
+credentials
+string
+
+400
+400
+
+
+404
+404
+
+
+409
+409
+
+Updated 7 months ago
+
+Próximo passo:
+Deletar catálogo
+
+Deletar catálogo
+delete
+https://api.rd.services/platform/catalog_feeds/{CATALOG_FEED_ID}
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+CATALOG_FEED_ID
+int32
+required
+ID do catálogo
+
+Headers
+accept
+string
+enum
+Defaults to application/json
+Generated from available response content types
+
+
+text/plain
+Allowed:
+
+application/json
+
+text/plain
+Responses
+
+204
+204
+
+Response body
+json
+
+400
+400
+
+
+404
+404
+
+
+409
+409

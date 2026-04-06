@@ -1777,9 +1777,13 @@ function LiveChat() {
                     <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                       {selectedVisitor.notes && selectedVisitor.notes.length > 0 ? (
                         [...selectedVisitor.notes].reverse().map((n, i) => {
-                          // Extrai link do RD Station da nota para criar botão dedicado
-                          const rdLinkMatch = n.content.match(/https:\/\/app\.rdstation\.com\.br\/crm\/[\w\-\/]+/);
-                          const cleanContent = n.content.replace(/Link: https:\/\/[^\s]+/g, "").trim();
+                          // Extrai qualquer URL do RD Station da nota (com ou sem prefixo "Link: ")
+                          const rdLinkMatch = n.content.match(/https:\/\/app\.rdstation\.com\.br\/(?:crm|sales)\/[\w\-\/]+/);
+                          // Remove a URL bruta do texto do card — vai virar botão dedicado
+                          const cleanContent = n.content
+                            .replace(/Link:\s*https:\/\/[^\s]+/g, "")
+                            .replace(/https:\/\/app\.rdstation\.com\.br\/[^\s]+/g, "")
+                            .trim();
                           return (
                             <div key={i} className="p-2.5 bg-white border border-zinc-200/70 rounded-xl shadow-sm">
                               <div className="flex justify-between items-center mb-1">

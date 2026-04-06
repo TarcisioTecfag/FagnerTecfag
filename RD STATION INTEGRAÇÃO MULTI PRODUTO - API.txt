@@ -1,0 +1,853 @@
+Webhook Service
+O Webhook é a funcionalidade da API que possibilita a automatização do envio de dados e atividades de contatos do RD Station Marketing e CRM para sistemas externos. Assim, é possível que você utilize o seu próprio aplicativo personalizado para ler, salvar e realizar ações com esses dados. Esta é uma opção poderosa que permite manter todos os seus dados em sincronia e abre a possibilidade para todos os tipos de integração.
+
+Sempre que o evento configurado como gatilho no Webhook é acionado, o RD Station Marketing fará o disparo de um LEAD e o RD Station CRM fará o disparo de uma Negociação para integrações externas, contendo o payload padrão em JSON ("pacote de dados") único e imutável para a URL de destino, que vai vai conter todas as informações disponíveis no Perfil do Lead ou todas as informações da Negociação, o que inclui todos os campos padrão e personalizados que foram preenchidos.
+
+Para informações sobre autenticação (OAUTH) para uso das APIs de Webhooks, consulte a seção de Autenticação da API .
+
+Eventos que acionam o envio dos Webhooks
+O evento que vai acionar o envio do payload conforme descrição abaixo:
+
+Eventos do RD Station Marketing:
+Conversão: envia os leads que realizaram alguma conversão no RD Station Marketing. Você pode selecionar quais serão essas conversões ou deixar em branco. Neste caso, todo lead que realizar uma conversão será enviado. Se as conversões forem realizadas em uma Landing Page, Formulário ou Pop-up do RD Station Marketing, o identificador vai ser o título da página/nome do elemento criado; se for integrado (formulários integrados, API, etc), eles podem ser identificados pelo identificador da conversão;
+Oportunidade: envia os leads marcados como Oportunidade (estrelinha). Exemplo: enviar o lead do RD Station Marketing para a ferramenta apenas quando ele for marcado como oportunidade manualmente, por integração ou por um fluxo de automação.
+📘
+O envio será acionado sempre que o contato cumprir o gatilho configurado no Webhook.
+Por exemplo, se o gatilho é "conversão" em qualquer evento,o contato será enviado mais de uma vez; sempre que ocorrer a conversão.
+
+Evento do RD Station CRM:
+Negociação: envia informações sobre uma negociação presente no CRM. Exemplo.: Se ocorreu uma criação de negociação, atualização de informações ou deleção da negociação.
+🚧
+Nota: Para utilizar o evento de negociação é necessário ter uma conta no RD Station CRM e ser assinante do plano Basic ou PRO.
+📘
+O tipo de evento que aciona a solicitação de webhook é definido pelo campo "entity_type".
+Segue a lista de tipos de eventos suportados:
+"WEBHOOK.CONVERTED", "WEBHOOK.MARKED_OPPORTUNITY"
+"crm_deal_created", "crm_deal_updated", "crm_deal_deleted"
+
+Requisitos para funcionamento dos Webhooks
+Os Webhooks criados devem obedecer aos seguintes requisitos:
+
+Ser capaz de receber e consumir dados em formato JSON;
+Possuir certificado de segurança;
+Ter compatibilidade para fazer a leitura do pacote de dados que o RD Station envia;
+Estar funcional, respondendo requisições POST com status 2.xx.
+⚠️
+Importações e atualizações manuais do contato não acionam os Webhooks.
+Autenticação
+Webhooks do RD Station CRM oferecem suporte a autenticação por cabeçalho HTTP customizado, permitindo que integrações externas validem a origem das requisições recebidas.
+
+O RD Station CRM incluirá automaticamente o cabeçalho configurado em todas as requisições disparadas pelo webhook quando forem informados os parâmetros:
+
+auth_header: nome do cabeçalho HTTP que será enviado na requisição.
+
+auth_key: valor que será atribuído ao cabeçalho definido em auth_header.
+
+Caso os parâmetros de autenticação não sejam informados, o comportamento do webhook permanece o mesmo, sendo enviada apenas a requisição padrão com Content-Type: application/json.
+
+Gestão de Webhooks
+Nesta documentação, mostramos como fazer a gestão dos Webhooks da API 2.0:
+
+Listar todos os webhooks
+Criar um webhook
+Lista um webhook
+Atualizar webhook
+Deletar um webhook
+
+Criar um webhook
+post
+https://api.rd.services/integrations/webhooks
+
+Cria uma assinatura de webhook na conta que a sua integração está vinculada. Os webhooks criados não serão listados na tela do RD Station Marketing.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+🚧
+Requisitos para criação do Webhook
+Ao criar uma nova assinatura, o endpoint executa uma validação inicial. A solicitação deve retornar um status 2xx para ser considerada bem-sucedida. Caso a validação falhe, o endpoint retorna 401 Unauthorized, e a assinatura não será criada.
+Não é permitido o cadastro de URLs duplicadas para o mesmo event_type. Nesses casos, deve-se atualizar a assinatura já existente informando o event_type desejado. Para modificar uma assinatura já criada, utilize o endpoint em Atualizar um Webhook.
+Body Params
+event_type
+string
+enum
+required
+O tipo de evento que aciona a solicitação de webhook. Atualmente somente eventos de negociação, conversão e oportunidade são suportados
+
+
+WEBHOOK.CONVERTED
+Allowed:
+
+WEBHOOK.CONVERTED
+
+WEBHOOK.MARKED_OPPORTUNITY
+
+crm_deal_created
+
+crm_deal_updated
+
+crm_deal_deleted
+entity_type
+string
+enum
+required
+A entidade da assinatura do webhook. Por enquanto, 'CONTATO' é a única opção aceita
+
+
+CONTACT
+Allowed:
+
+CONTACT
+event_identifiers
+array of strings
+Os identificadores dos eventos que devem acionar o webhook. Apenas para eventos 'WEBHOOK.CONVERTED'
+
+
+ADD string
+url
+string
+required
+A URL de destino do webhook
+
+http_method
+string
+enum
+required
+O método http que o webhook acionará. Atualmente, apenas o método 'POST' é suportado
+
+
+POST
+Allowed:
+
+POST
+include_relations
+array of strings
+Quais itens adicionais serão fornecidos no payload do webhook. Apenas 'COMPANY' e 'CONTACT_FUNNEL' são opções válidas
+
+
+ADD string
+Responses
+
+201
+Created
+
+Response body
+object
+created_at
+string
+Data de criação do Webhook
+
+updated_at
+string
+Data da última atualização do Webhook
+
+event_identifiers
+array of strings
+Permite filtrar os identificadores do evento que aciona o webhook. Apenas para eventos 'WEBHOOK.CONVERTED'
+
+event_type
+string
+O tipo de evento que aciona a solicitação de webhook
+
+entity_type
+string
+A entidade da assinatura do webhook
+
+http_method
+string
+O método http que o webhook acionará
+
+include_relations
+array of strings
+Quais itens adicionais serão fornecidos no payload do webhook
+
+platform_account_id
+number
+Identificador da conta
+
+source
+string
+Fonte do evento. Temos 2 no momento, MKT ou CRM
+
+status
+string
+O status do webhook, cujo valor padrão é 'active'
+
+url
+string
+A URL de destino do webhook
+
+uuid
+string
+O uuid exclusivo associado a cada assinatura de webhook do RD Station
+
+
+400
+Bad Request
+
+
+401
+Unauthorized
+
+Updated 7 months ago
+
+Listar todos os webhooks
+get
+https://api.rd.services/integrations/webhooks
+
+Retorna uma lista com todos os webhooks criados pela sua integração na conta que eles estão vinculados. Os webhooks criados diretamente pela tela do RD Station Marketing não serão listados.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Responses
+
+200
+Success
+
+Response body
+object
+webhooks
+array of objects
+object
+created_at
+string
+Data de criação do Webhook
+
+updated_at
+string
+Data da última atualização do Webhook
+
+event_identifiers
+array of strings
+Permite filtrar os identificadores do evento que aciona o webhook. Apenas para eventos 'WEBHOOK.CONVERTED'
+
+event_type
+string
+O tipo de evento que aciona a solicitação de webhook
+
+http_method
+string
+O método http que o webhook acionará
+
+include_relations
+array of strings
+Quais itens adicionais serão fornecidos no payload do webhook
+
+platform_account_id
+number
+Identificador da conta
+
+source
+string
+Fonte do evento. Temos 2 no momento, MKT ou CRM
+
+status
+string
+O status do webhook, cujo valor padrão é 'active'.
+
+url
+string
+A URL de destino do webhook
+
+entity_type
+string
+A entidade da assinatura do webhook
+
+uuid
+string
+O uuid exclusivo associado a cada assinatura de webhook do RD Station
+
+
+401
+Unauthorized
+
+Listar um Webhook
+get
+https://api.rd.services/integrations/webhooks/{uuid}
+
+Retorna um Webhook criado pela sua integração na conta que ela está vinculado. O webhook criado diretamente pela tela do RD Station Marketing não será listado.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+uuid
+string
+required
+O UUID exclusivo associado a cada webhook do RD Station.
+
+Responses
+
+200
+Success
+
+Response body
+object
+created_at
+string
+Data de criação do Webhook
+
+updated_at
+string
+Data da última atualização do Webhook
+
+event_identifiers
+array of strings
+Permite filtrar os identificadores do evento que aciona o webhook. Apenas para eventos 'WEBHOOK.CONVERTED'
+
+event_type
+string
+O tipo de evento que aciona a solicitação de webhook
+
+http_method
+string
+O método http que o webhook acionará
+
+include_relations
+array of strings
+Quais itens adicionais serão fornecidos no payload do webhook
+
+platform_account_id
+number
+Identificador da conta
+
+source
+string
+Fonte do evento. Temos 2 no momento, MKT ou CRM
+
+status
+string
+O status do webhook, cujo valor padrão é 'active'.
+
+url
+string
+A URL de destino do webhook
+
+entity_type
+string
+A entidade da assinatura do webhook
+
+uuid
+string
+O uuid exclusivo associado a cada assinatura de webhook do RD Station
+
+
+401
+Unauthorized
+
+
+404
+Not Found
+
+Updated 7 months ago
+
+Atualizar um Webhook
+put
+https://api.rd.services/integrations/webhooks/{uuid}
+
+Atualiza uma assinatura de webhook na conta que a sua integração está vinculada. Os webhooks atualizados não serão listados na tela do RD Station Marketing. Para atualizar um webhook, utilize o uuid obtido no endpoint de Listar todos os webhooks.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+uuid
+string
+required
+O UUID exclusivo associado a cada webhook do RD Station.
+
+Body Params
+event_type
+string
+enum
+required
+O tipo de evento que aciona a solicitação de webhook. Atualmente somente eventos de negociação, conversão e oportunidade são suportados
+
+
+WEBHOOK.CONVERTED
+Allowed:
+
+WEBHOOK.CONVERTED
+
+WEBHOOK.MARKED_OPPORTUNITY
+
+crm_deal_created
+
+crm_deal_updated
+
+crm_deal_deleted
+entity_type
+string
+enum
+required
+A entidade da assinatura do webhook. Por enquanto, 'CONTATO' é a única opção aceita
+
+
+CONTACT
+Allowed:
+
+CONTACT
+event_identifiers
+array of strings
+Os identificadores dos eventos que devem acionar o webhook. Apenas para eventos 'WEBHOOK.CONVERTED'
+
+
+ADD string
+url
+string
+required
+A URL de destino do webhook
+
+http_method
+string
+enum
+required
+O método http que o webhook acionará. Atualmente, apenas o método 'POST' é suportado
+
+
+POST
+Allowed:
+
+POST
+include_relations
+array of strings
+Quais itens adicionais serão fornecidos no payload do webhook. Apenas 'COMPANY' e 'CONTACT_FUNNEL' são opções válidas
+
+
+ADD string
+Responses
+
+200
+Success
+
+Response body
+object
+created_at
+string
+Data de criação do Webhook
+
+updated_at
+string
+Data da última atualização do Webhook
+
+event_identifiers
+array of strings
+Permite filtrar os identificadores do evento que aciona o webhook. Apenas para eventos 'WEBHOOK.CONVERTED'
+
+event_type
+string
+O tipo de evento que aciona a solicitação de webhook
+
+entity_type
+string
+A entidade da assinatura do webhook
+
+http_method
+string
+O método http que o webhook acionará
+
+include_relations
+array of strings
+Quais itens adicionais serão fornecidos no payload do webhook
+
+platform_account_id
+number
+Identificador da conta
+
+source
+string
+Fonte do evento. Temos 2 no momento, MKT ou CRM
+
+status
+string
+O status do webhook, cujo valor padrão é 'active'
+
+url
+string
+A URL de destino do webhook
+
+uuid
+string
+O uuid exclusivo associado a cada assinatura de webhook do RD Station
+
+
+400
+Bad Request
+
+
+401
+Unauthorized
+
+
+404
+Not Found
+
+Deletar um Webhook
+delete
+https://api.rd.services/integrations/webhooks/{uuid}
+
+Deleta uma assinatura de webhook da conta que a sua integração está vinculada. Os webhooks não serão listados na tela do RD Station Marketing, sendo assim, para deletar um webhook, utilize o uuid obtido no endpoint de Listar todos os webhooks.
+
+Recent Requests
+Log in to see full request history
+Time	Status	User Agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+uuid
+string
+required
+O UUID exclusivo associado a cada webhook do RD Station.
+
+Responses
+204
+No Content
+
+
+401
+Unauthorized
+
+
+404
+Not Found
+
+Webhooks CRM payload
+🚧
+Nota: O evento de negociação do CRM está disponível somente para planos Basic e PRO do CRM
+Corpo da requisição
+Quando o evento configurado no Webhook é acionado, o RD Station CRM envia uma requisição com o método configurado no http_method com o cabeçalho Content-Type: application/json.
+
+Abaixo seguem os campos disponíveis no payload da requisição:
+
+Payload Negociação do CRM - Create/Update/Delete
+crm_deal_created
+crm_deal_updated
+crm_deal_delete
+
+{
+      {
+   "event_name": "crm_deal_created",
+   "document":{
+      "id":"650878567482d9c0c7002050a475",
+      "name":"Teste Negociação",
+      "amount_monthly":0.0,
+      "amount_unique":0.0,
+      "amount_total":0.0,
+      "prediction_date":null,
+      "created_at":"2023-09-18T15:04:34.515-03:00",
+      "updated_at":"2023-09-18T15:04:34.515-03:00",
+      "rating":1,
+      "status":"ongoing",
+      "closed_at":null,
+      "user":{
+         "id":"622e7fb2f678470c001576f4a4",
+         "name":"Hian Almada",
+         "email":"hian.almada@rn.com",
+         "avatar_url":null
+      },
+      "deal_stage":{
+         "id":"622e4cee412e87000d2f52a6",
+         "name":"Sem contato",
+         "nickname":"SC",
+         "created_at":"2022-03-13T16:58:38.951-03:00",
+         "updated_at":"2022-03-13T16:58:38.951-03:00",
+         "order":1
+      },
+      "deal_pipeline":{
+         "id":"622e4cee111e87000d2f52a5",
+         "name":"Funil Padrão"
+      },
+      "deal_source":{
+         
+      },
+      "campaign":{
+         
+      },
+      "deal_lost_reason":{
+         
+      },
+      "deal_custom_fields":[
+         {
+            "value":null,
+            "custom_field":{
+               "id":"611e89b0f269d0000b3bb2c2",
+               "label":"Whatsapp",
+               "required":false,
+               "unique":false,
+               "opts":[
+                  
+               ],
+               "type":"text"
+            }
+         },
+         {
+            "value":null,
+            "custom_field":{
+               "id":"112e89ca673c7300162f15b3",
+               "label":"Instagram",
+               "required":false,
+               "unique":false,
+               "opts":[
+                  
+               ],
+               "type":"text"
+            }
+         },
+         {
+            "value":null,
+            "custom_field":{
+               "id":"622e89e9f329d0000f3bb17a",
+               "label":"Qual a sua idade?",
+               "required":false,
+               "unique":false,
+               "opts":[
+                  
+               ],
+               "type":"text"
+            }
+         },
+         {
+            "value":null,
+            "custom_field":{
+               "id":"622e8a32f269d0011f3bb17d",
+               "label":"De onde você conhece a Issues?",
+               "required":false,
+               "unique":false,
+               "opts":[
+                  "Selecione",
+                  "Redes Sociais",
+                  "Indicação",
+                  "Pesquisa no Goole",
+                  "Evento",
+                  "Pista de skate"
+               ],
+               "type":"option"
+            }
+         },
+         {
+            "value":null,
+            "custom_field":{
+               "id":"6258480fd71568001128705a",
+               "label":"Unidade",
+               "required":false,
+               "unique":false,
+               "opts":[
+                  "Florianópolis",
+                  "São Paulo"
+               ],
+               "type":"multiple_choice"
+            }
+         }
+      ],
+      "deal_products":[
+         
+      ]
+   },
+   "event_timestamp":"2023-09-18T18:04:34.000Z",
+   "transaction_uuid":"f111b90-ec81-4353-8d52-ffd3b8df412d"
+}
+Legenda dos campos enviados no payload padrão
+Confira abaixo cada campo enviado pelo webhook e o que cada um deles representa:
+
+Campo	Tipo	Descrição
+event_name	String	O tipo de evento que acionou a solicitação do webhook. Atualmente, apenas CRM_DEAL_CREATED. ou CRM_DEAL_UPDATED ou CRM_DEAL_DELETED são opções válidas.
+event_timestamp	DateTime	A hora em que ocorreu o evento que acionou o webhook.
+transaction_uuid	UUID	Identificador único do evento.
+document	Object	Objeto contendo objetos com as informações da negociação
+user	Object	Usuário relacionado a negociação
+deal_stage	Object	Estágio da negociação no fluxo
+deal_pipeline	Object	Funil do CRM em que a negociação se encontra
+deal_source	Object	Fonte da negociação
+campaign	Object	Informação das campanhas referente à entrada das negociações
+deal_lost_reason	Object	Motivo da perda da negociação
+deal_custom_fields	Object	Campos personalizados da negociação
+deal_products	Object	Produtos e serviços presentes na negociação
+amount_unique	Object	Valor único
+amount_monthly	Object	Valor recorrente
+amount_annual	Object	Valor total (soma do valor único e valor recorrente)
+❗️
+O webhook envia um payload padrão em JSON único e imutável.
+Não é possível personalizar os dados enviados pelo webhook.
+
+Webhooks MKT payload
+Corpo da requisição
+Quando o evento configurado no Webhook é acionado, o RD Station envia uma requisição com o método configurado no http_method com o cabeçalho Content-Type: application/json.
+
+Abaixo seguem os campos disponíveis no payload da requisição:
+
+Payload padrão
+JSON
+
+{
+      "event_type": "WEBHOOK.CONVERTED",
+      "entity_type": "CONTACT",
+      "event_identifier": "my-event-identifier",
+      "timestamp": "2018-03-13T14:09:02.724-03:00",
+      "event_timestamp": "2018-03-13T14:07:04.254-03:00",
+      "contact": {
+        "uuid":"c2f3d2b3-7250-4d27-97f4-eef38be32f7f",
+        "email":"suporte@resultadosdigitais.com.br",
+        "name":"Contact Name",
+        "job_title":"Developer",
+        "bio":"This is my bio",
+        "website": "http://rdstation.com.br",
+        "personal_phone":"48 30252598",
+        "mobile_phone":"48 30252598",
+        "city":"Florianópolis",
+        "facebook": "Contact Facebook",
+        "linkedin": "Contact Linkedin",
+        "twitter": "Contact Twitter",
+        "tags": ["tag 1", "tag 2"],
+        "cf_custom_field_example": ["Option1", "Option2"],
+        "legal_bases": [
+          {
+            "category": "communications",
+            "type": "consent",
+            "status": "granted"
+          }
+        ],
+        "company": {
+          "name": "Company Example 0"
+        },
+        "funnel": {
+          "name": "default",
+          "lifecycle_stage": "Lead",
+          "opportunity": false,
+          "contact_owner_email": "owner@example.org",
+          "interest": 20,
+          "fit": 0,
+          "origin": "Busca Paga | Google"
+        }
+      }
+    }
+📘
+Os custom fields são prefixados com "cf_". Caso a entidade não possua o campo personalizado com um valor preenchido, ele não será enviado.
+Legenda dos campos enviados no payload padrão
+Confira abaixo cada campo enviado pelo webhook e o que cada um deles representa:
+
+Campo	Tipo	Descrição
+event_type	String	O tipo de evento que acionou a solicitação do webhook. Atualmente, apenas WEBHOOK.CONVERTED ou WEBHOOK.MARKED_OPPORTUNITY são opções válidas.
+entity_type	String	A entidade enviada no webhook. Atualmente, apenas CONTACT é uma opção válida.
+event_identifier	String	O identificador do evento que acionou a solicitação do webhook, quando o event_type é WEBHOOK.CONVERTED. Para WEBHOOK.MARKED_OPPORTUNITY esse campo vai com o valor 'default'.
+timestamp	DateTime	A hora em que o webhook foi enviado.
+event_timestamp	DateTime	A hora em que ocorreu o evento que acionou o webhook.
+contact	Object	A própria entidade, pode ser company ou qualquer outra entidade suportada.
+uuid		Identificador único do contato.
+email		Email do contato.
+name		Nome do contato.
+job_title		Cargo do contato.
+bio		Anotações do Perfil do contato.
+website		Site do contato.
+personal_phone		Telefone do contato.
+mobile_phone		Celular do contato.
+city		Cidade.
+facebook		Facebook do contato.
+linkedin		Linkedin do contato.
+twitter		Twitter do contato.
+tags		Tags do contato.
+cf_custom_field_example		Campos personalizados do contato.
+company		Empresa do contato.
+lifecycle_stage		Estágio do funil do contato.
+opportunity		Se o contato é oportunidade.
+contact_owner_email		Dono do contato.
+interest		Interesse do Lead Scoring do contato.
+fit		Perfil do Lead Scoring do contato.
+origin		Origem do contato (utm_medium e utm_source).
+legal_bases		Bases Legais do contato.
+❗️
+O webhook envia um payload padrão em JSON único e imutável.
+Não é possível personalizar os dados enviados pelo webhook.
+
+Updated 7 months ago
+
+Webhooks CRM payload
+Retries Logic
+Caso nosso serviço de webhooks tenha problemas ao entregar suas notificações, nós tentaremos enviá-las novamente 3 vezes.
+
+Os possíveis problemas na entrega das notificações são:
+
+Se seu endpoint de callback demorar mais de 5 segundos para responder.
+Se a resposta do seu endpoint de callback tiver um status code diferente de 2xx.
+Após a falha no envio acontecer, as notificações entram em uma fila para serem re-processadas. Caso o re-envio de uma notificação falhe 3 vezes seguidas, a notificação será marcada como falha e não será re-processada.
+
+Seguindo essa lógica, se as notificações estejam chegando duplicadamente no seu sistema, é um indício de que o tempo de resposta do endpoint é maior do que 5 segundos.
+
+Boas Práticas
+Integrar diferentes produtos, como RD Station CRM e RD Station Marketing, é uma prática valiosa para otimizar processos e obter uma visão mais abrangente sobre seus dados e operações.
+
+Para garantir uma integração eficiente e robusta, siga estas boas práticas:
+
+Entendimento dos Produtos: Antes de começar a integração, familiarize-se com os produtos RD Station CRM e RD Station Marketing. Compreender suas funcionalidades, terminologias e fluxos de trabalho é crucial para uma integração bem-sucedida.
+
+RD Station Marketing
+RD Station CRM
+Definição de Objetivos: Estabeleça claramente os objetivos da integração. Identifique quais dados e funcionalidades precisam ser sincronizados entre os produtos. Isso ajudará a direcionar o desenvolvimento e a testar a integração de maneira mais eficaz.
+
+Ideias de casos de uso que podem ser desenvolvidos
+Utilização de APIs: Ambos os produtos oferecem APIs robustas. Certifique-se de revisar a documentação oficial das APIs do RD Station CRM e RD Station Marketing. Planeje como você usará essas APIs para garantir uma comunicação eficiente entre os sistemas.
+
+Autenticação Segura: Implemente uma autenticação segura para acessar as APIs. Utilize tokens de acesso e siga as práticas recomendadas de segurança para proteger as credenciais e dados sensíveis durante a comunicação entre sistemas.
+
+Tratamento de Erros: Antecipe e gerencie possíveis cenários de erro. Implemente um tratamento adequado para erros de rede, timeouts, respostas inesperadas e situações em que os dados não podem ser sincronizados. Forneça mensagens de erro claras para facilitar a resolução de problemas.
+
+Mapeamento de Dados: Realize um mapeamento completo dos dados entre os produtos. Certifique-se de que os campos de dados são consistentes em ambas as plataformas e considere a possibilidade de transformações de dados, se necessário.
+
+Sincronização Incremental: Ao sincronizar dados, implemente uma lógica de sincronização incremental para reduzir a carga no sistema. Isso envolve identificar e atualizar apenas os dados que foram modificados desde a última sincronização.
+
+Logs e Monitoramento: Implemente logs detalhados para rastrear atividades e identificar problemas rapidamente. Configure um sistema de monitoramento para alertar sobre falhas de integração ou comportamentos inesperados.
+
+Testes: Conduza testes abrangentes em todos os cenários possíveis. Isso inclui testes de integração, testes de unidade e testes de aceitação do usuário. Certifique-se de testar a integração em ambientes de teste e produção.
+
+Documentação Adequada: Forneça documentação abrangente para a integração, incluindo detalhes sobre autenticação, endpoints da API, mapeamento de dados e fluxos de trabalho. Isso será útil para a manutenção futura e para outros desenvolvedores que possam interagir com a integração.
+
+👍
+Seguir essas boas práticas ajudará a garantir uma integração multiproduto eficiente, confiável e segura entre a sua solução os produtos da RD Station.
+Updated 7 months ago
+
+Retries Logic
+Exemplos de casos de uso
+Did this page help you?
+
+Exemplos de casos de uso
+Separamos alguns casos de uso que podem ser implementados para te ajudar a planejar o desenvolvimento de sua integração
+
+Esses exemplos de casos de uso ilustram como a integração multiproduto entre o RD Station CRM e o RD Station Marketing pode melhorar a eficiência operacional e oferecer uma visão geral do ciclo de vida do cliente, desde a sua aquisição até a conversão.
+
+Sincronização de Contatos:
+Implemente uma rotina de sincronização diária para enviar novos contatos do RD Station CRM para o RD Station Marketing.
+Atualize automaticamente os dados de contato no RD Station CRM quando um contato for atualizado no RD Station Marketing.
+Objetivo: Manter os contatos atualizados entre o RD Station CRM e o RD Station Marketing.
+
+Rastreamento de Oportunidades:
+Quando uma oportunidade é ganha no RD Station CRM, acione automaticamente uma campanha correspondente no RD Station Marketing para enviar e-mails de agradecimento.
+Atualize o status da oportunidade no RD Station CRM com base nas interações do lead com as campanhas de marketing.
+Objetivo: Acompanhar o progresso das oportunidades e campanhas em ambos os produtos.
+
+Segmentação Dinâmica:
+Utilize dados do RD Station CRM, como o estágio de compra do lead, para criar segmentos dinâmicos no RD Station Marketing.
+Atualize automaticamente os segmentos à medida que os leads avançam ou retrocedem nos estágios de compra no RD Station CRM.
+Objetivo: Criar segmentos dinâmicos com base em dados de ambos os produtos para campanhas personalizadas.
+
+Relatório Integrado de Desempenho:
+Crie um relatório consolidado que inclua métricas do RD Station CRM, como taxas de conversão de oportunidades, e do RD Station Marketing, como taxas de abertura de e-mails.
+Atualize automaticamente o relatório conforme novos dados são gerados em ambas as plataformas.
+Objetivo: Consolidar dados de desempenho de marketing e vendas em um único relatório.
+
+Gestão de Eventos:
+Ao cadastrar um novo participante de evento no RD Station CRM, adicione automaticamente esse contato a uma lista de inscritos em um evento no RD Station Marketing.
+Atualize os dados do participante automaticamente em ambas as plataformas à medida que informações são atualizadas.
+Objetivo: Sincronizar dados de participantes de eventos entre os produtos.

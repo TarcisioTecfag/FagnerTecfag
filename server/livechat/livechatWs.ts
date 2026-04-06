@@ -328,22 +328,40 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               visitorId = visitor!.id;
               await recalculateVisitorCategory(visitorId);
 
-              // — Problema 4 (F5): Se há chat ativo mas não há sessão AI em memória,
-              // significa que o cliente deu F5 (reconexão limpa). Fechamos o chat antigo
-              // para que o próximo CHAT_MESSAGE crie um chat novo e fresco.
-              // IMPORTANTE: Grace period de 2 minutos — não fecha chats recém-criados.
-              // Isso evita que reconexões durante o buffer de 5s (ex: ao enviar telefone)
-              // fechem o chat atual e quebrem a conversa do Fagner.
+              // — F5 / Reconexão: Se há chat ativo mas não há sessão AI em memória,
+              // pode ser F5 legítimo (janela nova) OU servidor reiniciou (perdeu a sessão em RAM).
+              // REGRA CRÍTICA: Só fecha o chat se:
+              //   1. Chat tem mais de 2 min (grace period para buffer de mensagens)
+              //   2. E NÃO houve mensagens nas últimas 30 min (evita fragmentar chats ativos após deploy)
               try {
                 const { hasAISession } = await import("./livechatAI.js");
                 const existingChat = await lcStorage.getActiveChatByVisitor(visitorId);
                 if (existingChat && !hasAISession(existingChat.id)) {
                   const chatAgeMs = Date.now() - new Date(existingChat.startedAt).getTime();
                   const GRACE_PERIOD_MS = 2 * 60 * 1000; // 2 minutos
+
                   if (chatAgeMs > GRACE_PERIOD_MS) {
-                    await lcStorage.closeChat(existingChat.id);
-                    console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI (F5, ${Math.round(chatAgeMs/1000)}s) — chat ${existingChat.id} fechado.`);
-                    broadcastToAgents({ type: "CHAT_STATUS", chatId: existingChat.id, status: "closed" });
+                    // Verifica quando foi a última mensagem do chat
+                    let lastMsgAge = chatAgeMs; // fallback: usa idade do chat
+                    try {
+                      const msgs = await lcStorage.listMessagesByChat(existingChat.id);
+                      if (msgs.length > 0) {
+                        const lastMsg = msgs[msgs.length - 1];
+                        const lastMsgTs = (lastMsg as any).createdAt ?? (lastMsg as any).timestamp;
+                        if (lastMsgTs) {
+                          lastMsgAge = Date.now() - new Date(lastMsgTs).getTime();
+                        }
+                      }
+                    } catch {}
+
+                    const INACTIVITY_MS = 30 * 60 * 1000; // 30 minutos sem mensagem = F5 real
+                    if (lastMsgAge > INACTIVITY_MS) {
+                      await lcStorage.closeChat(existingChat.id);
+                      console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI, último msg ${Math.round(lastMsgAge/60000)}min atrás — chat ${existingChat.id} fechado.`);
+                      broadcastToAgents({ type: "CHAT_STATUS", chatId: existingChat.id, status: "closed" });
+                    } else {
+                      console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI MAS última msg foi ${Math.round(lastMsgAge/60000)}min atrás — mantendo chat ativo (provável restart do servidor).`);
+                    }
                   } else {
                     console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI mas chat é recente (${Math.round(chatAgeMs/1000)}s < grace ${GRACE_PERIOD_MS/1000}s) — mantendo chat.`);
                   }
@@ -677,7 +695,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                   if (cnpjCheckMatch) {
                     const doc = cnpjCheckMatch[1];
-                    const cleanMsg = rawReply.replace(/\[CNPJ_CHECK:[^\]]+\]/g, "").trim();
+                    // Remove CNPJ_CHECK tag e SCORE antes de enviar ao cliente
+                    const cleanMsg = rawReply
+                      .replace(/\[CNPJ_CHECK:[^\]]+\]/g, "")
+                      .replace(/\[SCORE:\d+\]/gi, "")
+                      .replace(/\[STAGE:[^\]]+\]/gi, "")
+                      .trim();
 
                     if (cleanMsg) {
                       sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
@@ -722,11 +745,34 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                         const cnpjData = {
                           cnpj: d,
                           nome: rd.razao_social,
-                          fantasia: rd.estabelecimento?.nome_fantasia,
-                          logradouro: rd.estabelecimento ? `${rd.estabelecimento.tipo_logradouro} ${rd.estabelecimento.logradouro}` : "",
-                          municipio: rd.estabelecimento?.cidade?.nome,
-                          uf: rd.estabelecimento?.estado?.sigla,
-                          situacao: rd.estabelecimento?.situacao_cadastral
+                          fantasia: rd.estabelecimento?.nome_fantasia || null,
+                          logradouro: rd.estabelecimento ? `${rd.estabelecimento.tipo_logradouro || ''} ${rd.estabelecimento.logradouro || ''}`.trim() : null,
+                          numero: rd.estabelecimento?.numero || null,
+                          bairro: rd.estabelecimento?.bairro || null,
+                          cep: rd.estabelecimento?.cep || null,
+                          municipio: rd.estabelecimento?.cidade?.nome || null,
+                          uf: rd.estabelecimento?.estado?.sigla || null,
+                          situacao: rd.estabelecimento?.situacao_cadastral || null,
+                          // Campos adicionais
+                          dataAbertura: rd.estabelecimento?.data_inicio_atividade || null,
+                          capitalSocial: rd.capital_social || null,
+                          porte: rd.porte?.descricao || null,
+                          naturezaJuridica: rd.natureza_juridica?.descricao || null,
+                          matrizFilial: rd.estabelecimento?.tipo === 'Matriz' ? 'Matriz' : 'Filial',
+                          cnaePrincipal: rd.estabelecimento?.atividade_principal
+                            ? `${rd.estabelecimento.atividade_principal.subclasse} - ${rd.estabelecimento.atividade_principal.descricao}`
+                            : null,
+                          cnaesSecundarios: rd.estabelecimento?.atividades_secundarias
+                            ?.slice(0, 3)
+                            .map((a: any) => `${a.subclasse} - ${a.descricao}`)
+                            .join('; ') || null,
+                          socios: rd.socios
+                            ?.slice(0, 5)
+                            .map((s: any) => s.nome)
+                            .join(', ') || null,
+                          telefone1: rd.estabelecimento?.telefone1 || null,
+                          telefone2: rd.estabelecimento?.telefone2 || null,
+                          email: rd.estabelecimento?.email || null,
                         };
                         result = { valid: true, nome: rd.razao_social, dados: cnpjData };
                         await lcStorage.updateVisitorPosVendaData(currentVisitorId, { cnpjData });
@@ -905,6 +951,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   const note = await generateConversationNote(chat.id);
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_com_venda");
                   if (note) await lcStorage.addVisitorNote(currentVisitorId, "Venda", note);
+                  // Fagner define motivo automaticamente
+                  await lcStorage.setChatCloseReason(chat.id, "venda_fechada").catch(() => {});
                   await lcStorage.closeChat(chat.id);
                   clearAISession(chat.id);
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_com_venda");
@@ -914,6 +962,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   const note = await generateConversationNote(chat.id);
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_sem_venda");
                   if (note) await lcStorage.addVisitorNote(currentVisitorId, "Sem Venda", note);
+                  // Fagner define motivo automaticamente
+                  await lcStorage.setChatCloseReason(chat.id, "venda_cancelada").catch(() => {});
                   await lcStorage.closeChat(chat.id);
                   clearAISession(chat.id);
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_sem_venda");
@@ -1011,9 +1061,15 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             relatorio
                           );
 
-                          // Nota de sucesso com link correto do RD Station CRM
+                          // Nota de sucesso com link clicável
                           const dealUrl = `https://app.rdstation.com.br/sales/deals/${dealId}`;
-                          await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", `✅ Card criado no RD Station CRM!\nID do Deal: ${dealId}\nLink: ${dealUrl}`);
+                          await lcStorage.addVisitorNote(
+                            currentVisitorId,
+                            "RD CRM",
+                            `✅ Card criado no RD Station CRM!\nID do Deal: ${dealId}\n${dealUrl}`
+                          );
+                          // Fagner define motivo automaticamente
+                          await lcStorage.setChatCloseReason(chat.id, "atendimento_concluido").catch(() => {});
                           broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
 
                           // Notificar painel admin com o link da OS criada
