@@ -69,11 +69,8 @@ export const lcStorage = {
         utmMedium: visitor.utmMedium,
         utmCampaign: visitor.utmCampaign,
         name: visitor.name,        // Propaga nome para o novo card
-        posVendaNome: visitor.posVendaNome,
-        posVendaTelefone: visitor.posVendaTelefone,
-        posVendaEmail: visitor.posVendaEmail,
-        posVendaCnpjCpf: visitor.posVendaCnpjCpf,
-        posVendaNotaPedido: visitor.posVendaNotaPedido,
+        // Não propagamos dados de pós-venda: o Fagner coleta do zero no novo atendimento,
+        // garantindo que um card novo seja criado no RD CRM.
         totalVisits: visitor.totalVisits + 1,
         pipelineStage: "novo_atendimento",
         isOnline: "true",
@@ -250,6 +247,26 @@ export const lcStorage = {
     return result;
   },
 
+  // Varredura periódica: move visitantes offline sem resposta para 'sem_resposta'
+  // Executar a cada 5 minutos. Garante que o estágio funcione mesmo após restarts.
+  async sweepStaleVisitors(): Promise<number> {
+    const STALE_THRESHOLD_MINUTES = 15;
+    const cutoff = new Date(Date.now() - STALE_THRESHOLD_MINUTES * 60 * 1000).toISOString();
+    const result = await db.execute(sql`
+      UPDATE lc_visitors
+      SET "pipelineStage" = 'sem_resposta',
+          "lastSeenAt" = ${new Date().toISOString()}
+      WHERE "isOnline" = 'false'
+        AND "lastSeenAt" < ${cutoff}
+        AND "pipelineStage" IN ('novo_atendimento', 'em_atendimento')
+    `) as any;
+    const count = result?.rowCount ?? 0;
+    if (count > 0) {
+      console.log(`[LiveChat Sweep] ${count} visitante(s) movidos para 'sem_resposta' (offline > ${STALE_THRESHOLD_MINUTES}min)`);
+    }
+    return count;
+  },
+
   // ── Pós Venda — Dados coletados pelo Fagner (persistentes entre sessões) ──
   async updateVisitorPosVendaData(id: string, data: {
     nome?: string | null;
@@ -424,6 +441,12 @@ export const lcStorage = {
   async closeChat(id: string): Promise<void> {
     await db.update(lcChats)
       .set({ status: "closed", endedAt: new Date().toISOString() })
+      .where(eq(lcChats.id, id));
+  },
+
+  async setChatCloseReason(id: string, reason: string): Promise<void> {
+    await db.update(lcChats)
+      .set({ closeReason: reason } as any)
       .where(eq(lcChats.id, id));
   },
 

@@ -205,6 +205,7 @@ export const lcChats = pgTable("lc_chats", {
   needsHuman: text("needsHuman").notNull().default("false"),   // flag de "não sei" → alerta no painel
   proactiveApproach: text("proactiveApproach").notNull().default("false"),
   mood: text("mood"),
+  closeReason: text("closeReason"),            // Motivo do encerramento (preenchido pelo agente)
 });
 
 export const lcMessages = pgTable("lc_messages", {

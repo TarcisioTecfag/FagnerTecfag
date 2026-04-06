@@ -331,13 +331,22 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               // — Problema 4 (F5): Se há chat ativo mas não há sessão AI em memória,
               // significa que o cliente deu F5 (reconexão limpa). Fechamos o chat antigo
               // para que o próximo CHAT_MESSAGE crie um chat novo e fresco.
+              // IMPORTANTE: Grace period de 2 minutos — não fecha chats recém-criados.
+              // Isso evita que reconexões durante o buffer de 5s (ex: ao enviar telefone)
+              // fechem o chat atual e quebrem a conversa do Fagner.
               try {
                 const { hasAISession } = await import("./livechatAI.js");
                 const existingChat = await lcStorage.getActiveChatByVisitor(visitorId);
                 if (existingChat && !hasAISession(existingChat.id)) {
-                  await lcStorage.closeChat(existingChat.id);
-                  console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI (F5) — chat ${existingChat.id} fechado, novo será criado.`);
-                  broadcastToAgents({ type: "CHAT_STATUS", chatId: existingChat.id, status: "closed" });
+                  const chatAgeMs = Date.now() - new Date(existingChat.startedAt).getTime();
+                  const GRACE_PERIOD_MS = 2 * 60 * 1000; // 2 minutos
+                  if (chatAgeMs > GRACE_PERIOD_MS) {
+                    await lcStorage.closeChat(existingChat.id);
+                    console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI (F5, ${Math.round(chatAgeMs/1000)}s) — chat ${existingChat.id} fechado.`);
+                    broadcastToAgents({ type: "CHAT_STATUS", chatId: existingChat.id, status: "closed" });
+                  } else {
+                    console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI mas chat é recente (${Math.round(chatAgeMs/1000)}s < grace ${GRACE_PERIOD_MS/1000}s) — mantendo chat.`);
+                  }
                 }
               } catch (e) {
                 console.warn("[LiveChat] F5 check falhou:", e);

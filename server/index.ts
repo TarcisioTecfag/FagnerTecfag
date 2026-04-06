@@ -43,11 +43,16 @@ import { pool, bootstrapSchema } from "./db.js";
 // Roda a cada 5 minutos para capturar chats sem resposta mais rapidamente
 setInterval(() => {
   lcStorage.sweepOrphanedChats().catch((err) => {
-    console.error("[LiveChat Sweeper] Erro:", err);
+    console.error("[LiveChat Sweeper] Erro (orphaned):", err);
+  });
+  // Move visitantes offline há >15min para 'sem_resposta' (independe de timers em memória)
+  lcStorage.sweepStaleVisitors().catch((err) => {
+    console.error("[LiveChat Sweeper] Erro (stale):", err);
   });
 }, 5 * 60 * 1000).unref();
 // Roda uma vez imediatamente no boot para limpar possíveis chats que ficaram presos antes do reinício
 lcStorage.sweepOrphanedChats().catch(() => {});
+lcStorage.sweepStaleVisitors().catch(() => {});
 
 import {
   initOrchestrator,

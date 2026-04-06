@@ -233,7 +233,8 @@ export async function bootstrapSchema(): Promise<void> {
     await client.query(`ALTER TABLE folders ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '';`);
     await client.query(`ALTER TABLE folders ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER DEFAULT 0;`);
     await client.query(`ALTER TABLE lc_visitors ADD COLUMN IF NOT EXISTS "posVendaCnpjData" JSONB;`);
-    console.log("[DB] ✅ Migrações idempotentes aplicadas (folders: color, sortOrder, lc_visitors: posVendaCnpjData)");
+    await client.query(`ALTER TABLE lc_chats ADD COLUMN IF NOT EXISTS "closeReason" TEXT;`);
+    console.log("[DB] ✅ Migrações idempotentes aplicadas (folders: color, sortOrder, lc_visitors: posVendaCnpjData, lc_chats: closeReason)");
   } catch (e) {
     console.error("[DB] ❌ Falha ao criar schema PostgreSQL:", e);
   } finally {

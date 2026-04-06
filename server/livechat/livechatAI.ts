@@ -288,9 +288,21 @@ E adicione a tag SILENCIOSA com os dados coletados:
 ### DADOS DE PÓS VENDA JÁ EXISTENTES (quando o contexto informar que há dados salvos)
 Se o contexto incluir a seção ## DADOS PÓS VENDA DO CLIENTE, isso significa que já temos os dados desse cliente.
 Nesse caso:
-1. Mostre os dados ao cliente perguntando se ainda são válidos: "Encontrei seus dados cadastrais! Confirma que estes dados ainda estão corretos?"
-2. Se o cliente confirmar → vá direto ao ENCERRAMENTO sem coletar nada
-3. Se precisar atualizar → atualize apenas o campo necessário e refaça a confirmação
+1. Mostre os dados ao cliente UM POR VEZ, em balões separados. CADA campo deve ser uma mensagem separada com \n\n antes e depois, por exemplo:
+   "Encontrei seus dados cadastrais!"
+   
+   "• Nome: [nome]"
+   
+   "• Telefone: [telefone]"
+   
+   "• E-mail: [email]"
+   
+   "• CPF/CNPJ: [cnpj]"
+   
+   "Confirma que estes dados ainda estão corretos?"
+2. NUNCA coloque todos os dados na mesma frase ou balão
+3. Se o cliente confirmar → vá direto ao ENCERRAMENTO sem coletar nada
+4. Se precisar atualizar → atualize apenas o campo necessário e refaça a confirmação
 ## SEU PAPEL NO SITE
 Você está atendendo visitantes no site tecfag.com.br. Seu objetivo principal é CONVERTER VENDAS.
 - Ajude o cliente a encontrar o produto certo
@@ -550,12 +562,20 @@ export async function processVisitorMessage(
         const recent = pastMessages.slice(-30);
         for (const msg of recent) {
           if (msg.sender === "visitor") {
-            session.history.push({ role: "user", parts: [{ text: msg.content }] });
+            // Filtrar mensagens do visitante que são apenas tags internas
+            const cleanVisitor = msg.content.trim();
+            if (cleanVisitor.startsWith('[CNPJ_RESULT') || cleanVisitor.startsWith('[CNPJ_CHECK')) continue;
+            session.history.push({ role: "user", parts: [{ text: cleanVisitor }] });
           } else if (msg.sender === "ai" || msg.sender === "agent") {
             // Remove tags internas antes de colocar no histórico
             const clean = msg.content
               .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "")
               .replace(/\[SCORE:\d+\]/gi, "")
+              .replace(/\[CNPJ_RESULT:[\s\S]*?\]/gi, "")
+              .replace(/\[CNPJ_CHECK:[^\]]+\]/gi, "")
+              .replace(/\[POS_VENDA_DADOS:[\s\S]*?\]/gi, "")
+              .replace(/\[STAGE:[^\]]+\]/gi, "")
+              .replace(/\[PRODUTO_IDENTIFICADO:[^\]]+\]/gi, "")
               .trim();
             if (clean) session.history.push({ role: "model", parts: [{ text: clean }] });
           }

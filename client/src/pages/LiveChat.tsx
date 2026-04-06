@@ -37,6 +37,8 @@ import {
   ExternalLink,
   Hash,
   Layers,
+  FileText,
+  X,
 } from "lucide-react";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -241,6 +243,9 @@ function LiveChat() {
   const [visitorChats, setVisitorChats] = useState<Chat[]>([]);
   const [pastNegotiations, setPastNegotiations] = useState<any[]>([]);
   const [historyModal, setHistoryModal] = useState<{ visitor: Visitor; pageviews: Pageview[] } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [closeReasonOpen, setCloseReasonOpen] = useState<string | null>(null); // chatId
+  const [closeReasonSaving, setCloseReasonSaving] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -584,11 +589,21 @@ function LiveChat() {
   };
 
   // ——— Derived data —————————————————————————————————————————————————
-  const activeChats = chats.filter((c) => c.status !== "closed");
-  const archivedChats = chats.filter((c) => c.status === "closed");
+  const sq = searchQuery.toLowerCase().trim();
+  const activeChats = chats.filter((c) => c.status !== "closed" && (
+    !sq || (c.visitorName ?? "").toLowerCase().includes(sq)
+  ));
+  const archivedChats = chats.filter((c) => c.status === "closed" && (
+    !sq || (c.visitorName ?? "").toLowerCase().includes(sq)
+  ));
   // Atenção: apenas chats explicitamente marcados pelo admin (needsHuman === "attention")
   const attentionChats = chats.filter((c) => c.needsHuman === "attention");
   const needsHumanChats = chats.filter((c) => c.needsHuman === "true" && c.status !== "closed");
+  const filteredVisitors = visitors.filter((v) => !sq ||
+    (v.name ?? "").toLowerCase().includes(sq) ||
+    (v.city ?? "").toLowerCase().includes(sq) ||
+    (v.source ?? "").toLowerCase().includes(sq)
+  );
 
   // ——— TABS —————————————————————————————————————————————————
   const mainTabs = [
@@ -658,13 +673,13 @@ function LiveChat() {
         </div>
 
         {/* Row 2: Tabs */}
-        <div className="flex gap-1 bg-white/60 p-1 rounded-xl border border-zinc-200/60 shadow-sm backdrop-blur-sm">
+        <div className="flex gap-1 bg-white/60 p-1 rounded-xl border border-zinc-200/60 shadow-sm backdrop-blur-sm items-center">
           {mainTabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 ${
                   isActive ? "text-white shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100/60"
                 }`}
@@ -680,14 +695,38 @@ function LiveChat() {
               </button>
             );
           })}
-          <div className="flex-1" />
+
+          {/* ── Search Bar (center, hidden on arquivados/atencao/stats) ── */}
+          {["chats", "visitors", "crm"].includes(activeTab) ? (
+            <div className="flex-1 flex items-center justify-center px-2">
+              <div className="relative w-full max-w-xs">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+                <input
+                  id="livechat-search"
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={activeTab === "chats" ? "Buscar conversas..." : activeTab === "visitors" ? "Buscar visitantes..." : "Buscar no CRM..."}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-zinc-200 bg-white/80 focus:outline-none focus:border-red-300 focus:ring-1 focus:ring-red-200 transition-all placeholder:text-zinc-400"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1" />
+          )}
+
           <div className="w-px bg-zinc-200/60 mx-1 self-stretch rounded-full" />
           {secondaryTabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 ${
                   isActive ? "text-white shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100/60"
                 }`}
@@ -945,12 +984,74 @@ function LiveChat() {
                         </span>
                       )}
 
-                      {/* Badge somente leitura — aba Arquivados */}
-                      {activeTab === "arquivados" && (
-                        <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-50 text-zinc-500 border border-zinc-200">
-                          🗄️ Conversa arquivada
-                        </span>
-                      )}
+                      {/* Badge somente leitura — aba Arquivados + botão Motivo */}
+                      {activeTab === "arquivados" && (() => {
+                        const CLOSE_REASONS = [
+                          { value: "sem_resposta", label: "Não respondeu mais", color: "#6b7280" },
+                          { value: "venda_fechada", label: "Venda fechada", color: "#16a34a" },
+                          { value: "venda_cancelada", label: "Venda cancelada", color: "#dc2626" },
+                          { value: "atendimento_concluido", label: "Atendimento concluído", color: "#2563eb" },
+                          { value: "problema_tecnico", label: "Problema técnico", color: "#d97706" },
+                          { value: "outro", label: "Outro", color: "#7c3aed" },
+                        ];
+                        const currentReason = (selectedChat as any).closeReason;
+                        const reasonObj = CLOSE_REASONS.find(r => r.value === currentReason);
+                        return (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-50 text-zinc-500 border border-zinc-200">
+                              🗄️ Conversa arquivada
+                            </span>
+                            {reasonObj ? (
+                              <span className="px-3 py-1.5 rounded-lg text-xs font-semibold border" style={{ background: `${reasonObj.color}15`, color: reasonObj.color, borderColor: `${reasonObj.color}40` }}>
+                                📝 {reasonObj.label}
+                              </span>
+                            ) : null}
+                            <div className="relative">
+                              <button
+                                id={`close-reason-btn-${selectedChat.id}`}
+                                onClick={() => setCloseReasonOpen(closeReasonOpen === selectedChat.id ? null : selectedChat.id)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-zinc-300 text-zinc-600 hover:border-zinc-400 hover:bg-zinc-50 transition-all flex items-center gap-1"
+                              >
+                                <FileText className="w-3 h-3" />
+                                {currentReason ? "Alterar motivo" : "Definir motivo"}
+                              </button>
+                              {closeReasonOpen === selectedChat.id && (
+                                <div className="absolute top-full left-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 py-1 min-w-[180px]">
+                                  {CLOSE_REASONS.map(r => (
+                                    <button
+                                      key={r.value}
+                                      disabled={closeReasonSaving}
+                                      onClick={async () => {
+                                        setCloseReasonSaving(true);
+                                        try {
+                                          await fetch(`/api/livechat/chats/${selectedChat.id}/close-reason`, {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json" },
+                                            credentials: "include",
+                                            body: JSON.stringify({ reason: r.value }),
+                                          });
+                                          setChats(prev => prev.map(c => c.id === selectedChat.id ? { ...c, closeReason: r.value } as any : c));
+                                          setSelectedChat(prev => prev ? { ...prev, closeReason: r.value } as any : prev);
+                                          toast({ title: "Motivo salvo!", description: r.label });
+                                        } catch {
+                                          toast({ title: "Erro ao salvar", variant: "destructive" });
+                                        } finally {
+                                          setCloseReasonSaving(false);
+                                          setCloseReasonOpen(null);
+                                        }
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs hover:bg-zinc-50 transition-colors flex items-center gap-2"
+                                    >
+                                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: r.color }} />
+                                      {r.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -1062,21 +1163,21 @@ function LiveChat() {
               <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 Visitantes Online
-                <span className="text-zinc-400 font-normal">({visitors.filter(v => v.isOnline === "true").length})</span>
+                <span className="text-zinc-400 font-normal">({filteredVisitors.filter(v => v.isOnline === "true").length})</span>
               </h3>
             </div>
 
             {/* Visitor cards list */}
             <div className="flex-1 overflow-y-auto p-4">
-              {visitors.filter(v => v.isOnline === "true").length === 0 ? (
+              {filteredVisitors.filter(v => v.isOnline === "true").length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-zinc-400">
                   <Eye className="w-12 h-12 mb-3 opacity-20" />
-                  <p className="text-sm font-medium">Nenhum visitante online</p>
-                  <p className="text-[11px]">Os visitantes aparecerão aqui em tempo real</p>
+                  <p className="text-sm font-medium">{sq ? "Nenhum resultado encontrado" : "Nenhum visitante online"}</p>
+                  <p className="text-[11px]">{sq ? "Tente outro termo de busca" : "Os visitantes aparecerão aqui em tempo real"}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {visitors.filter(v => v.isOnline === "true").map((v, idx) => {
+                  {filteredVisitors.filter(v => v.isOnline === "true").map((v, idx) => {
                     const cat = categoryLabel(v.category);
                     const src = sourceLabel(v.source);
 

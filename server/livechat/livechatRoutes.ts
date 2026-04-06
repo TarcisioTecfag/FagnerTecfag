@@ -108,6 +108,13 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json({ ok: true });
   });
 
+  router.patch("/chats/:id/close-reason", requireAuth, async (req: Request, res: Response) => {
+    const { reason } = req.body;
+    if (!reason || typeof reason !== "string") return res.status(400).json({ error: "reason required" });
+    await lcStorage.setChatCloseReason(p(req.params.id), reason);
+    return res.json({ ok: true });
+  });
+
   router.post("/chats/:id/take-over", requireAuth, async (req: Request, res: Response) => {
     const { userId } = req.body;
     await lcStorage.updateChat(p(req.params.id), {
