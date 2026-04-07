@@ -308,7 +308,7 @@ function LiveChat() {
       ws.send(JSON.stringify({ type: "AGENT_CONNECT", userId: "admin" }));
     };
 
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data);
         switch (data.type) {
@@ -439,6 +439,36 @@ function LiveChat() {
                  c.visitorId === data.visitorId ? { ...c, visitorName: data.posVendaData.nome } : c
                ));
             }
+            break;
+          }
+          case "VISITOR_NOTE_ADDED":
+          case "RD_CRM_OS_CREATED": {
+            // Recarrega dados do visitante afetado para atualizar as Notas da IA em tempo real
+            const affectedId = data.visitorId;
+            if (!affectedId) break;
+            try {
+              const vRes = await fetch(`/api/livechat/visitors/${affectedId}`, { credentials: "include" });
+              if (vRes.ok) {
+                const updatedVisitor: Visitor = await vRes.json();
+                // Atualiza no selectedVisitor (painel de detalhes aberto)
+                setSelectedVisitor(prev =>
+                  prev && prev.id === affectedId ? { ...prev, ...updatedVisitor } : prev
+                );
+                // Atualiza também nas listas gerais
+                setAllVisitors(prev =>
+                  prev.map(v => v.id === affectedId ? { ...v, ...updatedVisitor } : v)
+                );
+                setPipelineData(prev => {
+                  const next = { ...prev };
+                  for (const stage of Object.keys(next)) {
+                    next[stage] = (next[stage] || []).map((v: Visitor) =>
+                      v.id === affectedId ? { ...v, ...updatedVisitor } : v
+                    );
+                  }
+                  return next;
+                });
+              }
+            } catch { /* ignora erros de fetch — não crítico */ }
             break;
           }
         }

@@ -422,6 +422,13 @@ export const lcStorage = {
       .set({ totalChats: sql`"totalChats" + 1` } as any)
       .where(eq(lcVisitors.id, data.visitorId));
 
+    // ── Limpa rdCrmDealId para que o próximo atendimento gere um novo card ──
+    // Isso garante que cada sessão de chat cria um card independente no RD CRM,
+    // mesmo que o visitante já tenha um card de um atendimento anterior.
+    await db.update(lcVisitors)
+      .set({ rdCrmDealId: null })
+      .where(eq(lcVisitors.id, data.visitorId));
+
     return (await this.getChatById(id))!;
   },
 

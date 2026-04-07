@@ -122,6 +122,18 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
     try {
       const chat = await lcStorage.getChatById(chatId);
       if (chat && chat.status !== "closed") {
+        // ── Proteção: não mover visitante que já está num estágio finalizado ──
+        // Isso acontece quando o POS_VENDA_DADOS cria o card CRM de forma
+        // assíncrona e fecha o chat — o timer já estava armado.
+        const visitor = await lcStorage.getVisitorById(visitorId);
+        const FINAL_STAGES = ["finalizado_com_venda", "finalizado_sem_venda", "outros", "pos_venda"];
+        if (visitor && FINAL_STAGES.includes(visitor.pipelineStage ?? "")) {
+          // Atendimento já concluído — apenas encerra o chat sem mover o card
+          console.log(`[LiveChat] Visitante ${visitorId} já em '${visitor.pipelineStage}' — timer cancelado sem mover.`);
+          await lcStorage.closeChat(chatId).catch(() => {});
+          clearAISession(chatId);
+          return;
+        }
         await lcStorage.closeChat(chatId);
         await lcStorage.updateVisitorPipeline(visitorId, "sem_resposta");
         clearAISession(chatId);
