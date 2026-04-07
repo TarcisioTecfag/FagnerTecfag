@@ -397,10 +397,13 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               visitorId = visitor.id;
             }
 
-            // Set pipeline stage to novo_atendimento for new/returning visitors
+            // Set pipeline stage — NUNCA rebaixa estágios de atendimento ativo
+            // Só define 'novo_atendimento' se o visitante não tem estágio ou está em estágio neutro/inicial
+            const ACTIVE_STAGES = ['em_atendimento', 'pos_venda', 'outros', 'finalizado_com_venda', 'finalizado_sem_venda'];
             if (visitor && !visitor.pipelineStage) {
               await lcStorage.updateVisitorPipeline(visitorId, "novo_atendimento");
-            } else if (visitor && visitor.pipelineStage !== 'em_atendimento' && visitor.pipelineStage !== 'finalizado_com_venda') {
+            } else if (visitor && !ACTIVE_STAGES.includes(visitor.pipelineStage ?? '') && visitor.pipelineStage !== 'sem_resposta') {
+              // Só reseta se estava em novo_atendimento (nunca rebaixa quem já avançou)
               await lcStorage.updateVisitorPipeline(visitorId, "novo_atendimento");
             }
 
@@ -500,15 +503,20 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
           case "SET_VISITOR_NAME": {
             if (!visitorId || !data.name) break;
 
-            // Persistir nome no registro do visitante
+            // Persistir nome no registro do visitante (sempre atualiza — nunca cria novo)
             try { await lcStorage.setVisitorName(visitorId, data.name); } catch {}
+
+            // ⚡ Visitante voltou: cancela os timers de follow-up/encerramento que estavam
+            // rodando desde que desconectou. Isso evita que o chat seja fechado automaticamente
+            // enquanto o visitante estava só navegando em outra aba.
+            clearFollowUpTimers(visitorId);
 
             const chat = await lcStorage.getActiveChatByVisitor(visitorId);
             if (chat) {
+              // Chat ativo existe: apenas atualiza o nome e notifica painel
               await lcStorage.updateChat(chat.id, { visitorName: data.name });
               chat.visitorName = data.name;
               const visitor = await lcStorage.getVisitorById(visitorId);
-
               broadcastToAgents({
                 type: "NEW_CHAT",
                 chat,
@@ -516,11 +524,18 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 proactive: false,
               });
             }
+            // Se não há chat ativo: não faz nada especial — o chat será criado
+            // normalmente quando o visitante enviar a primeira mensagem (CHAT_MESSAGE).
+            // O Fagner saberá o nome via visitor.name injetado no contexto.
 
-            // Mover pipeline para Em Atendimento quando visitante fornece o nome
+            // Mover pipeline para Em Atendimento (só se não estiver em estágio final)
             try {
-              await lcStorage.updateVisitorPipeline(visitorId, "em_atendimento");
-              broadcastPipelineUpdate(visitorId, "em_atendimento");
+              const FINAL_STAGES = ['finalizado_com_venda', 'finalizado_sem_venda', 'pos_venda'];
+              const currentVisitor = await lcStorage.getVisitorById(visitorId);
+              if (!FINAL_STAGES.includes(currentVisitor?.pipelineStage ?? '')) {
+                await lcStorage.updateVisitorPipeline(visitorId, "em_atendimento");
+                broadcastPipelineUpdate(visitorId, "em_atendimento");
+              }
             } catch {}
             break;
           }
@@ -1034,36 +1049,85 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                       (async () => {
                         try {
-                          // Coletar snippet das últimas mensagens para enriquecer o relatório
+                          // Coletar mensagens do chat para o relatório
                           const recentMessages = await lcStorage.listMessagesByChat(chat.id);
+
+                          // Snippet compacto (150 chars/msg) — usado como contexto para a análise do Gemini
                           const snippet = recentMessages
                             .slice(-30)
-                            .map(m => `${m.sender === 'visitor' ? 'Cliente' : 'Fagner'}: ${m.content.slice(0, 150)}`)
+                            .filter(m => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
+                            .map(m => {
+                              const who = m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]';
+                              const clean = m.content
+                                .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, '')
+                                .replace(/\[SCORE:\d+\]/gi, '')
+                                .replace(/\[STAGE:[^\]]+\]/gi, '')
+                                .replace(/\[POS_VENDA_DADOS:[\s\S]*?\]/gi, '')
+                                .trim();
+                              return `${who} ${clean.slice(0, 150)}`;
+                            })
+                            .filter(Boolean)
+                            .join('\n');
+
+                          // Transcrição completa — vai para a seção de histórico do relatório
+                          const transcricaoCompleta = recentMessages
+                            .filter(m => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
+                            .map(m => {
+                              const who = m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]';
+                              const clean = m.content
+                                .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, '')
+                                .replace(/\[SCORE:\d+\]/gi, '')
+                                .replace(/\[STAGE:[^\]]+\]/gi, '')
+                                .replace(/\[POS_VENDA_DADOS:[\s\S]*?\]/gi, '')
+                                .replace(/\[PRODUTO_IDENTIFICADO:[^\]]+\]/gi, '')
+                                .trim();
+                              return clean ? `${who} ${clean}` : null;
+                            })
+                            .filter(Boolean)
                             .join('\n');
 
                           // Gerar relatório via Gemini
                           const relatorio = await generatePosVendaReport({
-                            nome:        posVendaData.nome,
-                            telefone:    posVendaData.telefone,
-                            email:       posVendaData.email       ?? null,
-                            cnpjCpf:     posVendaData.cnpjCpf     ?? null,
-                            notaPedido:  posVendaData.notaPedido  ?? null,
-                            problema:    posVendaData.problema,
-                            cnpjData:    posVendaData.cnpjData,
+                            nome:                posVendaData.nome,
+                            telefone:            posVendaData.telefone,
+                            email:               posVendaData.email       ?? null,
+                            cnpjCpf:             posVendaData.cnpjCpf     ?? null,
+                            notaPedido:          posVendaData.notaPedido  ?? null,
+                            problema:            posVendaData.problema,
+                            cnpjData:            posVendaData.cnpjData,
                             conversationSnippet: snippet,
+                            transcricaoCompleta: transcricaoCompleta,
                           });
 
                           // Criar OS no RD CRM
+                          // Extrai o resumo gerado pelo Gemini para usar em "Informações Complementares"
+                          // O relatório completo vai para as Anotações; o resumo vai para o campo do deal
+                          const conversationSummary = (() => {
+                            // Tenta extrair o bloco de ANÁLISE FAGNER IA como resumo, ou usa
+                            // a primeira parte do relatório (Identificação + Problema) até 400 chars
+                            const analiseMatch = relatorio.match(/ANÁLISE FAGNER IA\n([\s\S]*?)$/i);
+                            if (analiseMatch && analiseMatch[1]?.trim()) {
+                              return analiseMatch[1].trim().slice(0, 400);
+                            }
+                            // Fallback: extrai a linha do problema
+                            const problemaMatch = relatorio.match(/PROBLEMA RELATADO\n\s*([\s\S]*?)(?:\n\n|$)/i);
+                            if (problemaMatch && problemaMatch[1]?.trim()) {
+                              return `Problema: ${problemaMatch[1].trim().slice(0, 300)}`;
+                            }
+                            return `${posVendaData.problema ?? 'Suporte pós-venda'}`.slice(0, 400);
+                          })();
+
                           const dealId = await createPosVendaOS(
                             currentVisitorId,
                             {
-                              nome:       posVendaData.nome,
-                              telefone:   posVendaData.telefone,
-                              email:      posVendaData.email       ?? undefined,
-                              cnpjCpf:    posVendaData.cnpjCpf     ?? undefined,
-                              notaPedido: posVendaData.notaPedido  ?? undefined,
-                              problema:   posVendaData.problema,
-                              cnpjData:   posVendaData.cnpjData    ?? undefined,
+                              nome:                posVendaData.nome,
+                              telefone:            posVendaData.telefone,
+                              email:               posVendaData.email       ?? undefined,
+                              cnpjCpf:             posVendaData.cnpjCpf     ?? undefined,
+                              notaPedido:          posVendaData.notaPedido  ?? undefined,
+                              problema:            posVendaData.problema,
+                              cnpjData:            posVendaData.cnpjData    ?? undefined,
+                              conversationSummary: conversationSummary,
                             },
                             relatorio
                           );

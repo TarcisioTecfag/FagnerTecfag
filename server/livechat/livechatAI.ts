@@ -762,8 +762,15 @@ export async function processVisitorMessage(
   }
 
   // Add visitor name context (so Fagner knows who he's talking to)
+  // Se o histórico está vazio MAS o visitante já tem nome, é um retorno de sessão —
+  // o Fagner NÃO deve tratar a primeira mensagem como se fosse um cliente desconhecido.
   if (visitorName) {
-    contextParts.unshift(`## DADOS DO CLIENTE\nNome: ${visitorName}\nINSTRUÇÃO: Você JÁ SABE o nome do cliente. Use-o naturalmente quando fizer sentido, mas não force em toda frase.`);
+    const isReturningVisitor = session.history.length === 0;
+    if (isReturningVisitor) {
+      contextParts.unshift(`## DADOS DO CLIENTE\nNome: ${visitorName}\nAVISO IMPORTANTE: Este é um cliente que JÁ CONVERSOU COM VOCÊ anteriormente. O chat atual é uma continuação (nova sessão do navegador). NÃO faça saudação de boas-vindas genérica como se fosse a primeira vez. Responda diretamente ao que ele estiver pedindo, usando o nome "${visitorName}" naturalmente. Se ele mencionar um assunto que parece continuação de conversa anterior, demonstre que se lembra do contexto.`);
+    } else {
+      contextParts.unshift(`## DADOS DO CLIENTE\nNome: ${visitorName}\nINSTRUÇÃO: Você JÁ SABE o nome do cliente. Use-o naturalmente quando fizer sentido, mas não force em toda frase.`);
+    }
   }
 
   // Add visitor page context
@@ -1057,13 +1064,19 @@ export interface PosVendaReportInput {
   notaPedido?: string | null;
   problema: string;
   cnpjData?: any;
-  conversationSnippet?: string; // últimas mensagens do chat
+  conversationSnippet?: string;  // snippet compacto para contexto do Gemini
+  transcricaoCompleta?: string;  // transcrição completa para seção do relatório
 }
+
+const SEP = "-------------------------------------------------------";
 
 /**
  * Gera um relatório estruturado em texto para ser usado como Anotação
  * na Negociação criada automaticamente no RD Station CRM.
- * Usa o Gemini para sintetizar o contexto. Fallback para texto estruturado simples.
+ * Usa o Gemini para sintetizar análise SDR detalhada.
+ * Fallback para texto estruturado simples sem IA.
+ *
+ * Formato visual baseado no exemplo do usuário (separadores, seções claras).
  */
 export async function generatePosVendaReport(input: PosVendaReportInput): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -1072,84 +1085,185 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
     hour: "2-digit", minute: "2-digit",
   });
 
-  // Relatório base estruturado (usado como fallback ou enriquecido pelo Gemini)
-  const estruturado = [
-    `📋 OS DE PÓS VENDA — Gerado automaticamente pelo Fagner (Live Chat Tecfag)`,
-    `📅 Data/Hora: ${dataAtual}`,
+  // ─── Bloco 1: Cabeçalho ───────────────────────────────────────────────────
+  const cabecalho = [
+    `RELATÓRIO DE TRIAGEM — FAGNER`,
+    SEP,
     ``,
-    `👤 IDENTIFICAÇÃO DO CLIENTE`,
-    `   • Nome: ${input.nome}`,
-    `   • Telefone: ${input.telefone}`,
-    ...(input.email         ? [`   • E-mail: ${input.email}`]         : []),
-    ...(input.cnpjCpf       ? [`   • CPF/CNPJ: ${input.cnpjCpf}`]     : []),
-    ...(input.notaPedido    ? [`   • Nota do Pedido: ${input.notaPedido}`] : [`   • Nota do Pedido: Não informado`]),
-    ...(input.cnpjData      ? [
-      ``,
-      `🏢 DADOS DA EMPRESA (Receita Federal)`,
-      `   • Razão Social: ${input.cnpjData.nome ?? 'Não encontrado'}`,
-      `   • Fantasia: ${input.cnpjData.fantasia ?? 'Não encontrado'}`,
-      `   • Situação: ${input.cnpjData.situacao ?? 'Não encontrado'}`,
-      `   • Matriz/Filial: ${(input.cnpjData as any).matrizFilial ?? 'Não encontrado'}`,
-      `   • Data de Abertura: ${(input.cnpjData as any).dataAbertura ?? 'Não encontrado'}`,
-      `   • Capital Social: ${(input.cnpjData as any).capitalSocial ?? 'Não encontrado'}`,
-      `   • Porte: ${(input.cnpjData as any).porte ?? 'Não encontrado'}`,
-      `   • Natureza Jurídica: ${(input.cnpjData as any).naturezaJuridica ?? 'Não encontrado'}`,
-      `   • CNAE Principal: ${(input.cnpjData as any).cnaePrincipal ?? 'Não encontrado'}`,
-      ...((input.cnpjData as any).cnaesSecundarios ? [`   • CNAEs Secundários: ${(input.cnpjData as any).cnaesSecundarios}`] : [`   • CNAEs Secundários: Não encontrado`]),
-      `   • Sócios: ${(input.cnpjData as any).socios ?? 'Não encontrado'}`,
-      `   • Endereço: ${[input.cnpjData.logradouro, (input.cnpjData as any).numero, (input.cnpjData as any).bairro].filter(Boolean).join(', ') || 'Não encontrado'}`,
-      `   • CEP: ${(input.cnpjData as any).cep ?? 'Não encontrado'}`,
-      `   • Cidade/UF: ${input.cnpjData.municipio ? `${input.cnpjData.municipio} - ${input.cnpjData.uf}` : 'Não encontrado'}`,
-      `   • Telefone(s): ${[(input.cnpjData as any).telefone1, (input.cnpjData as any).telefone2].filter(Boolean).join(' / ') || 'Não encontrado'}`,
-      `   • E-mail: ${(input.cnpjData as any).email ?? 'Não encontrado'}`,
-    ] : []),
-    ``,
-    `🔧 PROBLEMA RELATADO`,
-    `   ${input.problema}`,
-    ``,
-    ...(input.conversationSnippet ? [
-      `💬 CONTEXTO DO ATENDIMENTO (Chat Widget Tecfag)`,
-      input.conversationSnippet,
-      ``,
-    ] : []),
-    `📌 STATUS: Aguardando primeiro contato da equipe de Pós Venda`,
-    `🤖 Gerado automaticamente pelo sistema Fagner IA — Tecfag`,
   ].join("\n");
 
-  if (!apiKey) return estruturado;
+  // ─── Bloco 2: Identificação do Cliente ───────────────────────────────────
+  const identificacao = [
+    `IDENTIFICAÇÃO DO CLIENTE:`,
+    `Nome : ${input.nome}`,
+    ...(input.cnpjData?.nome && input.cnpjData.nome !== input.nome
+      ? [`Empresa : ${input.cnpjData.nome}`]
+      : []),
+    ...(input.cnpjCpf ? [`${input.cnpjCpf.replace(/\D/g, "").length === 14 ? "CNPJ" : "CPF"} : ${input.cnpjCpf}`] : []),
+    `Telefone : ${input.telefone}`,
+    ...(input.email ? [`E-mail : ${input.email}`] : [`E-mail : Não informado`]),
+    ...(input.notaPedido ? [`Nota Fiscal : ${input.notaPedido}`] : [`Nota Fiscal : Não informado`]),
+    ``,
+    SEP.slice(0, 8), // "--------" separador curto entre seções
+    ``,
+  ].join("\n");
 
-  // Enriquecer com Gemini (análise de tipo de atendimento)
+  // ─── Bloco 3: Problema Relatado ───────────────────────────────────────────
+  const problemaBloco = [
+    `PROBLEMA / MOTIVO DO CONTATO:`,
+    `${input.problema}`,
+    ``,
+    SEP.slice(0, 8),
+    ``,
+  ].join("\n");
+
+  // ─── Bloco 4: Perfil da Empresa (Receita Federal) — apenas para CNPJ ──────
+  let perfilEmpresaBloco = "";
+  if (input.cnpjData) {
+    const cd = input.cnpjData as any;
+    perfilEmpresaBloco = [
+      `PERFIL DA EMPRESA (RECEITA FEDERAL):`,
+      `Razão Social : ${cd.nome ?? "Não encontrado"}`,
+      ...(cd.fantasia ? [`Nome Fantasia : ${cd.fantasia}`] : []),
+      `CNPJ : ${cd.cnpj ?? input.cnpjCpf ?? "Não encontrado"}`,
+      ...(cd.porte ? [`Porte : ${cd.porte}`] : []),
+      ...(cd.naturezaJuridica ? [`Tipo de Empresa : ${cd.naturezaJuridica}`] : []),
+      ...(cd.capitalSocial ? [`Capital registrado : R$ ${Number(cd.capitalSocial).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`] : []),
+      ...(cd.situacao ? [`Situação Cadastral : ${cd.situacao}`] : []),
+      ...(cd.matrizFilial ? [`Matriz/Filial : ${cd.matrizFilial}`] : []),
+      ...(cd.dataAbertura ? [`Data de Abertura : ${cd.dataAbertura}`] : []),
+      ...(cd.cnaePrincipal ? [`CNAE Principal : ${cd.cnaePrincipal}`] : []),
+      ...(cd.cnaesSecundarios ? [`CNAEs Secundários : ${cd.cnaesSecundarios}`] : []),
+      ...(cd.socios ? [`Sócios : ${cd.socios}`] : []),
+      ...([cd.logradouro, cd.numero, cd.bairro].filter(Boolean).length > 0
+        ? [`Endereço : ${[cd.logradouro, cd.numero, cd.bairro].filter(Boolean).join(", ")}`]
+        : []),
+      ...(cd.municipio ? [`Cidade/UF : ${cd.municipio} - ${cd.uf ?? ""}`] : []),
+      ...(cd.cep ? [`CEP : ${cd.cep}`] : []),
+      ...([cd.telefone1, cd.telefone2].filter(Boolean).length > 0
+        ? [`Telefone(s) Empresa : ${[cd.telefone1, cd.telefone2].filter(Boolean).join(" / ")}`]
+        : []),
+      ...(cd.email ? [`E-mail Empresa : ${cd.email}`] : []),
+      ``,
+      SEP.slice(0, 8),
+      ``,
+    ].join("\n");
+  }
+
+  // ─── Bloco 5: Data e Status ───────────────────────────────────────────────
+  const rodape = [
+    `DATA / HORA : ${dataAtual}`,
+    `STATUS : Aguardando primeiro contato da equipe de Pós Venda`,
+    ``,
+    SEP,
+    `Gerado automaticamente pelo sistema Fagner IA — Tecfag`,
+  ].join("\n");
+
+  // ─── Bloco 5: Transcrição completa do atendimento ───────────────────────
+  const transcricaoBloco = input.transcricaoCompleta
+    ? [
+        `TRANSCRIÇÃO DO ATENDIMENTO:`,
+        input.transcricaoCompleta,
+        ``,
+        SEP.slice(0, 8),
+        ``,
+      ].join("\n")
+    : "";
+
+  // ─── Monta estrutura base (sem análise Gemini) ─────────────────────────────
+  // Ordem: cabeçalho → dados cliente → dados empresa → problema → transcrição → rodapé
+  const estruturadoBase = [
+    cabecalho,
+    identificacao,
+    perfilEmpresaBloco,
+    problemaBloco,
+    transcricaoBloco,
+  ].filter(Boolean).join("") + rodape;
+
+  if (!apiKey) return estruturadoBase;
+
+  // ─── Enriquecer com análise de Pós Venda via Gemini ─────────────────────
   try {
     const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
     const prompt = `
-Você é um assistente de operações da Tecfag (fabricante de máquinas industriais).
-Analise os dados abaixo de um atendimento de Pós Venda e gere um relatório conciso (máx 5 linhas) classificando:
-1. TIPO DE ATENDIMENTO: (Suporte Técnico / Visita Showroom / Reunião Online / Rastreio de Entrega / Outro)
-2. URGÊNCIA: (Alta / Média / Baixa)
-3. RESUMO DA SITUAÇÃO em 2-3 linhas
+Você é um assistente de operações de Pós Venda da Tecfag (fabricante de máquinas industriais).
+Analise o atendimento de pós-venda abaixo e gere um relatório interno para a equipe responsável.
 
-Dados do cliente:
+DADOS COLETADOS:
 Nome: ${input.nome}
 Telefone: ${input.telefone}
-Nota do Pedido: ${input.notaPedido ?? "Não informado"}
-Problema: ${input.problema}
-${input.conversationSnippet ? `\nContexto do chat:\n${input.conversationSnippet}` : ""}
+E-mail: ${input.email ?? "Não informado"}
+Documento (CPF/CNPJ): ${input.cnpjCpf ?? "Não informado"}
+Nota Fiscal: ${input.notaPedido ?? "Não informado"}
+Problema relatado: ${input.problema}
+${input.conversationSnippet ? `\nCONTEXTO DO CHAT:\n${input.conversationSnippet}` : ""}
 
-Responda APENAS com o relatório em texto simples, sem markdown, sem asteriscos.
+INSTRUÇÕES:
+Gere o relatório EXATAMENTE neste formato. Use textos reais baseados nos dados acima, nunca colchetes.
+Responda APENAS com o texto do relatório, sem markdown, sem asteriscos, sem negrito.
+Cada campo use "Chave : Valor" (com dois pontos e espaço).
+
+TIPO DE ATENDIMENTO:
+Categoria : [Suporte Técnico / Manutenção / Garantia / Visita Técnica / Nota Fiscal / 2ª Via de Boleto / Rastreio de Entrega / Devolução / Outro]
+Resumo : [Descreva o problema ou solicitação em 2-3 frases claras e objetivas]
+
+--------
+
+URGÊNCIA:
+Nível : [Alta / Média / Baixa]
+Motivo : [1 frase justificando o nível de urgência com base no problema]
+
+--------
+
+PRÓXIMOS PASSOS:
+[Liste 3 ações concretas para a equipe de pós-venda resolver o caso, cada uma em sua própria linha]
+
+--------
+
+OBSERVAÇÕES:
+[Observações relevantes sobre o cliente ou a situação: tom da conversa, histórico mencionado, cuidados especiais, pontos de atenção. Mínimo 2 linhas.]
+
+Responda APENAS com o conteúdo acima. Nada mais.
 `.trim();
 
     const data = await geminiRequest(url, {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
+      generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
     });
 
     const analise = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     if (analise) {
-      return estruturado + `\n\n🧠 ANÁLISE FAGNER IA\n${analise}`;
+      // Ordem: cabeçalho → dados cliente → dados empresa → análise Gemini → transcrição → rodapé
+      const relatorioFinal = [
+        cabecalho,
+        identificacao,
+        perfilEmpresaBloco,
+        anliseFormatada(analise),
+        ``,
+        SEP.slice(0, 8),
+        ``,
+        transcricaoBloco,
+        rodape,
+      ].filter(Boolean).join("");
+
+      return relatorioFinal;
     }
   } catch (err) {
     console.warn("[RD CRM] Falha ao gerar análise Gemini para relatório:", err);
   }
 
-  return estruturado;
+  return estruturadoBase;
 }
+
+/**
+ * Garante que a análise do Gemini tenha a formatação correta de separadores.
+ * Substitui "--------" por SEP curto se necessário.
+ */
+function anliseFormatada(analise: string): string {
+  return analise
+    .split("\n")
+    .map(line => line.trimEnd())
+    .join("\n");
+}
+
+
