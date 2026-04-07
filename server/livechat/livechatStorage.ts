@@ -44,8 +44,16 @@ export const lcStorage = {
     const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
     const lastSeenTime = new Date(visitor.lastSeenAt).getTime();
     
-    // Se passou do tempo, duplica os dados base mas cria um card NOVO
-    if (Date.now() - lastSeenTime > TWO_HOURS_MS) {
+    // ⚡ GUARDA ABSOLUTA: se o visitante tem um chat ATIVO (não fechado), NUNCA cria novo visitor.
+    // Uma conversa em andamento é sempre a mesma sessão, independente do tempo decorrido.
+    // Sem essa guarda, navegar de página no meio de uma coleta de pós-venda fragmenta o atendimento.
+    const hasActiveChat = await db.select({ id: lcChats.id })
+      .from(lcChats)
+      .where(and(eq(lcChats.visitorId, visitor.id), sql`status != 'closed'`))
+      .limit(1);
+
+    // Se passar do tempo E não houver chat ativo, duplica os dados base mas cria um card NOVO
+    if (Date.now() - lastSeenTime > TWO_HOURS_MS && hasActiveChat.length === 0) {
       const { v4: uuidv4 } = await import("uuid");
       const newId = uuidv4();
 
