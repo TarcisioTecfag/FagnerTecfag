@@ -1132,21 +1132,20 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
     // Add raw conversation lines without markdown
     const transcricaoLines = input.transcricaoCompleta.split('\n');
     for (const tl of transcricaoLines) {
-       if (tl.trim()) lines.push(tl.trim());
+       // O "+ '<br>'" garante os dois espaços necessários após o join('<br>') final do relatório.
+       if (tl.trim()) lines.push(tl.trim() + '<br>');
     }
   } else {
     lines.push(`(Nenhuma transcrição disponível)`);
   }
   
-  lines.push(``);
+  lines.push(`<br>`);
   lines.push(`DATA / HORA: ${dataAtual}`);
   lines.push(`STATUS: Aguardando primeiro contato da equipe de Pós Venda`);
   lines.push(`=======================================================`);
   lines.push(`Gerado automaticamente pelo sistema Fagner IA — Tecfag`);
 
-  // To make sure RD Station renders line breaks perfectly in notes (since it uses HTML internally)
-  // We double line breaks where there are empty entries
-  const reportText = lines.join("\n").replace(/\\n/g, "<br>");
+  const reportText = lines.join("<br>");
   return reportText;
 }
 

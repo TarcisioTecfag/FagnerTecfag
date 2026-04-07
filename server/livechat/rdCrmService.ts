@@ -310,15 +310,17 @@ async function findOrCreateOrganization(
       // 3. Cria empresa nova (CNPJ)
       const orgPayload: Record<string, any> = {
         name: cnpjData.nome,
-        custom_fields: {
-          cnpj: cnpjNum,
-        },
+        organization_custom_fields: []
       };
 
-      // Campos opcionais — só preenche se a Receita retornou
-      if (cnpjData.municipio) orgPayload.city    = cnpjData.municipio;
-      if (cnpjData.uf)        orgPayload.state   = cnpjData.uf;
-      if (cnpjData.bairro)    orgPayload.district = cnpjData.bairro;
+      // Tenta enviar custom field via objeto (v1 fallback) ou array (v2 spec)
+      orgPayload.custom_fields = { cnpj: cnpjNum };
+
+      // Campos opcionais de endereço removidos permanentemente para evitar quebras silenciosas 
+      // na API do RD CRM v2 por falta de whitelist (municipio/estado inválidos pro CRM).
+      // if (cnpjData.municipio) orgPayload.city    = cnpjData.municipio;
+      // if (cnpjData.uf)        orgPayload.state   = cnpjData.uf;
+      // if (cnpjData.bairro)    orgPayload.district = cnpjData.bairro;
 
       const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
       console.log(`[RD CRM] Empresa criada (CNPJ): ${org.id} — ${cnpjData.nome}`);
@@ -346,6 +348,7 @@ async function findOrCreateOrganization(
         custom_fields: {
           cpf: doc, // campo CPF da empresa no RD
         },
+        organization_custom_fields: []
       };
 
       const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
@@ -361,69 +364,54 @@ async function findOrCreateOrganization(
 }
 
 // ─── Contatos ────────────────────────────────────────────────────────────────
-async function findContactByPhone(phone: string): Promise<{ id: string } | null> {
-  const normalized = phone.replace(/\D/g, "");
-  try {
-    const data = await rdRequest<any[]>("GET", `/contacts?filter=phone:${normalized}`);
-    if (Array.isArray(data) && data.length > 0) return data[0];
-    return null;
-  } catch {
-    return null;
+async function upsertContact(posVenda: PosVendaData, organizationId?: string | null): Promise<string> {
+  let docDigits = (posVenda.cnpjCpf ?? "").replace(/\D/g, "");
+  let hasCnpjCpf = docDigits.length === 11 || docDigits.length === 14;
+
+  const telefoneNum = posVenda.telefone.replace(/\D/g, "");
+
+  // 1. Tenta buscar pelo campo personalizado (CPF_CNPJ)
+  if (hasCnpjCpf) {
+    try {
+      const byDoc = await rdRequest<any[]>(
+        "GET",
+        `/contacts?filter=@cpf_cnpj:${encodeURIComponent(docDigits)}`
+      );
+      if (Array.isArray(byDoc) && byDoc.length > 0) {
+        console.log(`[RD CRM] Contato existente (por doc): ${byDoc[0].id}`);
+        return byDoc[0].id;
+      }
+    } catch {}
   }
-}
 
-/**
- * Atualiza um contato existente com o e-mail caso o campo esteja ausente.
- * Garante que o e-mail nunca fique em branco por causa do "contato já existe".
- */
-async function updateContactEmailIfMissing(
-  contactId: string,
-  email: string | null | undefined
-): Promise<void> {
-  if (!email) return;
+  // 2. Tenta buscar pelo telefone
   try {
-    // Verifica se o contato já tem e-mail
-    const existing = await rdRequest<any>("GET", `/contacts/${contactId}`);
-    const emails: any[] = existing?.emails ?? [];
-    const alreadyHasEmail = emails.some((e: any) => e.email && e.email.trim().length > 0);
-
-    if (!alreadyHasEmail) {
-      await rdRequest("PUT", `/contacts/${contactId}`, {
-        emails: [{ email }],
-        custom_fields: { e_mail: email },
-      });
-      console.log(`[RD CRM] E-mail atualizado no contato ${contactId}: ${email}`);
-    } else {
-      console.log(`[RD CRM] Contato ${contactId} já possui e-mail — sem atualização.`);
+    const byPhone = await rdRequest<any[]>("GET", `/contacts?filter=phone:${telefoneNum}`);
+    if (Array.isArray(byPhone) && byPhone.length > 0) {
+      console.log(`[RD CRM] Contato existente (por telefone): ${byPhone[0].id}`);
+      return byPhone[0].id;
     }
-  } catch (e: any) {
-    console.warn(`[RD CRM] Falha ao atualizar e-mail do contato ${contactId}:`, e.message);
-  }
-}
+  } catch {}
 
-async function findOrCreateContact(posVenda: PosVendaData): Promise<string> {
-  const existing = await findContactByPhone(posVenda.telefone);
-
-  if (existing) {
-    console.log(`[RD CRM] Contato existente encontrado: ${existing.id}`);
-    // FIX: Atualiza e-mail no contato existente se estiver faltando
-    await updateContactEmailIfMissing(existing.id, posVenda.email);
-    return existing.id;
-  }
-
+  // 3. Cria contato novo
   const contactPayload: Record<string, any> = {
-    name:   posVenda.nome,
-    phones: [{ phone: posVenda.telefone.replace(/\D/g, ""), type: "mobile" }],
-    legal_bases: [{
-      category: "data_processing",
-      type:     "pre_existent_contract",
-      status:   "granted",
-    }],
+    name:        posVenda.nome,
+    phones:      [{ phone: telefoneNum }],
   };
 
   if (posVenda.email) {
-    contactPayload.emails         = [{ email: posVenda.email }];
-    contactPayload.custom_fields  = { e_mail: posVenda.email };
+    const emailSanitized = posVenda.email.trim().toLowerCase();
+    contactPayload.emails = [{ email: emailSanitized }];
+  }
+  if (posVenda.cnpjCpf) {
+    contactPayload.custom_fields = {
+      cpf_cnpj: docDigits
+    };
+  }
+  
+  if (organizationId) {
+    contactPayload.organization_id = organizationId;
+    contactPayload.company_id = organizationId;
   }
 
   const contact = await rdRequest<{ id: string }>("POST", "/contacts", contactPayload);
@@ -477,16 +465,6 @@ async function createDeal(
 
   console.log(`[RD CRM] Criando deal "${titulo}": pipeline=${pipelineId} stage=${stageId}`);
 
-  const payloadData: Record<string, any> = {
-    deal: {
-      name:        titulo,
-      deal_stage_id: stageId,
-      deal_source_id: sourceId || undefined,
-      campaign_id: campaignId || undefined,
-      user_id: ownerId, // Dono do deal
-    }
-  };
-
   const dealPayload: Record<string, any> = {
     name:        titulo,
     pipeline_id: pipelineId,
@@ -498,22 +476,30 @@ async function createDeal(
     deal_custom_fields: []
   };
 
-  if (sourceId)       dealPayload.source_id       = sourceId;
+  if (sourceId)       dealPayload.deal_source_id  = sourceId;
   if (campaignId)     dealPayload.campaign_id     = campaignId;
-  if (organizationId) dealPayload.organization_id = organizationId;
+  
+  if (organizationId) {
+    dealPayload.organization_id = organizationId;
+    dealPayload.organization = { _id: organizationId };
+    dealPayload.company_id = organizationId; // V1 fallback
+  }
 
   // Busca campos personalizados dinamicamente 
   const cfs = await loadDealCustomFields();
   const infoField = cfs.find((f: any) => f.name.includes("complementar"));
+  
+  dealPayload.custom_fields = {};
   
   if (infoField) {
     dealPayload.deal_custom_fields.push({
       custom_field_id: infoField.id,
       value: infoCompl
     });
+    // Injeção de redundância (API v2 mix)
+    dealPayload.custom_fields[infoField.id] = infoCompl;
   } else {
-    // Tenta fallback com o formato antigo de objeto (funciona em alguns endpoints)
-    dealPayload.custom_fields = { informacoes_complementares: infoCompl };
+    dealPayload.custom_fields.informacoes_complementares = infoCompl;
   }
 
   const deal = await rdRequest<{ id: string }>("POST", "/deals", dealPayload);
@@ -533,7 +519,7 @@ async function createNote(dealId: string, relatorio: string): Promise<void> {
 // ─── Função principal ────────────────────────────────────────────────────────
 export async function createPosVendaOS(
   visitorId: string,
-  posVenda: PosVendaData,
+  posVendaData: Omit<PosVendaData, 'conversationSnippet'> & { conversationSummary?: string },
   relatorio: string
 ): Promise<string> {
   if (!process.env.RD_CRM_CLIENT_ID || !process.env.RD_CRM_PIPELINE_OS_STAGE_ID) {
@@ -551,26 +537,25 @@ export async function createPosVendaOS(
 
   console.log(`[RD CRM] Criando OS de Pós Venda para visitante ${visitorId}...`);
 
-  // 1. Contato (cria ou busca, e atualiza e-mail se necessário)
-  const contactId = await findOrCreateContact(posVenda);
-
-  // 2. Empresa — para CNPJ: usa dados da Receita. Para CPF: cria com nome do cliente.
+  // 1. Empresa — para CNPJ: usa dados da Receita. Para CPF: cria com nome do cliente.
   let organizationId: string | null = null;
-  const docDigits = (posVenda.cnpjCpf ?? "").replace(/\D/g, "");
+  const docDigits = (posVendaData.cnpjCpf ?? "").replace(/\D/g, "");
   const isCnpj = docDigits.length === 14;
   const isCpf  = docDigits.length === 11;
 
-  if (isCnpj && posVenda.cnpjData) {
+  if (isCnpj && posVendaData.cnpjData) {
     // CNPJ com dados da Receita disponíveis
-    organizationId = await findOrCreateOrganization(posVenda);
+    organizationId = await findOrCreateOrganization(posVendaData as PosVendaData);
   } else if (isCpf) {
     // CPF: cria empresa com o nome do cliente
-    organizationId = await findOrCreateOrganization(posVenda);
+    organizationId = await findOrCreateOrganization(posVendaData as PosVendaData);
   }
-  // Se não tem CNPJ nem CPF, não cria empresa
+
+  // 2. Contato (cria ou busca, e atualiza e-mail se necessário)
+  const contactId = await upsertContact(posVendaData as PosVendaData, organizationId);
 
   // 3. Negociação
-  const dealId = await createDeal(posVenda, contactId, organizationId);
+  const dealId = await createDeal(posVendaData as PosVendaData, contactId, organizationId);
 
   // 4. Anotação com relatório completo
   await createNote(dealId, relatorio);
