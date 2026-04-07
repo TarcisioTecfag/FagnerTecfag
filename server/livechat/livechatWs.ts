@@ -1145,7 +1145,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                           );
 
                           // Nota de sucesso com link clicável
-                          const dealUrl = `https://app.rdstation.com.br/sales/deals/${dealId}`;
+                          const dealUrl = `https://crm.rdstation.com/app/deals/${dealId}`;
                           await lcStorage.addVisitorNote(
                             currentVisitorId,
                             "RD CRM",

@@ -18,9 +18,9 @@ const DB_KEY_ACCESS  = "rd_crm_access_token";
 const DB_KEY_REFRESH = "rd_crm_refresh_token";
 const DB_KEY_EXPIRES = "rd_crm_token_expires_at";
 
-// IDs fixos cacheados em memória (buscados/criados na primeira chamada)
 let _sourceId:   string | null = null;
 let _campaignId: string | null = null;
+let _customFieldsCache: { id: string; name: string }[] | null = null;
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface CnpjData {
@@ -247,6 +247,21 @@ async function getOrCreateCampaignId(): Promise<string> {
   return _campaignId!;
 }
 
+// ─── Busca dinâmica de custom fields de Deals ──────────────────────────────────
+async function loadDealCustomFields(): Promise<{ id: string; name: string }[]> {
+  if (_customFieldsCache) return _customFieldsCache;
+  try {
+    const data = await rdRequest<any[]>("GET", "/deals/custom_fields");
+    if (Array.isArray(data)) {
+      _customFieldsCache = data.map(f => ({ id: f.id, name: f.name.toLowerCase() }));
+      return _customFieldsCache;
+    }
+  } catch (e: any) {
+    console.warn("[RD CRM] Falha ao carregar campos personalizados do deal:", e.message);
+  }
+  return [];
+}
+
 // ─── Empresa (Organization) — CNPJ ou CPF ────────────────────────────────────
 
 /**
@@ -462,6 +477,16 @@ async function createDeal(
 
   console.log(`[RD CRM] Criando deal "${titulo}": pipeline=${pipelineId} stage=${stageId}`);
 
+  const payloadData: Record<string, any> = {
+    deal: {
+      name:        titulo,
+      deal_stage_id: stageId,
+      deal_source_id: sourceId || undefined,
+      campaign_id: campaignId || undefined,
+      user_id: ownerId, // Dono do deal
+    }
+  };
+
   const dealPayload: Record<string, any> = {
     name:        titulo,
     pipeline_id: pipelineId,
@@ -470,14 +495,26 @@ async function createDeal(
     contact_ids: [contactId],
     status:      "ongoing",
     rating:      1,  // Muito baixa intenção - FRIO (pós-venda)
-    custom_fields: {
-      informacoes_complementares: infoCompl,
-    },
+    deal_custom_fields: []
   };
 
   if (sourceId)       dealPayload.source_id       = sourceId;
   if (campaignId)     dealPayload.campaign_id     = campaignId;
   if (organizationId) dealPayload.organization_id = organizationId;
+
+  // Busca campos personalizados dinamicamente 
+  const cfs = await loadDealCustomFields();
+  const infoField = cfs.find((f: any) => f.name.includes("complementar"));
+  
+  if (infoField) {
+    dealPayload.deal_custom_fields.push({
+      custom_field_id: infoField.id,
+      value: infoCompl
+    });
+  } else {
+    // Tenta fallback com o formato antigo de objeto (funciona em alguns endpoints)
+    dealPayload.custom_fields = { informacoes_complementares: infoCompl };
+  }
 
   const deal = await rdRequest<{ id: string }>("POST", "/deals", dealPayload);
   console.log(`[RD CRM] Negociação criada: ${deal.id} — "${titulo}"`);

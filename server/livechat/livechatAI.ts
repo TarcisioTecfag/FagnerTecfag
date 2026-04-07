@@ -1079,191 +1079,75 @@ const SEP = "-------------------------------------------------------";
  * Formato visual baseado no exemplo do usuário (separadores, seções claras).
  */
 export async function generatePosVendaReport(input: PosVendaReportInput): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
   const dataAtual = new Date().toLocaleDateString("pt-BR", {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
 
-  // ─── Bloco 1: Cabeçalho ───────────────────────────────────────────────────
-  const cabecalho = [
-    `RELATÓRIO DE TRIAGEM — FAGNER`,
-    SEP,
-    ``,
-  ].join("\n");
+  const lines: string[] = [];
+  
+  lines.push(`RELATÓRIO DE TRIAGEM — FAGNER`);
+  lines.push(`-------------------------------------------------------`);
+  lines.push(``);
+  lines.push(`IDENTIFICAÇÃO DO CLIENTE`);
+  lines.push(`Nome: ${input.nome}`);
+  if (input.cnpjData?.nome && input.cnpjData.nome !== input.nome) {
+    lines.push(`Empresa: ${input.cnpjData.nome}`);
+  }
+  if (input.cnpjCpf) {
+    const isCnpj = input.cnpjCpf.replace(/\\D/g, "").length === 14;
+    lines.push(`${isCnpj ? "CNPJ" : "CPF"}: ${input.cnpjCpf}`);
+  }
+  lines.push(`Telefone: ${input.telefone}`);
+  lines.push(`E-mail: ${input.email || 'Não informado'}`);
+  lines.push(`Nota Fiscal: ${input.notaPedido || 'Não informado'}`);
+  lines.push(``);
 
-  // ─── Bloco 2: Identificação do Cliente ───────────────────────────────────
-  const identificacao = [
-    `IDENTIFICAÇÃO DO CLIENTE:`,
-    `Nome : ${input.nome}`,
-    ...(input.cnpjData?.nome && input.cnpjData.nome !== input.nome
-      ? [`Empresa : ${input.cnpjData.nome}`]
-      : []),
-    ...(input.cnpjCpf ? [`${input.cnpjCpf.replace(/\D/g, "").length === 14 ? "CNPJ" : "CPF"} : ${input.cnpjCpf}`] : []),
-    `Telefone : ${input.telefone}`,
-    ...(input.email ? [`E-mail : ${input.email}`] : [`E-mail : Não informado`]),
-    ...(input.notaPedido ? [`Nota Fiscal : ${input.notaPedido}`] : [`Nota Fiscal : Não informado`]),
-    ``,
-    SEP.slice(0, 8), // "--------" separador curto entre seções
-    ``,
-  ].join("\n");
-
-  // ─── Bloco 3: Problema Relatado ───────────────────────────────────────────
-  const problemaBloco = [
-    `PROBLEMA / MOTIVO DO CONTATO:`,
-    `${input.problema}`,
-    ``,
-    SEP.slice(0, 8),
-    ``,
-  ].join("\n");
-
-  // ─── Bloco 4: Perfil da Empresa (Receita Federal) — apenas para CNPJ ──────
-  let perfilEmpresaBloco = "";
   if (input.cnpjData) {
-    const cd = input.cnpjData as any;
-    perfilEmpresaBloco = [
-      `PERFIL DA EMPRESA (RECEITA FEDERAL):`,
-      `Razão Social : ${cd.nome ?? "Não encontrado"}`,
-      ...(cd.fantasia ? [`Nome Fantasia : ${cd.fantasia}`] : []),
-      `CNPJ : ${cd.cnpj ?? input.cnpjCpf ?? "Não encontrado"}`,
-      ...(cd.porte ? [`Porte : ${cd.porte}`] : []),
-      ...(cd.naturezaJuridica ? [`Tipo de Empresa : ${cd.naturezaJuridica}`] : []),
-      ...(cd.capitalSocial ? [`Capital registrado : R$ ${Number(cd.capitalSocial).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`] : []),
-      ...(cd.situacao ? [`Situação Cadastral : ${cd.situacao}`] : []),
-      ...(cd.matrizFilial ? [`Matriz/Filial : ${cd.matrizFilial}`] : []),
-      ...(cd.dataAbertura ? [`Data de Abertura : ${cd.dataAbertura}`] : []),
-      ...(cd.cnaePrincipal ? [`CNAE Principal : ${cd.cnaePrincipal}`] : []),
-      ...(cd.cnaesSecundarios ? [`CNAEs Secundários : ${cd.cnaesSecundarios}`] : []),
-      ...(cd.socios ? [`Sócios : ${cd.socios}`] : []),
-      ...([cd.logradouro, cd.numero, cd.bairro].filter(Boolean).length > 0
-        ? [`Endereço : ${[cd.logradouro, cd.numero, cd.bairro].filter(Boolean).join(", ")}`]
-        : []),
-      ...(cd.municipio ? [`Cidade/UF : ${cd.municipio} - ${cd.uf ?? ""}`] : []),
-      ...(cd.cep ? [`CEP : ${cd.cep}`] : []),
-      ...([cd.telefone1, cd.telefone2].filter(Boolean).length > 0
-        ? [`Telefone(s) Empresa : ${[cd.telefone1, cd.telefone2].filter(Boolean).join(" / ")}`]
-        : []),
-      ...(cd.email ? [`E-mail Empresa : ${cd.email}`] : []),
-      ``,
-      SEP.slice(0, 8),
-      ``,
-    ].join("\n");
+    const cd = input.cnpjData;
+    lines.push(`PERFIL DA EMPRESA (RECEITA FEDERAL)`);
+    lines.push(`Razão Social: ${cd.nome || "Não encontrado"}`);
+    if (cd.fantasia) lines.push(`Nome Fantasia: ${cd.fantasia}`);
+    lines.push(`CNPJ: ${cd.cnpj || input.cnpjCpf || "Não encontrado"}`);
+    if (cd.porte) lines.push(`Porte: ${cd.porte}`);
+    if (cd.naturezaJuridica) lines.push(`Tipo de Empresa: ${cd.naturezaJuridica}`);
+    if (cd.capitalSocial) lines.push(`Capital Registrado: R$ ${Number(cd.capitalSocial).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+    if (cd.situacao) lines.push(`Situação Cadastral: ${cd.situacao}`);
+    if (cd.matrizFilial) lines.push(`Matriz/Filial: ${cd.matrizFilial}`);
+    if (cd.dataAbertura) lines.push(`Data de Abertura: ${cd.dataAbertura}`);
+    if (cd.cnaePrincipal) lines.push(`CNAE Principal: ${cd.cnaePrincipal}`);
+    if (cd.logradouro) lines.push(`Endereço: ${[cd.logradouro, cd.numero, cd.bairro].filter(Boolean).join(", ")}`);
+    if (cd.municipio) lines.push(`Cidade/UF: ${cd.municipio} - ${cd.uf || ""}`);
+    if (cd.cep) lines.push(`CEP: ${cd.cep}`);
+    const telefones = [cd.telefone1, cd.telefone2].filter(Boolean);
+    if (telefones.length > 0) lines.push(`Telefone(s): ${telefones.join(" / ")}`);
+    if (cd.email) lines.push(`E-mail Empresa: ${cd.email}`);
+    lines.push(``);
   }
 
-  // ─── Bloco 5: Data e Status ───────────────────────────────────────────────
-  const rodape = [
-    `DATA / HORA : ${dataAtual}`,
-    `STATUS : Aguardando primeiro contato da equipe de Pós Venda`,
-    ``,
-    SEP,
-    `Gerado automaticamente pelo sistema Fagner IA — Tecfag`,
-  ].join("\n");
-
-  // ─── Bloco 5: Transcrição completa do atendimento ───────────────────────
-  const transcricaoBloco = input.transcricaoCompleta
-    ? [
-        `TRANSCRIÇÃO DO ATENDIMENTO:`,
-        input.transcricaoCompleta,
-        ``,
-        SEP.slice(0, 8),
-        ``,
-      ].join("\n")
-    : "";
-
-  // ─── Monta estrutura base (sem análise Gemini) ─────────────────────────────
-  // Ordem: cabeçalho → dados cliente → dados empresa → problema → transcrição → rodapé
-  const estruturadoBase = [
-    cabecalho,
-    identificacao,
-    perfilEmpresaBloco,
-    problemaBloco,
-    transcricaoBloco,
-  ].filter(Boolean).join("") + rodape;
-
-  if (!apiKey) return estruturadoBase;
-
-  // ─── Enriquecer com análise de Pós Venda via Gemini ─────────────────────
-  try {
-    const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
-    const prompt = `
-Você é um assistente de operações de Pós Venda da Tecfag (fabricante de máquinas industriais).
-Analise o atendimento de pós-venda abaixo e gere um relatório interno para a equipe responsável.
-
-DADOS COLETADOS:
-Nome: ${input.nome}
-Telefone: ${input.telefone}
-E-mail: ${input.email ?? "Não informado"}
-Documento (CPF/CNPJ): ${input.cnpjCpf ?? "Não informado"}
-Nota Fiscal: ${input.notaPedido ?? "Não informado"}
-Problema relatado: ${input.problema}
-${input.conversationSnippet ? `\nCONTEXTO DO CHAT:\n${input.conversationSnippet}` : ""}
-
-INSTRUÇÕES:
-Gere o relatório EXATAMENTE neste formato. Use textos reais baseados nos dados acima, nunca colchetes.
-Responda APENAS com o texto do relatório, sem markdown, sem asteriscos, sem negrito.
-Cada campo use "Chave : Valor" (com dois pontos e espaço).
-
-TIPO DE ATENDIMENTO:
-Categoria : [Suporte Técnico / Manutenção / Garantia / Visita Técnica / Nota Fiscal / 2ª Via de Boleto / Rastreio de Entrega / Devolução / Outro]
-Resumo : [Descreva o problema ou solicitação em 2-3 frases claras e objetivas]
-
---------
-
-URGÊNCIA:
-Nível : [Alta / Média / Baixa]
-Motivo : [1 frase justificando o nível de urgência com base no problema]
-
---------
-
-PRÓXIMOS PASSOS:
-[Liste 3 ações concretas para a equipe de pós-venda resolver o caso, cada uma em sua própria linha]
-
---------
-
-OBSERVAÇÕES:
-[Observações relevantes sobre o cliente ou a situação: tom da conversa, histórico mencionado, cuidados especiais, pontos de atenção. Mínimo 2 linhas.]
-
-Responda APENAS com o conteúdo acima. Nada mais.
-`.trim();
-
-    const data = await geminiRequest(url, {
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
-    });
-
-    const analise = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    if (analise) {
-      // Ordem: cabeçalho → dados cliente → dados empresa → análise Gemini → transcrição → rodapé
-      const relatorioFinal = [
-        cabecalho,
-        identificacao,
-        perfilEmpresaBloco,
-        anliseFormatada(analise),
-        ``,
-        SEP.slice(0, 8),
-        ``,
-        transcricaoBloco,
-        rodape,
-      ].filter(Boolean).join("");
-
-      return relatorioFinal;
+  lines.push(`=======================================================`);
+  lines.push(`TRANSCRIÇÃO DO ATENDIMENTO`);
+  
+  if (input.transcricaoCompleta) {
+    // Add raw conversation lines without markdown
+    const transcricaoLines = input.transcricaoCompleta.split('\n');
+    for (const tl of transcricaoLines) {
+       if (tl.trim()) lines.push(tl.trim());
     }
-  } catch (err) {
-    console.warn("[RD CRM] Falha ao gerar análise Gemini para relatório:", err);
+  } else {
+    lines.push(`(Nenhuma transcrição disponível)`);
   }
+  
+  lines.push(``);
+  lines.push(`DATA / HORA: ${dataAtual}`);
+  lines.push(`STATUS: Aguardando primeiro contato da equipe de Pós Venda`);
+  lines.push(`=======================================================`);
+  lines.push(`Gerado automaticamente pelo sistema Fagner IA — Tecfag`);
 
-  return estruturadoBase;
-}
-
-/**
- * Garante que a análise do Gemini tenha a formatação correta de separadores.
- * Substitui "--------" por SEP curto se necessário.
- */
-function anliseFormatada(analise: string): string {
-  return analise
-    .split("\n")
-    .map(line => line.trimEnd())
-    .join("\n");
+  // To make sure RD Station renders line breaks perfectly in notes (since it uses HTML internally)
+  // We double line breaks where there are empty entries
+  const reportText = lines.join("\n").replace(/\\n/g, "<br>");
+  return reportText;
 }
 
 

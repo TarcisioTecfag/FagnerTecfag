@@ -1808,11 +1808,11 @@ function LiveChat() {
                       {selectedVisitor.notes && selectedVisitor.notes.length > 0 ? (
                         [...selectedVisitor.notes].reverse().map((n, i) => {
                           // Extrai qualquer URL do RD Station da nota (com ou sem prefixo "Link: ")
-                          const rdLinkMatch = n.content.match(/https:\/\/app\.rdstation\.com\.br\/(?:crm|sales)\/[\w\-\/]+/);
+                          const rdLinkMatch = n.content.match(/https:\/\/(?:app\.rdstation\.com\.br\/(?:crm|sales)|crm\.rdstation\.com\/app)\/[\w\-\/]+/);
                           // Remove a URL bruta do texto do card — vai virar botão dedicado
                           const cleanContent = n.content
                             .replace(/Link:\s*https:\/\/[^\s]+/g, "")
-                            .replace(/https:\/\/app\.rdstation\.com\.br\/[^\s]+/g, "")
+                            .replace(/https:\/\/(?:app\.rdstation\.com\.br|crm\.rdstation\.com)\/[^\s]+/g, "")
                             .trim();
                           return (
                             <div key={i} className="p-2.5 bg-white border border-zinc-200/70 rounded-xl shadow-sm">
