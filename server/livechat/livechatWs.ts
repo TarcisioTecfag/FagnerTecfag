@@ -332,7 +332,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               // pode ser F5 legítimo (janela nova) OU servidor reiniciou (perdeu a sessão em RAM).
               // REGRA CRÍTICA: Só fecha o chat se:
               //   1. Chat tem mais de 2 min (grace period para buffer de mensagens)
-              //   2. E NÃO houve mensagens nas últimas 30 min (evita fragmentar chats ativos após deploy)
+              //   2. E NÃO há buffer ativo de mensagens pendentes (visitante está digitando agora)
+              //   3. E NÃO houve mensagens no banco nas últimas 30 min
               try {
                 const { hasAISession } = await import("./livechatAI.js");
                 const existingChat = await lcStorage.getActiveChatByVisitor(visitorId);
@@ -340,7 +341,13 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   const chatAgeMs = Date.now() - new Date(existingChat.startedAt).getTime();
                   const GRACE_PERIOD_MS = 2 * 60 * 1000; // 2 minutos
 
-                  if (chatAgeMs > GRACE_PERIOD_MS) {
+                  // ⚡ CRÍTICO: Se há buffer ativo para este chat, o visitante está no meio
+                  // de uma interação — NUNCA fechamos. Isso cobre o race condition onde o
+                  // visitante navega de página DURANTE o debounce de 5s (antes de salvar no DB).
+                  const hasActiveBuffer = chatMessageBuffers.has(existingChat.id);
+                  if (hasActiveBuffer) {
+                    console.log(`[LiveChat] Visitante ${visitorId} reconectou com buffer ativo — mantendo chat ${existingChat.id}.`);
+                  } else if (chatAgeMs > GRACE_PERIOD_MS) {
                     // Verifica quando foi a última mensagem do chat
                     let lastMsgAge = chatAgeMs; // fallback: usa idade do chat
                     try {
@@ -360,7 +367,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                       console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI, último msg ${Math.round(lastMsgAge/60000)}min atrás — chat ${existingChat.id} fechado.`);
                       broadcastToAgents({ type: "CHAT_STATUS", chatId: existingChat.id, status: "closed" });
                     } else {
-                      console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI MAS última msg foi ${Math.round(lastMsgAge/60000)}min atrás — mantendo chat ativo (provável restart do servidor).`);
+                      console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI MAS última msg foi ${Math.round(lastMsgAge/60000)}min atrás — mantendo chat ativo.`);
                     }
                   } else {
                     console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI mas chat é recente (${Math.round(chatAgeMs/1000)}s < grace ${GRACE_PERIOD_MS/1000}s) — mantendo chat.`);
