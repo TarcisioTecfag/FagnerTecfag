@@ -1095,7 +1095,7 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
     lines.push(`Empresa: ${input.cnpjData.nome}`);
   }
   if (input.cnpjCpf) {
-    const isCnpj = input.cnpjCpf.replace(/\\D/g, "").length === 14;
+    const isCnpj = input.cnpjCpf.replace(/\D/g, "").length === 14;
     lines.push(`${isCnpj ? "CNPJ" : "CPF"}: ${input.cnpjCpf}`);
   }
   lines.push(`Telefone: ${input.telefone}`);
@@ -1129,11 +1129,21 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
   lines.push(`TRANSCRIÇÃO DO ATENDIMENTO`);
   
   if (input.transcricaoCompleta) {
-    // Add raw conversation lines without markdown
+    // O join final já usa '<br>' como separador de linhas do array.
+    // Para ter duplo espaçamento ENTRE turnos diferentes (Cliente <-> Fagner),
+    // inserimos uma linha vazia entre cada fala — ela vira '<br><br>' no output.
     const transcricaoLines = input.transcricaoCompleta.split('\n');
+    let lastPrefix = '';
     for (const tl of transcricaoLines) {
-       // O "+ '<br>'" garante os dois espaços necessários após o join('<br>') final do relatório.
-       if (tl.trim()) lines.push(tl.trim() + '<br>');
+      const trimmed = tl.trim();
+      if (!trimmed) continue;
+      const currentPrefix = trimmed.startsWith('[CLIENTE]') ? '[CLIENTE]' : '[FAGNER]';
+      // Insere linha vazia para separar turnos diferentes (gera '<br><br>' no join)
+      if (lastPrefix && currentPrefix !== lastPrefix) {
+        lines.push('');
+      }
+      lines.push(trimmed);
+      lastPrefix = currentPrefix;
     }
   } else {
     lines.push(`(Nenhuma transcrição disponível)`);

@@ -378,8 +378,16 @@ async function upsertContact(posVenda: PosVendaData, organizationId?: string | n
         `/contacts?filter=@cpf_cnpj:${encodeURIComponent(docDigits)}`
       );
       if (Array.isArray(byDoc) && byDoc.length > 0) {
-        console.log(`[RD CRM] Contato existente (por doc): ${byDoc[0].id}`);
-        return byDoc[0].id;
+        const existingId = byDoc[0].id;
+        console.log(`[RD CRM] Contato existente (por doc): ${existingId}`);
+        // Vincula à empresa se ainda não estiver vinculado
+        if (organizationId && !byDoc[0].organization_id) {
+          try {
+            await rdRequest("PUT", `/contacts/${existingId}`, { organization_id: organizationId });
+            console.log(`[RD CRM] Contato ${existingId} vinculado à empresa ${organizationId}`);
+          } catch (e: any) { console.warn(`[RD CRM] Falha ao vincular contato à empresa:`, e.message); }
+        }
+        return existingId;
       }
     } catch {}
   }
@@ -388,8 +396,16 @@ async function upsertContact(posVenda: PosVendaData, organizationId?: string | n
   try {
     const byPhone = await rdRequest<any[]>("GET", `/contacts?filter=phone:${telefoneNum}`);
     if (Array.isArray(byPhone) && byPhone.length > 0) {
-      console.log(`[RD CRM] Contato existente (por telefone): ${byPhone[0].id}`);
-      return byPhone[0].id;
+      const existingId = byPhone[0].id;
+      console.log(`[RD CRM] Contato existente (por telefone): ${existingId}`);
+      // Vincula à empresa se ainda não estiver vinculado
+      if (organizationId && !byPhone[0].organization_id) {
+        try {
+          await rdRequest("PUT", `/contacts/${existingId}`, { organization_id: organizationId });
+          console.log(`[RD CRM] Contato ${existingId} vinculado à empresa ${organizationId}`);
+        } catch (e: any) { console.warn(`[RD CRM] Falha ao vincular contato à empresa:`, e.message); }
+      }
+      return existingId;
     }
   } catch {}
 
