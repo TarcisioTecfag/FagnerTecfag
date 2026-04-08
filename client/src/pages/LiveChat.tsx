@@ -857,7 +857,7 @@ function LiveChat() {
       {/* ——— POPUP NOTIFICATIONS ——— */}
       <div
         aria-live="polite"
-        className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"
+        className="fixed bottom-6 left-6 z-50 flex flex-col gap-3 pointer-events-none"
         style={{ width: 380 }}
       >
         {notifPopups.map((n) => (
@@ -868,7 +868,7 @@ function LiveChat() {
               background: "linear-gradient(135deg, #ffffff 0%, #fdf2f2 100%)",
               border: "1px solid rgba(220,38,38,0.15)",
               boxShadow: "0 20px 60px rgba(220,38,38,0.22), 0 4px 16px rgba(0,0,0,0.10)",
-              animation: "slideInRight 0.4s cubic-bezier(.22,1,.36,1)",
+              animation: "slideInLeft 0.4s cubic-bezier(.22,1,.36,1)",
             }}
           >
             {/* Barra superior vermelha */}
@@ -1840,10 +1840,10 @@ function LiveChat() {
               {[
                 { stage: "novo_atendimento", label: "Novo Atendimento", color: "#22c55e", bgLight: "rgba(34,197,94,0.06)", borderColor: "rgba(34,197,94,0.3)" },
                 { stage: "em_atendimento", label: "Em Atendimento", color: "#3b82f6", bgLight: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.3)" },
-                { stage: "finalizado_com_venda", label: "Checkout ✅", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
-                { stage: "pos_venda", label: "Pós Venda", color: "#8b5cf6", bgLight: "rgba(139,92,246,0.06)", borderColor: "rgba(139,92,246,0.3)" },
-                { stage: "maquinas", label: "Máquinas ⚙️", color: "#ea580c", bgLight: "rgba(234,88,12,0.06)", borderColor: "rgba(234,88,12,0.3)" },
-                { stage: "sem_resposta", label: "Não Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
+                { stage: "maquinas", label: "Maquinas", color: "#ea580c", bgLight: "rgba(234,88,12,0.06)", borderColor: "rgba(234,88,12,0.3)" },
+                { stage: "pos_venda", label: "Pos Venda", color: "#8b5cf6", bgLight: "rgba(139,92,246,0.06)", borderColor: "rgba(139,92,246,0.3)" },
+                { stage: "finalizado_com_venda", label: "Vendido", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
+                { stage: "sem_resposta", label: "Nao Respondeu", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
                 { stage: "outros", label: "Outros", color: "#64748b", bgLight: "rgba(100,116,139,0.06)", borderColor: "rgba(100,116,139,0.3)" },
               ].map((col) => {
                 // Aplica o filtro de search no kanban: filtra por nome do visitante
@@ -2316,76 +2316,110 @@ function LiveChat() {
       {settingsOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
+          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}
           onClick={(e) => { if (e.target === e.currentTarget) setSettingsOpen(false); }}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl border border-zinc-200/60 w-full max-w-2xl mx-4 overflow-hidden"
-            style={{ maxHeight: "90vh", animation: "popIn 0.25s cubic-bezier(.22,1,.36,1)" }}
+            className="rounded-2xl shadow-2xl w-full mx-4 overflow-hidden flex flex-col"
+            style={{
+              maxWidth: 860,
+              maxHeight: "92vh",
+              animation: "popIn 0.25s cubic-bezier(.22,1,.36,1)",
+              background: "#0f172a",
+              border: "1px solid rgba(255,255,255,0.07)",
+            }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100"
-              style={{ background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)" }}
+            <div className="flex items-center justify-between px-7 py-5 flex-shrink-0"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
             >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)" }}>
-                  <Settings className="w-4 h-4 text-white" />
+              <div className="flex items-center gap-4">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg, #dc2626, #7f1d1d)", boxShadow: "0 4px 14px rgba(220,38,38,0.4)" }}
+                >
+                  <Settings className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-white">Configurações do Live Chat</h2>
-                  <p className="text-[10px] text-slate-300">Operadores e regras por funil</p>
+                  <h2 className="text-base font-bold text-white tracking-tight">Configurações do Live Chat</h2>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Gerencie operadores e regras de distribuição por funil</p>
                 </div>
               </div>
-              <button onClick={() => setSettingsOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all">
-                <X className="w-3.5 h-3.5" />
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-xl transition-all"
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+              >
+                <X className="w-4 h-4 text-slate-400" />
               </button>
             </div>
 
-            <div className="flex overflow-hidden" style={{ height: "calc(90vh - 72px)" }}>
+            <div className="flex flex-1 overflow-hidden">
               {/* Sidebar: Funnels */}
-              <div className="w-48 flex-shrink-0 border-r border-zinc-100 bg-zinc-50 p-3 flex flex-col gap-1">
-                <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider px-2 mb-2">Funis ativos</p>
+              <div
+                className="w-56 flex-shrink-0 flex flex-col gap-1 p-4"
+                style={{ borderRight: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.02)" }}
+              >
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-3 mb-3">Funis</p>
                 {([
-                  { key: "pos_venda" as const, label: "Pós Venda", emoji: "🎫", color: "#8b5cf6" },
-                  { key: "pecas" as const, label: "Peças", emoji: "⚙️", color: "#f59e0b" },
-                  { key: "maquinas" as const, label: "Máquinas", emoji: "🏭", color: "#3b82f6" },
-                ]).map((f) => (
-                  <button
-                    key={f.key}
-                    onClick={() => setActiveFunnel(f.key)}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all ${
-                      activeFunnel === f.key
-                        ? "text-white shadow-md"
-                        : "text-zinc-600 hover:bg-white hover:shadow-sm"
-                    }`}
-                    style={activeFunnel === f.key ? { background: f.color } : {}}
-                  >
-                    <span className="text-base">{f.emoji}</span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold leading-tight">{f.label}</p>
-                      <p className={`text-[9px] leading-tight ${
-                        activeFunnel === f.key ? "text-white/70" : "text-zinc-400"
-                      }`}>
-                        {liveSettings.funnels[f.key].operators.length} operador(es)
-                      </p>
-                    </div>
-                  </button>
-                ))}
+                  { key: "pos_venda" as const, label: "Pós Venda", icon: "🎫", accent: "#8b5cf6" },
+                  { key: "maquinas" as const, label: "Máquinas", icon: "🏭", accent: "#ea580c" },
+                  { key: "pecas" as const, label: "Peças", icon: "⚙️", accent: "#f59e0b" },
+                ]).map((f) => {
+                  const isActive = activeFunnel === f.key;
+                  const opCount = liveSettings.funnels[f.key].operators.length;
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => setActiveFunnel(f.key)}
+                      className="flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all w-full"
+                      style={isActive ? {
+                        background: `linear-gradient(135deg, ${f.accent}22, ${f.accent}11)`,
+                        border: `1px solid ${f.accent}44`,
+                      } : {
+                        background: "transparent",
+                        border: "1px solid transparent",
+                      }}
+                    >
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
+                        style={{ background: isActive ? f.accent : "rgba(255,255,255,0.05)" }}
+                      >
+                        {f.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-xs font-bold leading-tight ${isActive ? "text-white" : "text-slate-400"}`}>
+                          {f.label}
+                        </p>
+                        <p className="text-[9px] text-slate-600 mt-0.5">
+                          {opCount} operador{opCount !== 1 ? "es" : ""}
+                        </p>
+                      </div>
+                      {isActive && (
+                        <div className="ml-auto w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: f.accent }} />
+                      )}
+                    </button>
+                  );
+                })}
 
                 <div className="flex-1" />
-                <div className="px-2 py-3 rounded-xl bg-amber-50 border border-amber-100">
-                  <p className="text-[9px] text-amber-700 font-semibold leading-relaxed">
-                    💡 <strong>Peças</strong> ainda não está ativo no sistema, mas já pode ser configurado para quando for habilitado. <strong>Pós Venda</strong> e <strong>Máquinas</strong> já estão operacionais.
-                  </p>
+
+                {/* Status note */}
+                <div
+                  className="p-3 rounded-xl text-[9px] leading-relaxed"
+                  style={{ background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.15)", color: "#fb923c" }}
+                >
+                  <strong>Peças</strong> aguarda habilitação.<br />
+                  <span style={{ color: "#6ee7b7" }}><strong>Pós Venda</strong> e <strong>Máquinas</strong></span> estão operacionais.
                 </div>
               </div>
 
               {/* Main Config Area */}
-              <div className="flex-1 overflow-y-auto p-5">
+              <div className="flex-1 overflow-y-auto p-7">
                 {([
-                  { key: "pos_venda" as const, label: "Pós Venda", emoji: "🎫", color: "#8b5cf6", active: true },
-                  { key: "pecas" as const, label: "Peças", emoji: "⚙️", color: "#f59e0b", active: false },
-                  { key: "maquinas" as const, label: "Máquinas", emoji: "🏭", color: "#ea580c", active: true },
+                  { key: "pos_venda" as const, label: "Pós Venda", icon: "🎫", color: "#8b5cf6", active: true },
+                  { key: "maquinas" as const, label: "Máquinas", icon: "🏭", color: "#ea580c", active: true },
+                  { key: "pecas" as const, label: "Peças", icon: "⚙️", color: "#f59e0b", active: false },
                 ]).filter(f => f.key === activeFunnel).map((f) => {
                   const cfg = liveSettings.funnels[f.key];
 
@@ -2404,9 +2438,7 @@ function LiveChat() {
                   const addOperator = () => {
                     const name = newOperatorName.trim();
                     if (!name) return;
-                    // Verifica se já está na lista
                     if (cfg.operators.some(o => o.name === name)) return;
-                    // Tenta usar o ID real do RD CRM se estiver disponível
                     const rdUser = rdUsers.find(u => u.name === name);
                     const newOp: FunnelOperator = { id: rdUser?.id ?? `op-${Date.now()}`, name };
                     updateFunnel({ operators: [...cfg.operators, newOp] });
@@ -2418,103 +2450,145 @@ function LiveChat() {
                   };
 
                   return (
-                    <div key={f.key} className="space-y-5">
-                      {/* Title */}
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-md" style={{ background: f.color }}>
-                          {f.emoji}
+                    <div key={f.key} className="space-y-6">
+                      {/* Funnel header */}
+                      <div className="flex items-center gap-4 pb-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div
+                          className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+                          style={{ background: `linear-gradient(135deg, ${f.color}, ${f.color}99)`, boxShadow: `0 6px 20px ${f.color}44` }}
+                        >
+                          {f.icon}
                         </div>
                         <div>
-                          <h3 className="text-sm font-bold text-zinc-800">Funil: {f.label}</h3>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                              f.active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"
-                            }`}>
-                              {f.active ? "🟢 Ativo no sistema" : "⚪ Aguardando habilitação"}
+                          <h3 className="text-base font-bold text-white">{f.label}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span
+                              className="px-2.5 py-0.5 rounded-full text-[9px] font-bold"
+                              style={f.active
+                                ? { background: "rgba(34,197,94,0.15)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.25)" }
+                                : { background: "rgba(255,255,255,0.05)", color: "#64748b", border: "1px solid rgba(255,255,255,0.08)" }
+                              }
+                            >
+                              {f.active ? "● Ativo" : "○ Aguardando"}
+                            </span>
+                            <span className="text-[9px] text-slate-500">
+                              {cfg.operators.length} operador{cfg.operators.length !== 1 ? "es" : ""} cadastrado{cfg.operators.length !== 1 ? "s" : ""}
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Atendimento Mode */}
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-600">Modo de atendimento</label>
-                        <div className="grid grid-cols-2 gap-2">
+                      {/* Modo de atendimento */}
+                      <div className="space-y-3">
+                        <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Modo de Atendimento</label>
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Operador Único */}
                           <button
                             onClick={() => updateFunnel({ mode: "single" })}
-                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-xs font-semibold transition-all ${
-                              cfg.mode === "single"
-                                ? "border-slate-500 bg-slate-50 text-slate-700"
-                                : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
-                            }`}
+                            className="flex flex-col items-center gap-2 py-4 px-3 rounded-xl transition-all text-left"
+                            style={cfg.mode === "single" ? {
+                              background: "rgba(139,92,246,0.12)",
+                              border: "2px solid rgba(139,92,246,0.5)",
+                            } : {
+                              background: "rgba(255,255,255,0.03)",
+                              border: "2px solid rgba(255,255,255,0.07)",
+                            }}
                           >
-                            <UserCheck className="w-5 h-5" />
-                            Operador Único
-                            <p className="text-[9px] font-normal text-zinc-400 text-center leading-tight">Sempre o mesmo atendente recebe os chats</p>
+                            <UserCheck className={`w-6 h-6 ${cfg.mode === "single" ? "text-violet-400" : "text-slate-600"}`} />
+                            <div className="text-center">
+                              <p className={`text-xs font-bold ${cfg.mode === "single" ? "text-violet-300" : "text-slate-500"}`}>Operador Único</p>
+                              <p className="text-[9px] text-slate-600 mt-0.5 leading-tight">Sempre o mesmo atendente recebe os chats</p>
+                            </div>
                           </button>
+                          {/* Rodízio */}
                           <button
                             onClick={() => updateFunnel({ mode: "rotation" })}
-                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-xs font-semibold transition-all ${
-                              cfg.mode === "rotation"
-                                ? "border-amber-500 bg-amber-50 text-amber-700"
-                                : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
-                            }`}
+                            className="flex flex-col items-center gap-2 py-4 px-3 rounded-xl transition-all text-left"
+                            style={cfg.mode === "rotation" ? {
+                              background: "rgba(234,88,12,0.12)",
+                              border: "2px solid rgba(234,88,12,0.5)",
+                            } : {
+                              background: "rgba(255,255,255,0.03)",
+                              border: "2px solid rgba(255,255,255,0.07)",
+                            }}
                           >
-                            <RotateCcw className="w-5 h-5" />
-                            Rodízio
-                            <p className="text-[9px] font-normal text-zinc-400 text-center leading-tight">Chats são distribuídos em rotação entre os atendentes</p>
+                            <RotateCcw className={`w-6 h-6 ${cfg.mode === "rotation" ? "text-orange-400" : "text-slate-600"}`} />
+                            <div className="text-center">
+                              <p className={`text-xs font-bold ${cfg.mode === "rotation" ? "text-orange-300" : "text-slate-500"}`}>Rodízio</p>
+                              <p className="text-[9px] text-slate-600 mt-0.5 leading-tight">Distribui chats em rotação entre os atendentes</p>
+                            </div>
                           </button>
                         </div>
                       </div>
 
-                      {/* Operators list */}
-                      <div className="space-y-2">
+                      {/* Operadores */}
+                      <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
-                            <Users className="w-3.5 h-3.5 text-slate-500" />
-                            Operadores cadastrados
+                          <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                            <Users className="w-4 h-4 text-slate-500" />
+                            Operadores
                           </label>
-                          <span className="text-[10px] text-zinc-400">{cfg.operators.length} cadastrado(s)</span>
+                          <span
+                            className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                            style={{ background: "rgba(255,255,255,0.06)", color: "#94a3b8" }}
+                          >
+                            {cfg.operators.length} cadastrado{cfg.operators.length !== 1 ? "s" : ""}
+                          </span>
                         </div>
 
                         {cfg.operators.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-6 rounded-xl bg-zinc-50 border border-dashed border-zinc-200">
-                            <UserCheck className="w-8 h-8 text-zinc-200 mb-2" />
-                            <p className="text-xs text-zinc-400 text-center">Nenhum operador cadastrado.<br />Adicione abaixo.</p>
+                          <div
+                            className="flex flex-col items-center justify-center py-8 rounded-xl"
+                            style={{ background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.08)" }}
+                          >
+                            <UserCheck className="w-10 h-10 text-slate-700 mb-2" />
+                            <p className="text-xs text-slate-600 text-center">Nenhum operador cadastrado.<br />Adicione um abaixo.</p>
                           </div>
                         ) : (
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             {cfg.operators.map((op, idx) => (
-                              <div key={op.id} className="flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-zinc-200 shadow-sm">
-                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: `hsl(${(idx * 60) % 360},60%,50%)` }}>
+                              <div
+                                key={op.id}
+                                className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+                              >
+                                <div
+                                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                                  style={{ background: `linear-gradient(135deg, hsl(${(idx * 67) % 360},65%,45%), hsl(${(idx * 67 + 30) % 360},65%,35%))` }}
+                                >
                                   {op.name.charAt(0).toUpperCase()}
                                 </div>
-                                <span className="flex-1 text-xs font-semibold text-zinc-700">{op.name}</span>
+                                <span className="flex-1 text-sm font-semibold text-slate-200">{op.name}</span>
                                 {cfg.mode === "rotation" && (
-                                  <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
-                                    cfg.currentIndex % cfg.operators.length === idx
-                                      ? "bg-amber-100 text-amber-700"
-                                      : "bg-zinc-100 text-zinc-400"
-                                  }`}>
+                                  <span
+                                    className="text-[9px] px-2.5 py-1 rounded-full font-bold"
+                                    style={cfg.currentIndex % cfg.operators.length === idx
+                                      ? { background: "rgba(234,88,12,0.2)", color: "#fb923c", border: "1px solid rgba(234,88,12,0.3)" }
+                                      : { background: "rgba(255,255,255,0.05)", color: "#64748b" }
+                                    }
+                                  >
                                     {cfg.currentIndex % cfg.operators.length === idx ? "Próximo" : `${idx + 1}º`}
                                   </span>
                                 )}
                                 <button
                                   onClick={() => removeOperator(op.id)}
-                                  className="w-6 h-6 flex items-center justify-center rounded-lg text-zinc-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                                  className="w-7 h-7 flex items-center justify-center rounded-lg transition-all"
+                                  style={{ background: "transparent" }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = "rgba(239,68,68,0.15)")}
+                                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-3.5 h-3.5 text-slate-600" />
                                 </button>
                               </div>
                             ))}
                           </div>
                         )}
 
-                        {/* Add operator — dropdown se houver usuários do RD CRM, campo manual como fallback */}
-                        <div className="mt-2">
+                        {/* Adicionar operador */}
+                        <div className="mt-3">
                           {rdUsersLoading ? (
-                            <div className="flex items-center gap-2 px-3 py-2 text-xs text-zinc-400">
-                              <div className="w-3 h-3 border border-slate-400 border-t-transparent rounded-full animate-spin" />
+                            <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-500">
+                              <div className="w-3 h-3 border border-slate-500 border-t-transparent rounded-full animate-spin" />
                               Buscando usuários do RD CRM...
                             </div>
                           ) : rdUsers.length > 0 ? (
@@ -2522,28 +2596,36 @@ function LiveChat() {
                               <select
                                 value={newOperatorName}
                                 onChange={(e) => setNewOperatorName(e.target.value)}
-                                className="flex-1 px-3 py-2 text-xs rounded-xl border border-zinc-200 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition-all bg-zinc-50"
+                                className="flex-1 px-3 py-2.5 text-sm rounded-xl transition-all"
+                                style={{
+                                  background: "rgba(255,255,255,0.04)",
+                                  border: "1px solid rgba(255,255,255,0.1)",
+                                  color: "#cbd5e1",
+                                  outline: "none",
+                                }}
                               >
-                                <option value="">Selecionar operador RD CRM...</option>
+                                <option value="" style={{ background: "#1e293b" }}>Selecionar operador RD CRM...</option>
                                 {rdUsers
                                   .filter(u => !cfg.operators.some(op => op.id === u.id || op.name === u.name))
                                   .map(u => (
-                                    <option key={u.id} value={u.name}>{u.name}{u.email ? ` (${u.email})` : ''}</option>
+                                    <option key={u.id} value={u.name} style={{ background: "#1e293b" }}>
+                                      {u.name}{u.email ? ` — ${u.email}` : ''}
+                                    </option>
                                   ))}
                               </select>
                               <button
                                 onClick={addOperator}
                                 disabled={!newOperatorName.trim()}
-                                className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40 flex items-center gap-1.5 flex-shrink-0"
-                                style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
+                                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-30 flex items-center gap-1.5 flex-shrink-0"
+                                style={{ background: "linear-gradient(135deg, #dc2626, #7f1d1d)" }}
                               >
                                 <Plus className="w-3.5 h-3.5" /> Adicionar
                               </button>
                             </div>
                           ) : (
                             <div className="space-y-2">
-                              <p className="text-[10px] text-zinc-400">
-                                RD CRM não configurado ou sem resposta. Adicione manualmente:
+                              <p className="text-[10px] text-slate-600">
+                                RD CRM não configurado. Adicione manualmente:
                               </p>
                               <div className="flex gap-2">
                                 <input
@@ -2552,13 +2634,19 @@ function LiveChat() {
                                   onChange={(e) => setNewOperatorName(e.target.value)}
                                   onKeyDown={(e) => { if (e.key === "Enter") addOperator(); }}
                                   placeholder="Nome do operador..."
-                                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-zinc-200 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition-all bg-zinc-50"
+                                  className="flex-1 px-3 py-2.5 text-sm rounded-xl transition-all"
+                                  style={{
+                                    background: "rgba(255,255,255,0.04)",
+                                    border: "1px solid rgba(255,255,255,0.1)",
+                                    color: "#cbd5e1",
+                                    outline: "none",
+                                  }}
                                 />
                                 <button
                                   onClick={addOperator}
                                   disabled={!newOperatorName.trim()}
-                                  className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40 flex items-center gap-1.5"
-                                  style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
+                                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-30 flex items-center gap-1.5"
+                                  style={{ background: "linear-gradient(135deg, #dc2626, #7f1d1d)" }}
                                 >
                                   <Plus className="w-3.5 h-3.5" /> Adicionar
                                 </button>
@@ -2568,24 +2656,31 @@ function LiveChat() {
                         </div>
                       </div>
 
-                      {/* Info box */}
+                      {/* Status cards */}
                       {cfg.mode === "rotation" && cfg.operators.length > 0 && (
-                        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-100">
-                          <RotateCcw className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <div
+                          className="flex items-start gap-3 p-4 rounded-xl"
+                          style={{ background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.2)" }}
+                        >
+                          <RotateCcw className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-xs font-semibold text-amber-800 mb-0.5">Modo Rodízio ativo</p>
-                            <p className="text-[10px] text-amber-600 leading-relaxed">
-                              Os chats serão distribuídos sequencialmente entre os {cfg.operators.length} operador(es) cadastrado(s). O próximo a receber é: <strong>{cfg.operators[cfg.currentIndex % cfg.operators.length]?.name}</strong>
+                            <p className="text-xs font-bold text-orange-300 mb-0.5">Rodízio ativo</p>
+                            <p className="text-[10px] text-orange-400/70 leading-relaxed">
+                              Distribuição sequencial entre {cfg.operators.length} operador{cfg.operators.length !== 1 ? "es" : ""}.
+                              Próximo: <strong className="text-orange-300">{cfg.operators[cfg.currentIndex % cfg.operators.length]?.name}</strong>
                             </p>
                           </div>
                         </div>
                       )}
 
                       {cfg.mode === "single" && cfg.operators.length > 1 && (
-                        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-blue-50 border border-blue-100">
-                          <UserCheck className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                          <p className="text-[10px] text-blue-700 leading-relaxed">
-                            <strong>Dica:</strong> No modo Operador Único, o primeiro da lista será o principal. Os demais ficam registrados como substitutos. Mude para <em>Rodízio</em> para distribuir automaticamente.
+                        <div
+                          className="flex items-start gap-3 p-4 rounded-xl"
+                          style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)" }}
+                        >
+                          <UserCheck className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-[10px] text-blue-400/80 leading-relaxed">
+                            <strong className="text-blue-300">Dica:</strong> No modo Operador Único, apenas o primeiro da lista recebe chats. Ative o Rodízio para distribuir automaticamente.
                           </p>
                         </div>
                       )}
@@ -2596,12 +2691,15 @@ function LiveChat() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3 border-t border-zinc-100 flex items-center justify-between bg-zinc-50">
-              <p className="text-[10px] text-zinc-400">Configurações salvas automaticamente no navegador.</p>
+            <div
+              className="px-7 py-4 flex items-center justify-between flex-shrink-0"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.02)" }}
+            >
+              <p className="text-[10px] text-slate-600">Sincronizado automaticamente com o servidor.</p>
               <button
                 onClick={() => setSettingsOpen(false)}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90"
-                style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #dc2626, #7f1d1d)" }}
               >
                 Fechar
               </button>

@@ -191,6 +191,12 @@
   animation: slideInRight 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* ── Slide-in from left (notification popups da esquerda) ── */
+@keyframes slideInLeft {
+  0%   { opacity: 0; transform: translateX(-60px) scale(0.95); }
+  100% { opacity: 1; transform: translateX(0)      scale(1);    }
+}
+
 /* ── Bounce-gentle (bot STARTING state) ── */
 @keyframes bounce-gentle {
   0%, 100% { transform: translateY(0);    }
