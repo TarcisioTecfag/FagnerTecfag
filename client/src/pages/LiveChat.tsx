@@ -191,12 +191,19 @@ function renderMessageContent(text: string) {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match;
-  
+
+  // URL base do backend Railway — resolve URLs relativas /uploads/
+  const BACKEND = (import.meta.env.VITE_BACKEND_URL || "https://fagnertecfag-production.up.railway.app").replace(/\/$/, "");
+
   while ((match = anexoRegex.exec(text)) !== null) {
     if (match.index > lastIndex) {
       parts.push(<span key={lastIndex}>{formatTextWithLinks(text.substring(lastIndex, match.index))}</span>);
     }
-    const url = match[1];
+    let url = match[1].trim();
+    // Corrige URL relativa para apontar para o backend Railway (não para o Vercel)
+    if (url.startsWith("/uploads/")) {
+      url = `${BACKEND}${url}`;
+    }
     const isImage = /\.(jpeg|jpg|gif|png|webp|svg|heic)$/i.test(url) || url.startsWith('data:image/');
     
     if (isImage) {
@@ -224,6 +231,7 @@ function renderMessageContent(text: string) {
   }
   return parts;
 }
+
 
 function scoreColor(score: number): string {
   if (score >= 70) return "from-red-500 to-orange-500";

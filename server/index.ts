@@ -210,12 +210,28 @@ app.use(
   })
 );
 
-// Serve uploaded files — lê do PostgreSQL (fileData base64) para persistência no Railway.
-// Fallback para disco local em ambiente de desenvolvimento.
+// Serve uploaded files — primeiro tenta chat_uploads (imagens do chat), depois documents (knowledge base),
+// depois fallback para disco local (dev).
 app.get("/uploads/:filename", async (req: Request, res: Response) => {
   const filename = p(req.params.filename);
   try {
-    // 1. Tentar servir do banco (campo fileData — base64 do arquivo original)
+    // 1. Tenta chat_uploads (imagens enviadas por clientes no widget)
+    try {
+      const chatResult = await pool.query(
+        `SELECT "fileData", "mimeType", filename FROM chat_uploads WHERE id = $1 OR filename = $1 LIMIT 1`,
+        [filename]
+      );
+      if (chatResult.rows.length > 0 && chatResult.rows[0].fileData) {
+        const { fileData, mimeType } = chatResult.rows[0];
+        const buffer = Buffer.from(fileData, "base64");
+        res.setHeader("Content-Type", mimeType || "image/jpeg");
+        res.setHeader("Cache-Control", "public, max-age=31536000"); // cache 1 ano
+        res.setHeader("Content-Length", buffer.length.toString());
+        return res.send(buffer);
+      }
+    } catch {/* tabela pode não existir ainda */}
+
+    // 2. Tenta documents (base de conhecimento)
     try {
       const dbResult = await pool.query(
         `SELECT "fileData", "mimeType", name FROM documents WHERE "filePath" = $1 LIMIT 1`,
@@ -230,10 +246,10 @@ app.get("/uploads/:filename", async (req: Request, res: Response) => {
         return res.send(buffer);
       }
     } catch (dbErr: any) {
-      console.warn(`[/uploads] Falha ao consultar banco para ${filename}, tentando fallback do disco. Erro:`, dbErr.message);
+      console.warn(`[/uploads] Falha ao consultar banco para ${filename}:`, dbErr.message);
     }
 
-    // 2. Fallback: servir do disco (dev local)
+    // 3. Fallback: servir do disco (dev local)
     const diskPath = path.join(UPLOADS_DIR, filename);
     if (fs.existsSync(diskPath)) {
       return res.sendFile(diskPath);
@@ -244,6 +260,7 @@ app.get("/uploads/:filename", async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Erro interno ao servir arquivo" });
   }
 });
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -343,10 +360,52 @@ app.post("/api/chat-upload", (req, res, next) => {
     }
     next();
   });
-}, (req, res) => {
+}, async (req: Request, res: Response) => {
   if (!req.file) return res.status(400).json({ message: "Nenhum arquivo enviado." });
-  return res.status(201).json({ url: `/uploads/${req.file.filename}`, mimeType: req.file.mimetype });
+
+  const filename = req.file.filename;
+  const filePath = `/uploads/${filename}`;
+
+  // ── Salva no banco como base64 para sobreviver aos restarts do Railway ──
+  // Sem isso, o arquivo só existe no disco efêmero do container e some ao reiniciar.
+  // Cria tabela chat_uploads se não existir, para não interferir com 'documents'.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chat_uploads (
+        id TEXT PRIMARY KEY,
+        filename TEXT NOT NULL,
+        "filePath" TEXT NOT NULL,
+        "mimeType" TEXT NOT NULL,
+        "fileData" TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const fileBuffer = fs.readFileSync(path.join(UPLOADS_DIR, filename));
+    const fileDataBase64 = fileBuffer.toString("base64");
+    await pool.query(
+      `INSERT INTO chat_uploads (id, filename, "filePath", "mimeType", "fileData") VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
+      [filename, filename, filePath, req.file.mimetype, fileDataBase64]
+    );
+    console.log(`[ChatUpload] Imagem salva no banco: ${filename} (${Math.round(fileBuffer.length / 1024)}KB)`);
+  } catch (dbErr: any) {
+    console.warn(`[ChatUpload] Falha ao salvar no banco (usará disco):`, dbErr.message);
+  }
+
+  // Retorna URL ABSOLUTA do backend para que o painel (Vercel) possa carregar
+  // URL relativa (/uploads/...) seria resolvida para vercel.app, não para o Railway!
+  let backendUrl: string;
+  if (process.env.BACKEND_URL) {
+    backendUrl = process.env.BACKEND_URL.replace(/\/$/, "");
+  } else if (process.env.RAILWAY_STATIC_URL) {
+    backendUrl = `https://${process.env.RAILWAY_STATIC_URL}`.replace(/\/$/, "");
+  } else {
+    backendUrl = "http://localhost:5000";
+  }
+
+  return res.status(201).json({ url: `${backendUrl}${filePath}`, mimeType: req.file!.mimetype });
+
 });
+
 
 // ─── Auth routes ─────────────────────────────────────────────────────────────
 
