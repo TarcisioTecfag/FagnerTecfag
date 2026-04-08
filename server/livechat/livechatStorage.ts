@@ -250,7 +250,7 @@ export const lcStorage = {
   },
 
   async getPipelineStats(): Promise<Record<string, number>> {
-    const stages = ['novo_atendimento', 'em_atendimento', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'];
+    const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'pos_venda', 'maquinas', 'sem_resposta', 'outros'];
     const result: Record<string, number> = {};
     for (const stage of stages) {
       const [row] = await db.select({ c: sql<number>`count(*)` })
@@ -526,7 +526,7 @@ export const lcStorage = {
       // IMPORTANTE: 'outros' é estágio PERMANENTE (ex: candidatos de emprego, perguntas diversas)
       // NÃO mover esses visitantes para sem_resposta
       const visitor = await this.getVisitorById(chat.visitorId);
-      const finalStages = ['pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta', 'outros'];
+      const finalStages = ['pos_venda', 'finalizado_com_venda', 'sem_resposta', 'outros', 'maquinas'];
       if (visitor && !finalStages.includes(visitor.pipelineStage ?? '')) {
         await this.updateVisitorPipeline(chat.visitorId, "sem_resposta");
       }

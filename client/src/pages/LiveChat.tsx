@@ -1833,9 +1833,9 @@ function LiveChat() {
               {[
                 { stage: "novo_atendimento", label: "Novo Atendimento", color: "#22c55e", bgLight: "rgba(34,197,94,0.06)", borderColor: "rgba(34,197,94,0.3)" },
                 { stage: "em_atendimento", label: "Em Atendimento", color: "#3b82f6", bgLight: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.3)" },
+                { stage: "finalizado_com_venda", label: "Checkout ✅", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
                 { stage: "pos_venda", label: "Pós Venda", color: "#8b5cf6", bgLight: "rgba(139,92,246,0.06)", borderColor: "rgba(139,92,246,0.3)" },
-                { stage: "finalizado_com_venda", label: "Finalizou Com Venda", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
-                { stage: "finalizado_sem_venda", label: "Finalizou Sem Venda", color: "#ef4444", bgLight: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.3)" },
+                { stage: "maquinas", label: "Máquinas ⚙️", color: "#ea580c", bgLight: "rgba(234,88,12,0.06)", borderColor: "rgba(234,88,12,0.3)" },
                 { stage: "sem_resposta", label: "Não Respondeu Mais", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
                 { stage: "outros", label: "Outros", color: "#64748b", bgLight: "rgba(100,116,139,0.06)", borderColor: "rgba(100,116,139,0.3)" },
               ].map((col) => {

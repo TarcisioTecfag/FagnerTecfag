@@ -58,7 +58,8 @@ const NOISE_REPLIES: string[] = [
 
 
 // ─── Detecção de intenção de ESTÁGIO (regex, zero custo LLM) ─────────────────
-// Identifica se o cliente se enquadra em "outros" ou "pos_venda"
+// Identifica se o cliente se enquadra em "outros", "pos_venda" ou "maquinas"
+// Prioridade: pos_venda > maquinas > outros
 // Retorna null se não detectado — Fagner continua atendimento normal
 
 const OUTROS_PATTERNS: RegExp[] = [
@@ -94,11 +95,34 @@ const POS_VENDA_PATTERNS: RegExp[] = [
   /assistência.{0,10}t[eé]cnica|suporte.{0,10}técnico/i,
 ];
 
-export function detectStageIntent(message: string): 'pos_venda' | 'outros' | null {
+// Máquinas: detecção de intenção de orçamento/cotação de máquinas grandes ou indisponíveis
+// ATENÇÃO: NÃO entra em máquinas se for pós-venda (defeito, garantia) — pos_venda tem prioridade
+const MAQUINAS_PATTERNS: RegExp[] = [
+  /or[çc]amento.{0,25}(m[aá]quina|equipamento|seladora|envasadora|dosadora|rotul)/i,
+  /cota[çc][aã]o.{0,25}(m[aá]quina|equipamento|seladora|envasadora|dosadora|rotul)/i,
+  /pre[çc]o.{0,20}(m[aá]quina|equipamento|seladora|envasadora|dosadora|rotul)/i,
+  /quanto.{0,15}custa.{0,20}(m[aá]quina|equipamento|seladora|envasadora)/i,
+  /quero.{0,15}(comprar|adquirir|investir).{0,15}(m[aá]quina|equipamento)/i,
+  /preciso.{0,20}(m[aá]quina|equipamento|seladora|envasadora|dosadora)/i,
+  /interessado.{0,20}(m[aá]quina|equipamento|seladora|envasadora)/i,
+  /ligar.{0,15}(sobre|pra|para).{0,15}(m[aá]quina|equipamento|cota[çc])/i,
+  /liga[çc][aã]o.{0,15}(cota[çc]|or[çc]amento|m[aá]quina)/i,
+  /indispon[ií]vel.{0,15}(no site|online|no cat[aá]logo)/i,
+  /n[aã]o.{0,10}(encontr|ach).{0,15}(no site|no cat[aá]logo|online)/i,
+  /fora.{0,10}(de estoque|do cat[aá]logo)/i,
+];
+
+export function detectStageIntent(message: string): 'pos_venda' | 'outros' | 'maquinas' | null {
   const trimmed = message.trim();
+  // Prioridade 1: Pós-venda (cliente já comprou, defeito, garantia, etc.)
   for (const p of POS_VENDA_PATTERNS) {
     if (p.test(trimmed)) return 'pos_venda';
   }
+  // Prioridade 2: Máquinas (orçamento, cotação, compra de máquina grande)
+  for (const p of MAQUINAS_PATTERNS) {
+    if (p.test(trimmed)) return 'maquinas';
+  }
+  // Prioridade 3: Outros (currículo, localização, bate-papo)
   for (const p of OUTROS_PATTERNS) {
     if (p.test(trimmed)) return 'outros';
   }
@@ -320,6 +344,86 @@ Nesse caso:
 2. NUNCA coloque todos os dados na mesma frase ou balão
 3. Se o cliente confirmar → vá direto ao ENCERRAMENTO sem coletar nada
 4. Se precisar atualizar → atualize apenas o campo necessário e refaça a confirmação
+
+### INTENÇÃO "MÁQUINAS" — Orçamento de equipamentos sob consulta ou indisponíveis
+Quando o cliente quiser orçamento, cotação ou ligação sobre uma máquina que:
+- NÃO está disponível no site (indisponível, fora de estoque, esgotada)
+- NÃO existe no catálogo VTEX (você não encontrou ao buscar)
+- É uma máquina grande/industrial que requer cotação especial/personalizada
+- O cliente quer fazer uma ligação de cotação de máquinas em específico
+
+**CONDIÇÃO-CHAVE:** Se a máquina ESTÁ DISPONÍVEL no site e pode ser comprada online, você tenta vender normalmente (sem entrar neste fluxo). Só entre no fluxo Máquinas quando o produto NÃO for vendível diretamente no site.
+
+**Você OBRIGATORIAMENTE deve:**
+1. Adicionar a tag SILENCIOSA [STAGE:maquinas] na primeira resposta deste fluxo (NÃO é visível ao cliente)
+2. Iniciar o FLUXO DE COLETA abaixo
+
+### FLUXO DE COLETA DE DADOS — MÁQUINAS (orçamento/cotação)
+**Colete 1 dado por vez, nesta ordem EXATA. Seja humano, consultivo e natural:**
+
+> ⚠️ REGRA ANTI-REINÍCIO (CRÍTICA — NUNCA VIOLE):
+> Mesma regra do pós-venda: verifique o histórico antes de qualquer pergunta de coleta.
+> NUNCA peça um dado que já foi respondido nesta sessão.
+
+**Passo 0 — Máquina/Necessidade** (SEMPRE o primeiro passo):
+Pergunte qual máquina ou equipamento o cliente precisa. Seja consultivo — tente entender o contexto:
+"Claro! Para eu já direcionar corretamente, pode me contar qual máquina ou equipamento você está buscando?"
+Se o cliente não sabe o modelo exato, pergunte sobre o tipo de produção dele para recomendar.
+Armazene como "maquinaDesejada" e "detalhes".
+
+**Passo 1 — Nome** (só pergunte se já tem a máquina mas ainda NÃO tem nome):
+"Para agilizar a cotação, pode me informar o nome completo?"
+
+**Passo 2 — Telefone** (só pergunte se já tem nome):
+"E qual o número de telefone/WhatsApp para contato?"
+
+**Passo 3 — E-mail** (só pergunte se já tem telefone):
+"Qual o e-mail para receber o orçamento?"
+
+**Passo 4 — CNPJ/CPF** (ÚLTIMO — só pergunte quando já tiver todos os dados anteriores):
+"E o CNPJ ou CPF para emissão do orçamento?"
+
+**SE O CLIENTE INFORMAR CNPJ:**
+Responda APENAS: "Um momento, vou verificar o CNPJ..." e adicione a tag:
+[CNPJ_CHECK:xxxxxxxxxxxxxx]
+(Mesmo processo do pós-venda — aguarde o [CNPJ_RESULT:{...}])
+
+**SE O CLIENTE INFORMAR CPF:** Prossiga para o OVERVIEW.
+
+**OVERVIEW — Confirmação dos dados:**
+"Ótimo! Vou confirmar os dados para o orçamento:
+
+• Máquina: [máquina desejada]
+
+• Nome: [nome]
+
+• Telefone: [tel]
+
+• E-mail: [email]
+
+• CPF/CNPJ: [doc]
+
+Está tudo correto?"
+
+**ENCERRAMENTO DO FLUXO MÁQUINAS:**
+Depois que o cliente confirmar, diga:
+"Perfeito! Já registrei sua solicitação. Nossa equipe comercial entrará em contato em breve com o orçamento detalhado. Obrigado pelo interesse!"
+
+E adicione a tag SILENCIOSA com os dados coletados + campos interpretados por VOCÊ:
+[MAQUINAS_DADOS:{"nome":"...","telefone":"...","email":"...","cnpjCpf":"...","maquinaDesejada":"...","detalhes":"...","produtoFabricado":"...","volumeProducao":"...","clienteNovo":"...","qualificacaoSDR":"..."}]
+
+⚠️ CAMPOS INTERPRETADOS PELA IA (você NÃO pergunta ao cliente — interpreta sozinho):
+- "produtoFabricado": O que o cliente fabrica ou vai produzir (extraído da conversa). Se não souber, coloque "Não identificado".
+- "volumeProducao": "Baixo volume" | "Médio volume" | "Alto volume" — interprete pela conversa (quantidade mencionada, porte da empresa, urgência).
+- "clienteNovo": "SIM" se nunca comprou Tecfag antes. "NAO" se já é cliente. Se não souber, coloque "SIM".
+- "qualificacaoSDR": Escolha UMA das opções abaixo com base no perfil do cliente na conversa:
+  "1" = Decisor com Pressa (Falou com quem manda e ele quer solução rápida)
+  "2" = Planejando Investimento (Interesse real, mas sem data definida)
+  "3" = Troca de Máquina (Já tem o processo e quer apenas renovar)
+  "4" = Curioso / Estudante (Não é empresa ou não tem intenção de compra)
+  "5" = Fora de Portfólio (Quer algo que a Tecfag não fabrica)
+  "6" = Sumiu / Sem contato (Não respondeu mais)
+
 ## SEU PAPEL NO SITE
 Você está atendendo visitantes no site tecfag.com.br. Seu objetivo principal é CONVERTER VENDAS.
 - Ajude o cliente a encontrar o produto certo
@@ -1222,3 +1326,207 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
 }
 
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// generateMaquinasReport — Relatório de Triagem SALES (estilo Valentina)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface MaquinasReportInput {
+  nome: string;
+  telefone: string;
+  email?: string | null;
+  cnpjCpf?: string | null;
+  maquinaDesejada: string;
+  detalhes?: string | null;
+  produtoFabricado?: string | null;
+  volumeProducao?: string | null;
+  clienteNovo?: string | null;
+  qualificacaoSDR?: string | null;
+  cnpjData?: any;
+  conversationSnippet?: string;
+  transcricaoCompleta?: string;
+}
+
+const SDR_LABELS: Record<string, string> = {
+  "1": "Decisor com Pressa (Falou com quem manda e ele quer solução rápida)",
+  "2": "Planejando Investimento (Interesse real, mas sem data definida)",
+  "3": "Troca de Máquina (Já tem o processo e quer apenas renovar)",
+  "4": "Curioso / Estudante (Não é empresa ou não tem intenção de compra)",
+  "5": "Fora de Portfólio (Quer algo que a Tecfag não fabrica)",
+  "6": "Sumiu / Sem contato (Não atendeu ou não retornou)",
+};
+
+/**
+ * Gera relatório de triagem comercial (Sales) para ser usado como Anotação
+ * na Negociação do funil MÁQUINAS 2.0 no RD Station CRM.
+ * Formato inspirado no modelo "Valentina" fornecido pelo usuário.
+ */
+export async function generateMaquinasReport(input: MaquinasReportInput): Promise<string> {
+  const dataAtual = new Date().toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+
+  const lines: string[] = [];
+
+  // ─── Cabeçalho ────────────────────────────────────────────────────────────
+  lines.push(`──────────────────────────────────────────────────`);
+  lines.push(`RELATÓRIO DE TRIAGEM — FAGNER IA`);
+  lines.push(`──────────────────────────────────────────────────`);
+  lines.push(``);
+
+  // ─── Identificação do Cliente ──────────────────────────────────────────────
+  lines.push(`IDENTIFICAÇÃO DO CLIENTE:`);
+  lines.push(`Nome: ${input.nome}`);
+  if (input.cnpjData?.nome && input.cnpjData.nome !== input.nome) {
+    lines.push(`Empresa: ${input.cnpjData.nome}`);
+  }
+  if (input.cnpjCpf) {
+    const isCnpj = input.cnpjCpf.replace(/\D/g, "").length === 14;
+    lines.push(`${isCnpj ? "CNPJ" : "CPF"}: ${input.cnpjCpf}`);
+  }
+  lines.push(`Telefone: ${input.telefone}`);
+  lines.push(`E-mail: ${input.email || 'Não informado'}`);
+  lines.push(``);
+  lines.push(`──────`);
+  lines.push(``);
+
+  // ─── Interesse Comercial ──────────────────────────────────────────────────
+  lines.push(`INTERESSE COMERCIAL:`);
+  lines.push(`Produto: ${input.maquinaDesejada}`);
+  if (input.detalhes) {
+    lines.push(`Detalhes: ${input.detalhes}`);
+  }
+  if (input.produtoFabricado && input.produtoFabricado !== 'Não identificado') {
+    lines.push(`Produto Fabricado pelo Cliente: ${input.produtoFabricado}`);
+  }
+  if (input.volumeProducao) {
+    lines.push(`Volume de Produção: ${input.volumeProducao}`);
+  }
+  lines.push(``);
+  lines.push(`──────`);
+  lines.push(``);
+
+  // ─── Nível de Interesse ──────────────────────────────────────────────────
+  const sdrCode = input.qualificacaoSDR || "2";
+  let nivelInteresse = "Morno";
+  let motivoNivel = "Cliente demonstrou interesse mas sem urgência definida.";
+  if (sdrCode === "1") {
+    nivelInteresse = "Quente";
+    motivoNivel = "Cliente decisor com urgência na aquisição.";
+  } else if (sdrCode === "3") {
+    nivelInteresse = "Quente";
+    motivoNivel = "Cliente já possui processo e busca renovação/substituição.";
+  } else if (sdrCode === "4" || sdrCode === "5" || sdrCode === "6") {
+    nivelInteresse = "Frio";
+    motivoNivel = sdrCode === "4" ? "Sem perfil empresarial ou intenção de compra."
+                 : sdrCode === "5" ? "Produto solicitado fora do portfólio Tecfag."
+                 : "Cliente não retornou contato durante o atendimento.";
+  }
+  lines.push(`NÍVEL DE INTERESSE:`);
+  lines.push(`Nível: ${nivelInteresse}`);
+  lines.push(`Motivo: ${motivoNivel}`);
+  lines.push(``);
+  lines.push(`──────`);
+  lines.push(``);
+
+  // ─── Qualificação SDR ──────────────────────────────────────────────────
+  lines.push(`QUALIFICAÇÃO SDR:`);
+  lines.push(`Categoria: ${SDR_LABELS[sdrCode] || SDR_LABELS["2"]}`);
+  lines.push(``);
+  lines.push(`──────`);
+  lines.push(``);
+
+  // ─── Cliente Novo ──────────────────────────────────────────────────────
+  lines.push(`CLIENTE NOVO?`);
+  lines.push(`Classificação: ${input.clienteNovo || "SIM"}`);
+  lines.push(``);
+  lines.push(`──────`);
+  lines.push(``);
+
+  // ─── Próximos Passos ──────────────────────────────────────────────────
+  lines.push(`PRÓXIMOS PASSOS:`);
+  if (nivelInteresse === "Quente") {
+    lines.push(`O vendedor deve realizar contato imediato — cliente demonstra urgência.`);
+    lines.push(`Levantar especificações técnicas detalhadas e apresentar proposta em até 24h.`);
+  } else if (nivelInteresse === "Morno") {
+    lines.push(`Realizar follow-up consultivo para entender melhor a necessidade.`);
+    lines.push(`Apresentar opções de máquinas compatíveis com a demanda informada.`);
+  } else {
+    lines.push(`Avaliar se vale follow-up. Cliente não demonstrou interesse comercial real.`);
+  }
+  lines.push(``);
+  lines.push(`──────`);
+  lines.push(``);
+
+  // ─── Observações ──────────────────────────────────────────────────────
+  lines.push(`OBSERVAÇÕES:`);
+  lines.push(`Atendimento realizado automaticamente pelo Fagner IA — triagem comercial.`);
+  if (input.detalhes) {
+    lines.push(`Contexto adicional: ${input.detalhes}`);
+  }
+  lines.push(``);
+
+  // ─── Perfil da Empresa (CNPJ) — TODOS os campos ──────────────────────────
+  if (input.cnpjData) {
+    const cd = input.cnpjData;
+    lines.push(`──────────────────────────────────────────────────`);
+    lines.push(``);
+    lines.push(`PERFIL DA EMPRESA (RECEITA FEDERAL)`);
+    lines.push(``);
+    lines.push(`Razão Social: ${cd.nome || "Não encontrado"}`);
+    if (cd.fantasia) lines.push(`Nome Fantasia: ${cd.fantasia}`);
+    lines.push(`CNPJ: ${cd.cnpj || input.cnpjCpf || "Não encontrado"}`);
+    if (cd.porte) lines.push(`Porte: ${cd.porte}`);
+    if (cd.naturezaJuridica) lines.push(`Tipo de Empresa: ${cd.naturezaJuridica}`);
+    if (cd.capitalSocial) lines.push(`Capital Registrado: R$ ${Number(cd.capitalSocial).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+    if (cd.situacao) lines.push(`Situação Cadastral: ${cd.situacao}`);
+    if (cd.matrizFilial) lines.push(`Matriz/Filial: ${cd.matrizFilial}`);
+    if (cd.dataAbertura) lines.push(`Data de Abertura: ${cd.dataAbertura}`);
+    if (cd.cnaePrincipal) lines.push(`CNAE Principal: ${cd.cnaePrincipal}`);
+    if (cd.cnaesSecundarios) lines.push(`CNAEs Secundários: ${cd.cnaesSecundarios}`);
+    if (cd.logradouro) lines.push(`Endereço: ${[cd.logradouro, cd.numero, cd.bairro].filter(Boolean).join(", ")}`);
+    if (cd.municipio) lines.push(`Cidade/UF: ${cd.municipio} - ${cd.uf || ""}`);
+    if (cd.cep) lines.push(`CEP: ${cd.cep}`);
+    const telefones = [cd.telefone1, cd.telefone2].filter(Boolean);
+    if (telefones.length > 0) lines.push(`Telefone(s): ${telefones.join(" / ")}`);
+    if (cd.email) lines.push(`E-mail Empresa: ${cd.email}`);
+    if (cd.socios) lines.push(`Sócios: ${cd.socios}`);
+    lines.push(``);
+
+    // Resumo Rápido da Empresa
+    lines.push(`Resumo Rápido: ${cd.porte || "Empresa"} com natureza ${cd.naturezaJuridica || "não informada"}${cd.capitalSocial ? ` e capital social de R$ ${Number(cd.capitalSocial).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : ""}. ${cd.cnaePrincipal ? `Atividade principal: ${cd.cnaePrincipal}.` : ""}`);
+    lines.push(``);
+  }
+
+  // ─── Transcrição ──────────────────────────────────────────────────────────
+  lines.push(`──────────────────────────────────────────────────`);
+  lines.push(``);
+  lines.push(`TRANSCRIÇÃO DO ATENDIMENTO`);
+  lines.push(`──────`);
+
+  if (input.transcricaoCompleta) {
+    const transcricaoLines = input.transcricaoCompleta.split('\n');
+    let lastPrefix = '';
+    for (const tl of transcricaoLines) {
+      const trimmed = tl.trim();
+      if (!trimmed) continue;
+      const currentPrefix = trimmed.startsWith('[CLIENTE]') ? '[CLIENTE]' : '[FAGNER]';
+      if (lastPrefix && currentPrefix !== lastPrefix) {
+        lines.push('');
+      }
+      lines.push(trimmed);
+      lastPrefix = currentPrefix;
+    }
+  } else {
+    lines.push(`(Nenhuma transcrição disponível)`);
+  }
+
+  lines.push(``);
+  lines.push(`──────────────────────────────────────────────────`);
+  lines.push(`DATA / HORA: ${dataAtual}`);
+  lines.push(`STATUS: Aguardando abordagem comercial`);
+  lines.push(`Gerado automaticamente pelo sistema Fagner IA — Tecfag`);
+  lines.push(`──────────────────────────────────────────────────`);
+
+  return lines.join("<br>");
+}

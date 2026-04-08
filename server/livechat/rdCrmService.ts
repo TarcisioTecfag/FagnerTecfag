@@ -59,6 +59,22 @@ export interface PosVendaData {
   conversationSummary?: string | null; // resumo da conversa para informações complementares
 }
 
+export interface MaquinasData {
+  nome: string;
+  telefone: string;
+  email?: string | null;
+  cnpjCpf?: string | null;
+  cnpjData?: CnpjData | null;
+  maquinaDesejada: string;
+  detalhes?: string | null;
+  produtoFabricado?: string | null;
+  volumeProducao?: string | null;
+  clienteNovo?: string | null;          // SIM / NAO / PEÇAS
+  qualificacaoSDR?: string | null;      // "1" a "6"
+  conversationSummary?: string | null;
+  ownerId?: string | null;              // vem do painel Settings (rodízio)
+}
+
 interface RdToken {
   accessToken: string;
   refreshToken: string;
@@ -596,6 +612,213 @@ export async function createPosVendaOS(
   return dealId;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MÁQUINAS — Criação de Deal no funil MÁQUINAS 2.0
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const RD_MAQUINAS_PIPELINE_ID    = "69cacc81e9770f001324bb44";
+const RD_MAQUINAS_FIRST_STAGE_ID = "69cacc81e9770f001324bb47"; // LEADS RECEBIDOS
+
+// Cache de custom fields do funil Máquinas
+let _maquinasCustomFieldsCache: { id: string; name: string }[] | null = null;
+
+async function loadMaquinasCustomFields(): Promise<{ id: string; name: string }[]> {
+  if (_maquinasCustomFieldsCache) return _maquinasCustomFieldsCache;
+  try {
+    const data = await rdRequest<any[]>("GET", "/deal_custom_fields?page[size]=100");
+    _maquinasCustomFieldsCache = (Array.isArray(data) ? data : []).map((f: any) => ({
+      id: f.id,
+      name: (f.name || "").toLowerCase(),
+    }));
+  } catch (e: any) {
+    console.warn("[RD CRM] Não foi possível carregar campos personalizados de deals:", e.message);
+    _maquinasCustomFieldsCache = [];
+  }
+  return _maquinasCustomFieldsCache!;
+}
+
+/**
+ * Cria uma negociação no funil MÁQUINAS 2.0 do RD CRM.
+ * Título: "FAGNER | NOME DO CLIENTE"
+ * Campos personalizados: CLIENTE NOVO?, QUALIFICADO POR SDR, QUAL O PRODUTO FABRICADO?, VOLUME DE PRODUÇÃO?
+ */
+async function createMaquinasDeal(
+  maqData: MaquinasData,
+  contactId: string,
+  organizationId?: string | null
+): Promise<string> {
+  const titulo = `FAGNER | ${maqData.nome}`;
+
+  // Informações complementares
+  let infoCompl: string;
+  if (maqData.conversationSummary) {
+    infoCompl = maqData.conversationSummary;
+  } else {
+    const partes: string[] = [];
+    partes.push(`Máquina: ${maqData.maquinaDesejada}`);
+    if (maqData.detalhes) partes.push(`Detalhes: ${maqData.detalhes}`);
+    if (maqData.produtoFabricado) partes.push(`Produto fabricado: ${maqData.produtoFabricado}`);
+    infoCompl = partes.join(" | ");
+  }
+
+  const pipelineId = RD_MAQUINAS_PIPELINE_ID;
+  const stageId    = RD_MAQUINAS_FIRST_STAGE_ID;
+  const ownerId    = maqData.ownerId || (process.env.RD_CRM_OWNER_MAQUINAS_ID ?? "").trim();
+
+  if (!ownerId) throw new Error("[RD CRM] Owner ID para máquinas não configurado (nem no Settings nem no env)");
+
+  const [sourceId, campaignId] = await Promise.all([
+    getOrCreateSourceId(),
+    getOrCreateCampaignId(),
+  ]);
+
+  console.log(`[RD CRM] Criando deal MÁQUINAS "${titulo}": pipeline=${pipelineId} stage=${stageId} owner=${ownerId}`);
+
+  const dealPayload: Record<string, any> = {
+    name:        titulo,
+    pipeline_id: pipelineId,
+    stage_id:    stageId,
+    owner_id:    ownerId,
+    contact_ids: [contactId],
+    status:      "ongoing",
+    rating:      3,  // Intenção média (sales, não frio)
+    deal_custom_fields: [],
+  };
+
+  if (sourceId)   dealPayload.deal_source_id = sourceId;
+  if (campaignId) dealPayload.campaign_id    = campaignId;
+
+  if (organizationId) {
+    dealPayload.organization_id = organizationId;
+    console.log(`[RD CRM] Vinculando empresa ${organizationId} à negociação de máquinas`);
+  }
+
+  // ── Campos personalizados ──────────────────────────────────────────────────
+  const cfs = await loadMaquinasCustomFields();
+
+  // Helper: encontra campo por parte do nome
+  const findField = (partialName: string) =>
+    cfs.find((f: any) => f.name.includes(partialName));
+
+  const clienteNovoField   = findField("cliente novo");
+  const sdrField           = findField("qualificado");
+  const produtoField       = findField("produto fabricado");
+  const volumeField        = findField("volume");
+  const infoField          = findField("complementar");
+
+  dealPayload.custom_fields = {};
+
+  // CLIENTE NOVO?
+  if (clienteNovoField && maqData.clienteNovo) {
+    dealPayload.deal_custom_fields.push({
+      custom_field_id: clienteNovoField.id,
+      value: maqData.clienteNovo.toUpperCase(),
+    });
+    dealPayload.custom_fields[clienteNovoField.id] = maqData.clienteNovo.toUpperCase();
+  }
+
+  // QUALIFICADO POR SDR — usar o texto completo da opção
+  const SDR_OPTIONS: Record<string, string> = {
+    "1": "Decisor com Pressa (Falou com quem manda e ele quer solução rápida)",
+    "2": "Planejando Investimento (Interesse real, mas sem data definida)",
+    "3": "Troca de Máquina (Já tem o processo e quer apenas renovar)",
+    "4": "Curioso / Estudante (Não é empresa ou não tem intenção de compra)",
+    "5": "Fora de Portfólio (Quer algo que a Tecfag não fabrica)",
+    "6": "Sumiu / Sem contato (Não atendeu ou não retornou)",
+  };
+  if (sdrField && maqData.qualificacaoSDR) {
+    const sdrValue = SDR_OPTIONS[maqData.qualificacaoSDR] || SDR_OPTIONS["2"];
+    dealPayload.deal_custom_fields.push({
+      custom_field_id: sdrField.id,
+      value: sdrValue,
+    });
+    dealPayload.custom_fields[sdrField.id] = sdrValue;
+  }
+
+  // QUAL O PRODUTO FABRICADO?
+  if (produtoField && maqData.produtoFabricado) {
+    dealPayload.deal_custom_fields.push({
+      custom_field_id: produtoField.id,
+      value: maqData.produtoFabricado,
+    });
+    dealPayload.custom_fields[produtoField.id] = maqData.produtoFabricado;
+  }
+
+  // VOLUME DE PRODUÇÃO?
+  if (volumeField && maqData.volumeProducao) {
+    dealPayload.deal_custom_fields.push({
+      custom_field_id: volumeField.id,
+      value: maqData.volumeProducao,
+    });
+    dealPayload.custom_fields[volumeField.id] = maqData.volumeProducao;
+  }
+
+  // INFORMAÇÕES COMPLEMENTARES
+  if (infoField) {
+    dealPayload.deal_custom_fields.push({
+      custom_field_id: infoField.id,
+      value: infoCompl,
+    });
+    dealPayload.custom_fields[infoField.id] = infoCompl;
+  }
+
+  const deal = await rdRequest<{ id: string }>("POST", "/deals", dealPayload);
+  console.log(`[RD CRM] Negociação MÁQUINAS criada: ${deal.id} — "${titulo}"`);
+  return deal.id;
+}
+
+// ─── Função principal para MÁQUINAS ──────────────────────────────────────────
+export async function createMaquinasOS(
+  visitorId: string,
+  maqData: MaquinasData,
+  relatorio: string
+): Promise<string> {
+  if (!process.env.RD_CRM_CLIENT_ID) {
+    throw new Error("[RD CRM] Variáveis de ambiente RD CRM não configuradas.");
+  }
+
+  const [visitor] = await db.select({ rdCrmDealId: lcVisitors.rdCrmDealId })
+    .from(lcVisitors)
+    .where(eq(lcVisitors.id, visitorId));
+
+  // Não bloqueia se já tem deal — máquinas pode ter múltiplos deals (diferentes orçamentos)
+  // MAS se o último deal é recente (< 1h), pula para evitar duplicação
+  if (visitor?.rdCrmDealId) {
+    console.log(`[RD CRM] Visitante ${visitorId} já tem deal: ${visitor.rdCrmDealId}. Criando novo deal de máquinas.`);
+  }
+
+  console.log(`[RD CRM] Criando deal MÁQUINAS para visitante ${visitorId}...`);
+
+  // 1. Empresa
+  let organizationId: string | null = null;
+  const docDigits = (maqData.cnpjCpf ?? "").replace(/\D/g, "");
+  const isCnpj = docDigits.length === 14;
+  const isCpf  = docDigits.length === 11;
+
+  if (isCnpj && maqData.cnpjData) {
+    organizationId = await findOrCreateOrganization(maqData as any);
+  } else if (isCpf) {
+    organizationId = await findOrCreateOrganization(maqData as any);
+  }
+
+  // 2. Contato
+  const contactId = await upsertContact(maqData as any, organizationId);
+
+  // 3. Negociação no funil MÁQUINAS 2.0
+  const dealId = await createMaquinasDeal(maqData, contactId, organizationId);
+
+  // 4. Anotação com relatório completo
+  await createNote(dealId, relatorio);
+
+  // 5. Persistir dealId
+  await db.update(lcVisitors)
+    .set({ rdCrmDealId: dealId })
+    .where(eq(lcVisitors.id, visitorId));
+
+  console.log(`[RD CRM] ✅ Deal MÁQUINAS criado! ID: ${dealId}`);
+  return dealId;
+}
+
 /**
  * Verifica se o ambiente RD CRM está corretamente configurado.
  */
@@ -603,8 +826,6 @@ export function isRdCrmConfigured(): boolean {
   return !!(
     process.env.RD_CRM_CLIENT_ID &&
     process.env.RD_CRM_CLIENT_SECRET &&
-    (process.env.RD_CRM_ACCESS_TOKEN || process.env.RD_CRM_REFRESH_TOKEN) &&
-    process.env.RD_CRM_PIPELINE_OS_STAGE_ID &&
-    process.env.RD_CRM_OWNER_POS_VENDA_ID
+    (process.env.RD_CRM_ACCESS_TOKEN || process.env.RD_CRM_REFRESH_TOKEN)
   );
 }

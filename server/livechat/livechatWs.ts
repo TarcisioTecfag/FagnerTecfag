@@ -15,8 +15,8 @@ import { WebSocket, WebSocketServer } from "ws";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
 import { lcStorage } from "./livechatStorage.js";
-import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, isObviousNoise, detectStageIntent, generatePosVendaReport } from "./livechatAI.js";
-import { createPosVendaOS, isRdCrmConfigured } from "./rdCrmService.js";
+import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, isObviousNoise, detectStageIntent, generatePosVendaReport, generateMaquinasReport } from "./livechatAI.js";
+import { createPosVendaOS, createMaquinasOS, isRdCrmConfigured } from "./rdCrmService.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 
 // ─── Connection maps ─────────────────────────────────────────────────────────
@@ -945,19 +945,16 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 } else if (hasNoSale) {
                   // Gerar nota ANTES de limpar a sessão
                   const note = await generateConversationNote(chat.id);
-                  await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_sem_venda");
+                  await lcStorage.updateVisitorPipeline(currentVisitorId, "sem_resposta");
                   if (note) await lcStorage.addVisitorNote(currentVisitorId, "Sem Venda", note);
                   // Fagner define motivo automaticamente
                   await lcStorage.setChatCloseReason(chat.id, "venda_cancelada").catch(() => {});
                   // ── NÃO FECHAR O CHAT — impede fragmentação ──
-                  // O chat permanece aberto com status ai_active.
-                  // Se o visitante quiser voltar a falar, a conversa continua no mesmo chat.
-                  // O sweepOrphanedChats (90min) cuida do encerramento natural.
-                  broadcastPipelineUpdate(currentVisitorId, "finalizado_sem_venda");
+                  broadcastPipelineUpdate(currentVisitorId, "sem_resposta");
                 }
 
                 // ── Detectar tags de estágio [STAGE:...] ──
-                const stageTagMatch = rawReply.match(/\[STAGE:(pos_venda|outros)\]/i);
+                const stageTagMatch = rawReply.match(/\[STAGE:(pos_venda|outros|maquinas)\]/i);
                 if (stageTagMatch) {
                   const newStage = stageTagMatch[1].toLowerCase() as string;
                   await lcStorage.updateVisitorPipeline(currentVisitorId, newStage);
@@ -966,9 +963,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                   // Para "outros": cancelar follow-up timers (não faz sentido perguntar
                   // "Ainda posso ajudar?" para quem enviou currículo ou quer falar com pessoa específica)
-                  if (newStage === 'outros') {
+                  if (newStage === 'outros' || newStage === 'maquinas') {
                     clearFollowUpTimers(currentVisitorId);
-                    console.log(`[LiveChat] Follow-up timers cancelados para visitante ${currentVisitorId} (estágio: outros)`);
+                    console.log(`[LiveChat] Follow-up timers cancelados para visitante ${currentVisitorId} (estágio: ${newStage})`);
                   }
                 } else {
                   // Fallback: detecção por regex na mensagem do USUÁRIO (para capturar intenção não marcada pelo Gemini)
@@ -1145,12 +1142,162 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   }
                 }
 
+                // ── Detectar tag de dados de MÁQUINAS [MAQUINAS_DADOS:{...}] ──
+                const maquinasTagMatch = rawReply.match(/\[MAQUINAS_DADOS:([\s\S]*?)\]/);
+                if (maquinasTagMatch) {
+                  try {
+                    const maqData = JSON.parse(maquinasTagMatch[1].trim());
+                    // Salva dados no visitante
+                    await lcStorage.updateVisitorPosVendaData(currentVisitorId, {
+                      nome:      maqData.nome      ?? null,
+                      telefone:  maqData.telefone  ?? null,
+                      email:     maqData.email     ?? null,
+                      cnpjCpf:   maqData.cnpjCpf   ?? null,
+                    });
+                    // Atualiza pipeline para maquinas
+                    await lcStorage.updateVisitorPipeline(currentVisitorId, "maquinas");
+                    broadcastPipelineUpdate(currentVisitorId, "maquinas");
+                    broadcastToAgents({
+                      type: "VISITOR_MAQUINAS_UPDATED",
+                      visitorId: currentVisitorId,
+                      maqData,
+                    });
+                    console.log(`[LiveChat] Dados de máquinas salvos para visitante ${currentVisitorId}`);
+
+                    // CNPJ data
+                    if (maqData.cnpjCpf) {
+                      const cv = await lcStorage.getVisitorById(currentVisitorId);
+                      if (cv?.posVendaCnpjData) {
+                        const pj = typeof cv.posVendaCnpjData === 'string' ? JSON.parse(cv.posVendaCnpjData) : cv.posVendaCnpjData;
+                        maqData.cnpjData = pj;
+                      }
+                    }
+
+                    // ── Criar deal no RD Station CRM funil MÁQUINAS 2.0 ──
+                    if (isRdCrmConfigured()) {
+                      await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", "⏳ Criando card no funil MÁQUINAS 2.0...");
+                      broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
+
+                      (async () => {
+                        try {
+                          const recentMessages = await lcStorage.listMessagesByChat(chat.id);
+
+                          // Snippet compacto
+                          const snippet = recentMessages
+                            .slice(-30)
+                            .filter(m => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
+                            .map(m => {
+                              const who = m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]';
+                              const clean = m.content
+                                .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, '')
+                                .replace(/\[SCORE:\d+\]/gi, '')
+                                .replace(/\[STAGE:[^\]]+\]/gi, '')
+                                .replace(/\[MAQUINAS_DADOS:[\s\S]*?\]/gi, '')
+                                .trim();
+                              return `${who} ${clean.slice(0, 150)}`;
+                            })
+                            .filter(Boolean)
+                            .join('\n');
+
+                          // Transcrição completa
+                          const transcricaoCompleta = recentMessages
+                            .filter(m => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
+                            .map(m => {
+                              const who = m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]';
+                              const clean = m.content
+                                .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, '')
+                                .replace(/\[SCORE:\d+\]/gi, '')
+                                .replace(/\[STAGE:[^\]]+\]/gi, '')
+                                .replace(/\[MAQUINAS_DADOS:[\s\S]*?\]/gi, '')
+                                .replace(/\[PRODUTO_IDENTIFICADO:[^\]]+\]/gi, '')
+                                .trim();
+                              return clean ? `${who} ${clean}` : null;
+                            })
+                            .filter(Boolean)
+                            .join('\n\n');
+
+                          // Gerar relatório Sales via generateMaquinasReport
+                          const relatorio = await generateMaquinasReport({
+                            nome:               maqData.nome,
+                            telefone:           maqData.telefone,
+                            email:              maqData.email      ?? null,
+                            cnpjCpf:            maqData.cnpjCpf    ?? null,
+                            maquinaDesejada:    maqData.maquinaDesejada,
+                            detalhes:           maqData.detalhes   ?? null,
+                            produtoFabricado:   maqData.produtoFabricado ?? null,
+                            volumeProducao:     maqData.volumeProducao  ?? null,
+                            clienteNovo:        maqData.clienteNovo     ?? null,
+                            qualificacaoSDR:    maqData.qualificacaoSDR ?? null,
+                            cnpjData:           maqData.cnpjData,
+                            conversationSnippet: snippet,
+                            transcricaoCompleta: transcricaoCompleta,
+                          });
+
+                          // Resumo para informações complementares do deal
+                          const conversationSummary = `Máquina: ${maqData.maquinaDesejada}. ${maqData.detalhes || ''}`.trim().slice(0, 400);
+
+                          // Resolver owner do Settings (rodízio do funil maquinas)
+                          let ownerId: string | undefined;
+                          try {
+                            const settingsRaw = typeof localStorage !== 'undefined'
+                              ? localStorage.getItem('livechat_settings') : null;
+                            // Settings está no frontend — precisamos buscar de outra forma
+                            // O owner vem do env como fallback
+                          } catch {}
+
+                          const dealId = await createMaquinasOS(
+                            currentVisitorId,
+                            {
+                              nome:               maqData.nome,
+                              telefone:           maqData.telefone,
+                              email:              maqData.email      ?? undefined,
+                              cnpjCpf:            maqData.cnpjCpf    ?? undefined,
+                              cnpjData:           maqData.cnpjData   ?? undefined,
+                              maquinaDesejada:    maqData.maquinaDesejada,
+                              detalhes:           maqData.detalhes   ?? undefined,
+                              produtoFabricado:   maqData.produtoFabricado ?? undefined,
+                              volumeProducao:     maqData.volumeProducao  ?? undefined,
+                              clienteNovo:        maqData.clienteNovo     ?? undefined,
+                              qualificacaoSDR:    maqData.qualificacaoSDR ?? undefined,
+                              conversationSummary: conversationSummary,
+                              ownerId:            ownerId,
+                            },
+                            relatorio
+                          );
+
+                          const dealUrl = `https://crm.rdstation.com/app/deals/${dealId}`;
+                          await lcStorage.addVisitorNote(
+                            currentVisitorId,
+                            "RD CRM",
+                            `✅ Card MÁQUINAS criado no RD Station CRM!\nFunil: MÁQUINAS 2.0\nID do Deal: ${dealId}\n${dealUrl}`
+                          );
+                          await lcStorage.setChatCloseReason(chat.id, "atendimento_concluido").catch(() => {});
+                          broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
+                          broadcastToAgents({
+                            type: "RD_CRM_OS_CREATED",
+                            visitorId: currentVisitorId,
+                            dealId,
+                            dealUrl,
+                          });
+                          console.log(`[RD CRM] ✅ Deal MÁQUINAS criado para visitante ${currentVisitorId}: ${dealId}`);
+                        } catch (crmErr: any) {
+                          console.error(`[RD CRM] ❌ Falha ao criar deal MÁQUINAS:`, crmErr.message);
+                          await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", `❌ Falha ao criar card MÁQUINAS\nMotivo: ${crmErr.message}`).catch(() => {});
+                          broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
+                        }
+                      })();
+                    }
+                  } catch (parseErr: any) {
+                    console.warn("[LiveChat] Falha ao parsear MAQUINAS_DADOS:", parseErr.message);
+                  }
+                }
+
                 // Start follow-ups (3m, 8m) — só se não for estágio "outros"
                 // Para "outros": follow-up já foi cancelado acima quando a tag foi detectada
                 // Mas se ainda não houve tag, só inicia timers se não está em estágio protegido
                 try {
                   const visitorNow = await lcStorage.getVisitorById(currentVisitorId);
-                  const PROTECTED_STAGES = ['outros', 'finalizado_com_venda', 'finalizado_sem_venda', 'pos_venda'];
+                  const PROTECTED_STAGES = ['outros', 'finalizado_com_venda', 'pos_venda', 'maquinas'];
                   if (!PROTECTED_STAGES.includes(visitorNow?.pipelineStage ?? '')) {
                     startFollowUpTimers(currentVisitorId, chat.id);
                   } else {
