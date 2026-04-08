@@ -226,6 +226,49 @@ function scoreColor(score: number): string {
 
 // ——— Main Component —————————————————————————————————————————————————
 
+// ——— Notification popup type ——————————————————————————————————————————
+interface NotifPopup {
+  id: string;
+  visitorName: string;
+  content: string;
+  chatId: string;
+}
+
+// ——— Sound helper (Web Audio API — sem arquivo externo) ——————————————
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0.35, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+    gainNode.connect(ctx.destination);
+
+    // Tom principal
+    const osc1 = ctx.createOscillator();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(880, ctx.currentTime);
+    osc1.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.15);
+    osc1.connect(gainNode);
+    osc1.start(ctx.currentTime);
+    osc1.stop(ctx.currentTime + 0.6);
+
+    // Tom harmônico para dar corpo
+    const osc2 = ctx.createOscillator();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(1320, ctx.currentTime);
+    osc2.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.2);
+    const gain2 = ctx.createGain();
+    gain2.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(ctx.currentTime);
+    osc2.stop(ctx.currentTime + 0.4);
+  } catch {
+    // AudioContext not supported — ignore silently
+  }
+}
+
 function LiveChat() {
   const [activeTab, setActiveTab] = useState<"chats" | "visitors" | "crm" | "arquivados" | "atencao" | "stats">("chats");
   const [visitors, setVisitors] = useState<Visitor[]>([]);
@@ -246,9 +289,28 @@ function LiveChat() {
   const [searchQuery, setSearchQuery] = useState("");
   const [closeReasonOpen, setCloseReasonOpen] = useState<string | null>(null); // chatId
   const [closeReasonSaving, setCloseReasonSaving] = useState(false);
+  // ——— Notificações ———
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({}); // chatId → count
+  const [notifPopups, setNotifPopups] = useState<NotifPopup[]>([]);
+  const selectedChatRef = useRef<Chat | null>(null);
+  const activeTabRef = useRef<string>("chats");
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Manter refs sincronizados para uso dentro do WS handler (closure)
+  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
+  // Dismiss popup por id
+  const dismissPopup = (id: string) =>
+    setNotifPopups((prev) => prev.filter((n) => n.id !== id));
+
+  // Mostra popup e agenda auto-dismiss após 6s
+  const showPopup = (popup: NotifPopup) => {
+    setNotifPopups((prev) => [popup, ...prev].slice(0, 4)); // max 4 simultâneos
+    setTimeout(() => dismissPopup(popup.id), 6000);
+  };
 
   const openHistoryModal = async (v: Visitor) => {
     try {
@@ -352,8 +414,37 @@ function LiveChat() {
               toast({ title: "Abordagem Proativa", description: "Fagner abordou um visitante automaticamente!" });
             }
             break;
-          case "CHAT_MESSAGE":
-            if (selectedChat?.id === data.chatId) {
+          case "CHAT_MESSAGE": {
+            const isChatOpen = selectedChatRef.current?.id === data.chatId;
+            const isVisitorMsg = data.sender === "visitor";
+
+            // Se é mensagem do visitante → notificação
+            if (isVisitorMsg) {
+              // Incrementa contador de não lidas (só se chat não está aberto)
+              if (!isChatOpen || activeTabRef.current !== "chats") {
+                setUnreadCounts((prev) => ({
+                  ...prev,
+                  [data.chatId]: (prev[data.chatId] ?? 0) + 1,
+                }));
+              }
+              // Som de notificação (sempre que visitor enviar)
+              playNotificationSound();
+              // Popup flutuante
+              const visitorName = data.visitorName ||
+                chatsRef.current?.find((c: Chat) => c.id === data.chatId)?.visitorName ||
+                "Visitante";
+              showPopup({
+                id: `${data.chatId}-${Date.now()}`,
+                visitorName,
+                content: data.content?.length > 80
+                  ? data.content.slice(0, 80) + "..."
+                  : (data.content ?? ""),
+                chatId: data.chatId,
+              });
+            }
+
+            // Adiciona mensagem ao painel se o chat estiver aberto
+            if (isChatOpen) {
               setChatMessages((prev) => [...prev, {
                 id: Date.now().toString(),
                 chatId: data.chatId,
@@ -364,6 +455,7 @@ function LiveChat() {
               }]);
             }
             break;
+          }
           case "NEEDS_HUMAN":
             toast({
               title: "⚠️ Fagner precisa de ajuda!",
@@ -530,6 +622,8 @@ function LiveChat() {
   // ——— Load chat messages —————————————————————————————————————————————————
   const loadChatMessages = async (chat: Chat) => {
     setSelectedChat(chat);
+    // Limpa não lidas ao abrir o chat
+    setUnreadCounts((prev) => { const n = { ...prev }; delete n[chat.id]; return n; });
     try {
       const res = await fetch(`/api/livechat/chats/${chat.id}/messages`, { credentials: "include" });
       if (res.ok) setChatMessages(await res.json());
@@ -636,20 +730,79 @@ function LiveChat() {
   );
 
   // ——— TABS —————————————————————————————————————————————————
+  const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
   const mainTabs = [
-    { id: "chats" as const, label: "Chats", icon: MessageCircle, count: activeChats.length },
-    { id: "visitors" as const, label: "Visitantes", icon: Eye, count: visitors.length },
-    { id: "crm" as const, label: "CRM", icon: Users, count: undefined as number | undefined },
+    { id: "chats" as const, label: "Chats", icon: MessageCircle, count: activeChats.length, unread: totalUnread },
+    { id: "visitors" as const, label: "Visitantes", icon: Eye, count: visitors.length, unread: 0 },
+    { id: "crm" as const, label: "CRM", icon: Users, count: undefined as number | undefined, unread: 0 },
   ];
   const secondaryTabs = [
-    { id: "arquivados" as const, label: "Arquivados", icon: Layers, count: archivedChats.length },
-    { id: "atencao" as const, label: "Atenção", icon: AlertTriangle, count: attentionChats.length },
-    { id: "stats" as const, label: "Estatísticas", icon: BarChart3, count: undefined as number | undefined },
+    { id: "arquivados" as const, label: "Arquivados", icon: Layers, count: archivedChats.length, unread: 0 },
+    { id: "atencao" as const, label: "Atenção", icon: AlertTriangle, count: attentionChats.length, unread: 0 },
+    { id: "stats" as const, label: "Estatísticas", icon: BarChart3, count: undefined as number | undefined, unread: 0 },
   ];
   const tabs = [...mainTabs, ...secondaryTabs];
 
+  // Ref para acessar chats dentro do WS handler sem stale closure
+  const chatsRef = useRef<Chat[]>(chats);
+  useEffect(() => { chatsRef.current = chats; }, [chats]);
+
   return (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(0 0% 97%) 0%, hsl(0 5% 95%) 100%)" }}>
+
+      {/* ——— POPUP NOTIFICATIONS ——— */}
+      <div
+        aria-live="polite"
+        className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"
+        style={{ maxWidth: 340 }}
+      >
+        {notifPopups.map((n) => (
+          <div
+            key={n.id}
+            className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-red-200 shadow-2xl px-4 py-3 animate-slide-in-right"
+            style={{
+              background: "linear-gradient(135deg, #fff 0%, #fff5f5 100%)",
+              boxShadow: "0 8px 32px rgba(220,38,38,0.18), 0 2px 8px rgba(0,0,0,0.08)",
+              animation: "slideInRight 0.35s cubic-bezier(.22,1,.36,1)",
+            }}
+          >
+            {/* Icon */}
+            <div
+              className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center mt-0.5"
+              style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
+            >
+              <MessageCircle className="w-4 h-4 text-white" />
+            </div>
+            {/* Text */}
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-semibold text-red-700 mb-0.5 truncate">
+                💬 {n.visitorName}
+              </p>
+              <p className="text-[12px] text-zinc-700 leading-snug line-clamp-2">
+                {n.content || "Nova mensagem recebida"}
+              </p>
+              <button
+                onClick={() => {
+                  dismissPopup(n.id);
+                  setActiveTab("chats");
+                  const chat = chatsRef.current?.find((c) => c.id === n.chatId);
+                  if (chat) loadChatMessages(chat);
+                }}
+                className="mt-1.5 text-[10px] font-bold text-red-600 hover:text-red-800 transition-colors"
+              >
+                Ver conversa →
+              </button>
+            </div>
+            {/* Close */}
+            <button
+              onClick={() => dismissPopup(n.id)}
+              className="flex-shrink-0 text-zinc-400 hover:text-zinc-600 transition-colors mt-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
 
       {/* ——— COMPACT HEADER ——— */}
       <div className="flex-shrink-0 px-6 pt-5 pb-3">
@@ -710,17 +863,31 @@ function LiveChat() {
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 ${
+                className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 ${
                   isActive ? "text-white shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100/60"
                 }`}
                 style={isActive ? { background: "linear-gradient(135deg, #7f1d1d, #dc2626)", boxShadow: "0 2px 8px rgba(220,38,38,0.3)" } : {}}
               >
                 <tab.icon className="w-3.5 h-3.5" />
                 {tab.label}
+                {/* Badge de conversas ativas */}
                 {tab.count !== undefined && tab.count > 0 && (
                   <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none ${
                     isActive ? "bg-white/25 text-white" : "bg-zinc-200/80 text-zinc-600"
                   }`}>{tab.count}</span>
+                )}
+                {/* Badge de não lidas — pulsante, vermelho vivo */}
+                {tab.unread > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[9px] font-black text-white leading-none shadow-lg"
+                    style={{
+                      background: "linear-gradient(135deg, #dc2626, #b91c1c)",
+                      boxShadow: "0 0 0 2px white, 0 2px 8px rgba(220,38,38,0.5)",
+                      animation: "pulse 1.5s ease-in-out infinite",
+                    }}
+                  >
+                    {tab.unread > 99 ? "99+" : tab.unread}
+                  </span>
                 )}
               </button>
             );
@@ -766,7 +933,9 @@ function LiveChat() {
                 {tab.label}
                 {tab.count !== undefined && tab.count > 0 && (
                   <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none ${
-                    isActive ? "bg-white/25 text-white" : "bg-zinc-200/80 text-zinc-600"
+                    isActive
+                      ? tab.id === "atencao" ? "bg-orange-300/60 text-white" : "bg-white/25 text-white"
+                      : tab.id === "atencao" ? "bg-orange-100 text-orange-700" : "bg-zinc-200/80 text-zinc-600"
                   }`}>{tab.count}</span>
                 )}
               </button>
