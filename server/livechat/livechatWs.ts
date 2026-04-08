@@ -981,16 +981,17 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 const hasNoSale = /\[OUTCOME:NO_SALE\]/i.test(rawReply);
 
                 if (hasSale) {
-                  // Gerar nota ANTES de limpar a sessão
+                  // ✅ OUTCOME:SALE detectado: apenas marca o pipeline e gera nota.
+                  // NÃO fechar o chat — o visitante pode ainda estar no meio da conversa
+                  // confirmando detalhes (CEP, forma de pagamento, etc). O chat fecha
+                  // naturalmente pelo timer de 10min ou quando o visitante sair.
                   const note = await generateConversationNote(chat.id);
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_com_venda");
                   if (note) await lcStorage.addVisitorNote(currentVisitorId, "Venda", note);
                   // Fagner define motivo automaticamente
                   await lcStorage.setChatCloseReason(chat.id, "venda_fechada").catch(() => {});
-                  await lcStorage.closeChat(chat.id);
-                  clearAISession(chat.id);
+                  // ✅ NÃO fechar nem limpar sessão — visitante ainda pode confirmar CEP, pagamento, etc.
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_com_venda");
-                  broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id });
                 } else if (hasNoSale) {
                   // Gerar nota ANTES de limpar a sessão
                   const note = await generateConversationNote(chat.id);
@@ -1096,7 +1097,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                               return clean ? `${who} ${clean}` : null;
                             })
                             .filter(Boolean)
-                            .join('\n');
+                            .join('\n\n');
 
                           // Gerar relatório via Gemini
                           const relatorio = await generatePosVendaReport({

@@ -380,7 +380,7 @@ Ao final de CADA resposta sua, você DEVE avaliar duas coisas:
 2. O nível do engajamento do cliente de 0 a 100 (0 = Frio/Desinteressado, 50 = Curioso/Explorando, 100 = Muito Quente/Pronto pra comprar).
 
 Com bases nas suas avaliações SILENCIOSAS, inclua as tags corretas NO FINAL ABSOLUTO da sua mensagem:
-- [OUTCOME:SALE] [SCORE:100] → Cliente de fato pediu orçamentos, fechou venda, ou está finalizando.
+- [OUTCOME:SALE] [SCORE:100] → SOMENTE quando o cliente CONFIRMOU EXPLICITAMENTE que vai comprar. Sinais válidos: "vou comprar", "pode confirmar", "fecha", "quero esse", "finaliza pra mim". NÃO emita por simples interesse, pedido de preço, pedido de frete ou CEP.
 - [OUTCOME:NO_SALE] [SCORE:0] → Somente após realizar a abordagem de retenção completa (resistir e oferecer cupom) e o cliente AINDA assim recusar.
 - SE a conversa ainda está em ANDAMENTO, adicione APENAS a tag com a sua avaliação do calor atual. Ex: [SCORE:65]
 
@@ -563,10 +563,34 @@ export async function processVisitorMessage(
     // Reconstrução do histórico a partir do banco de dados (anti-reinício de memória)
     try {
       const pastMessages = await lcStorage.listMessagesByChat(chatId);
-      if (pastMessages && pastMessages.length > 0) {
+      let messagesToLoad = pastMessages;
+
+      // ── FALLBACK CROSS-CHAT: se o chat atual não tem histórico ainda (chat recém-criado por
+      // fragmentação ou OUTCOME:SALE prematuro), busca mensagens do chat anterior mais recente
+      // do mesmo visitante (até 30min atrás) para restaurar contexto da conversa.
+      if ((!pastMessages || pastMessages.length === 0) && chat?.visitorId) {
+        try {
+          const recentChats = await lcStorage.listChatsByVisitor(chat.visitorId, 5);
+          const previousChat = recentChats.find(c =>
+            c.id !== chatId &&
+            c.status === 'closed' &&
+            (Date.now() - new Date(c.startedAt).getTime()) < 30 * 60 * 1000 // últimos 30 min
+          );
+          if (previousChat) {
+            messagesToLoad = await lcStorage.listMessagesByChat(previousChat.id);
+            if (messagesToLoad.length > 0) {
+              console.log(`[LiveChat AI] Sessão ${chatId}: sem histórico próprio. Carregando contexto do chat anterior ${previousChat.id} (${messagesToLoad.length} msgs).`);
+            }
+          }
+        } catch (e) {
+          console.warn('[LiveChat AI] Falha ao buscar chat anterior para fallback:', e);
+        }
+      }
+
+      if (messagesToLoad && messagesToLoad.length > 0) {
         // Usa as últimas 30 mensagens (15 turnos) para não perder o histórico do fluxo de coleta do CRM.
         // pastMessages vem ordenado por ASC (a mais recente no final). slice(-30) pega as últimas 30 na ordem correta!
-        const recent = pastMessages.slice(-30);
+        const recent = messagesToLoad.slice(-30);
         for (const msg of recent) {
           if (msg.sender === "visitor") {
             // Filtrar mensagens do visitante que são apenas tags internas
