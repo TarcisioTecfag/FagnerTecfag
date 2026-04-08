@@ -753,7 +753,7 @@ function LiveChat() {
       <div
         aria-live="polite"
         className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"
-        style={{ width: 500 }}
+        style={{ width: 380 }}
       >
         {notifPopups.map((n) => (
           <div
@@ -779,19 +779,19 @@ function LiveChat() {
                 style={{ background: "linear-gradient(180deg, #dc2626, #7f1d1d)" }}
               />
 
-              <div className="flex-1 px-5 py-4">
+              <div className="flex-1 px-4 py-3">
                 {/* Cabeçalho: remetente + hora */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2.5">
                     {/* Avatar */}
                     <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-md"
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-md"
                       style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
                     >
                       {n.visitorName.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-[13px] font-bold text-zinc-900 leading-tight">{n.visitorName}</p>
+                      <p className="text-[12px] font-bold text-zinc-900 leading-tight">{n.visitorName}</p>
                       <p className="text-[10px] text-red-500 font-semibold tracking-wide uppercase leading-tight">
                         💬 Nova mensagem
                       </p>
@@ -812,10 +812,10 @@ function LiveChat() {
 
                 {/* Preview da mensagem */}
                 <div
-                  className="rounded-xl px-4 py-3 mb-3"
+                  className="rounded-lg px-3 py-2 mb-2.5"
                   style={{ background: "rgba(127,29,29,0.05)", border: "1px solid rgba(220,38,38,0.10)" }}
                 >
-                  <p className="text-[13px] text-zinc-700 leading-relaxed line-clamp-3">
+                  <p className="text-[12px] text-zinc-700 leading-relaxed line-clamp-2">
                     {n.content || "Nova mensagem recebida"}
                   </p>
                 </div>
@@ -828,7 +828,7 @@ function LiveChat() {
                     const chat = chatsRef.current?.find((c) => c.id === n.chatId);
                     if (chat) loadChatMessages(chat);
                   }}
-                  className="w-full py-2 rounded-xl text-[12px] font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                  className="w-full py-1.5 rounded-lg text-[11px] font-bold text-white transition-all hover:opacity-90 active:scale-95"
                   style={{
                     background: "linear-gradient(135deg, #7f1d1d, #dc2626)",
                     boxShadow: "0 4px 14px rgba(220,38,38,0.35)",
