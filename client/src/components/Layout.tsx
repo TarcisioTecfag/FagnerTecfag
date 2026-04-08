@@ -337,8 +337,8 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </main>
 
-      {/* Floating Bot Status Icon */}
-      <div className="fixed bottom-6 right-6 z-50 group/botstatus">
+      {/* Floating Bot Status Icon — oculto no Live Chat pois o painel tem seus próprios popups */}
+      <div className={`fixed bottom-6 right-6 z-50 group/botstatus ${location === "/livechat" ? "hidden" : ""}`}>
         <div
           title={isBotActive ? 'Robô Online' : isStarting ? 'Iniciando...' : isStopping ? 'Encerrando...' : 'Robô Offline'}
           className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg cursor-default transition-all duration-300

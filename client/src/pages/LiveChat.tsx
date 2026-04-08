@@ -720,7 +720,6 @@ function LiveChat() {
   const archivedChats = chats.filter((c) => c.status === "closed" && (
     !sq || (c.visitorName ?? "").toLowerCase().includes(sq)
   ));
-  // Atenção: apenas chats explicitamente marcados pelo admin (needsHuman === "attention")
   const attentionChats = chats.filter((c) => c.needsHuman === "attention");
   const needsHumanChats = chats.filter((c) => c.needsHuman === "true" && c.status !== "closed");
   const filteredVisitors = visitors.filter((v) => !sq ||
@@ -729,7 +728,7 @@ function LiveChat() {
     (v.source ?? "").toLowerCase().includes(sq)
   );
 
-  // ——— TABS —————————————————————————————————————————————————
+  // ——— TABS —————————————————————————————————————————————————————————————
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
   const mainTabs = [
     { id: "chats" as const, label: "Chats", icon: MessageCircle, count: activeChats.length, unread: totalUnread },
@@ -753,53 +752,92 @@ function LiveChat() {
       {/* ——— POPUP NOTIFICATIONS ——— */}
       <div
         aria-live="polite"
-        className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"
-        style={{ maxWidth: 340 }}
+        className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"
+        style={{ width: 500 }}
       >
         {notifPopups.map((n) => (
           <div
             key={n.id}
-            className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-red-200 shadow-2xl px-4 py-3 animate-slide-in-right"
+            className="pointer-events-auto overflow-hidden rounded-2xl shadow-2xl"
             style={{
-              background: "linear-gradient(135deg, #fff 0%, #fff5f5 100%)",
-              boxShadow: "0 8px 32px rgba(220,38,38,0.18), 0 2px 8px rgba(0,0,0,0.08)",
-              animation: "slideInRight 0.35s cubic-bezier(.22,1,.36,1)",
+              background: "linear-gradient(135deg, #ffffff 0%, #fdf2f2 100%)",
+              border: "1px solid rgba(220,38,38,0.15)",
+              boxShadow: "0 20px 60px rgba(220,38,38,0.22), 0 4px 16px rgba(0,0,0,0.10)",
+              animation: "slideInRight 0.4s cubic-bezier(.22,1,.36,1)",
             }}
           >
-            {/* Icon */}
+            {/* Barra superior vermelha */}
             <div
-              className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center mt-0.5"
-              style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
-            >
-              <MessageCircle className="w-4 h-4 text-white" />
+              className="h-1 w-full"
+              style={{ background: "linear-gradient(90deg, #7f1d1d, #dc2626, #f87171)" }}
+            />
+
+            <div className="flex items-stretch gap-0">
+              {/* Faixa lateral vermelha */}
+              <div
+                className="w-1.5 flex-shrink-0"
+                style={{ background: "linear-gradient(180deg, #dc2626, #7f1d1d)" }}
+              />
+
+              <div className="flex-1 px-5 py-4">
+                {/* Cabeçalho: remetente + hora */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2.5">
+                    {/* Avatar */}
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-md"
+                      style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
+                    >
+                      {n.visitorName.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold text-zinc-900 leading-tight">{n.visitorName}</p>
+                      <p className="text-[10px] text-red-500 font-semibold tracking-wide uppercase leading-tight">
+                        💬 Nova mensagem
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-[10px] text-zinc-400 font-medium">
+                      {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <button
+                      onClick={() => dismissPopup(n.id)}
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Preview da mensagem */}
+                <div
+                  className="rounded-xl px-4 py-3 mb-3"
+                  style={{ background: "rgba(127,29,29,0.05)", border: "1px solid rgba(220,38,38,0.10)" }}
+                >
+                  <p className="text-[13px] text-zinc-700 leading-relaxed line-clamp-3">
+                    {n.content || "Nova mensagem recebida"}
+                  </p>
+                </div>
+
+                {/* Botão de ação */}
+                <button
+                  onClick={() => {
+                    dismissPopup(n.id);
+                    setActiveTab("chats");
+                    const chat = chatsRef.current?.find((c) => c.id === n.chatId);
+                    if (chat) loadChatMessages(chat);
+                  }}
+                  className="w-full py-2 rounded-xl text-[12px] font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                  style={{
+                    background: "linear-gradient(135deg, #7f1d1d, #dc2626)",
+                    boxShadow: "0 4px 14px rgba(220,38,38,0.35)",
+                  }}
+                >
+                  Abrir conversa →
+                </button>
+              </div>
             </div>
-            {/* Text */}
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-red-700 mb-0.5 truncate">
-                💬 {n.visitorName}
-              </p>
-              <p className="text-[12px] text-zinc-700 leading-snug line-clamp-2">
-                {n.content || "Nova mensagem recebida"}
-              </p>
-              <button
-                onClick={() => {
-                  dismissPopup(n.id);
-                  setActiveTab("chats");
-                  const chat = chatsRef.current?.find((c) => c.id === n.chatId);
-                  if (chat) loadChatMessages(chat);
-                }}
-                className="mt-1.5 text-[10px] font-bold text-red-600 hover:text-red-800 transition-colors"
-              >
-                Ver conversa →
-              </button>
-            </div>
-            {/* Close */}
-            <button
-              onClick={() => dismissPopup(n.id)}
-              className="flex-shrink-0 text-zinc-400 hover:text-zinc-600 transition-colors mt-0.5"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
           </div>
         ))}
       </div>
