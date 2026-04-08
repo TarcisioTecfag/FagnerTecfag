@@ -317,54 +317,11 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               visitorId = visitor!.id;
               await recalculateVisitorCategory(visitorId);
 
-              // — F5 / Reconexão: Se há chat ativo mas não há sessão AI em memória,
-              // pode ser F5 legítimo (janela nova) OU servidor reiniciou (perdeu a sessão em RAM).
-              // REGRA CRÍTICA: Só fecha o chat se:
-              //   1. Chat tem mais de 2 min (grace period para buffer de mensagens)
-              //   2. E NÃO há buffer ativo de mensagens pendentes (visitante está digitando agora)
-              //   3. E NÃO houve mensagens no banco nas últimas 30 min
-              try {
-                const { hasAISession } = await import("./livechatAI.js");
-                const existingChat = await lcStorage.getActiveChatByVisitor(visitorId);
-                if (existingChat && !hasAISession(existingChat.id)) {
-                  const chatAgeMs = Date.now() - new Date(existingChat.startedAt).getTime();
-                  const GRACE_PERIOD_MS = 2 * 60 * 1000; // 2 minutos
-
-                  // ⚡ CRÍTICO: Se há buffer ativo para este chat, o visitante está no meio
-                  // de uma interação — NUNCA fechamos. Isso cobre o race condition onde o
-                  // visitante navega de página DURANTE o debounce de 5s (antes de salvar no DB).
-                  const hasActiveBuffer = chatMessageBuffers.has(existingChat.id);
-                  if (hasActiveBuffer) {
-                    console.log(`[LiveChat] Visitante ${visitorId} reconectou com buffer ativo — mantendo chat ${existingChat.id}.`);
-                  } else if (chatAgeMs > GRACE_PERIOD_MS) {
-                    // Verifica quando foi a última mensagem do chat
-                    let lastMsgAge = chatAgeMs; // fallback: usa idade do chat
-                    try {
-                      const msgs = await lcStorage.listMessagesByChat(existingChat.id);
-                      if (msgs.length > 0) {
-                        const lastMsg = msgs[msgs.length - 1];
-                        const lastMsgTs = (lastMsg as any).createdAt ?? (lastMsg as any).timestamp;
-                        if (lastMsgTs) {
-                          lastMsgAge = Date.now() - new Date(lastMsgTs).getTime();
-                        }
-                      }
-                    } catch {}
-
-                    const INACTIVITY_MS = 30 * 60 * 1000; // 30 minutos sem mensagem = F5 real
-                    if (lastMsgAge > INACTIVITY_MS) {
-                      await lcStorage.closeChat(existingChat.id);
-                      console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI, último msg ${Math.round(lastMsgAge/60000)}min atrás — chat ${existingChat.id} fechado.`);
-                      broadcastToAgents({ type: "CHAT_STATUS", chatId: existingChat.id, status: "closed" });
-                    } else {
-                      console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI MAS última msg foi ${Math.round(lastMsgAge/60000)}min atrás — mantendo chat ativo.`);
-                    }
-                  } else {
-                    console.log(`[LiveChat] Visitante ${visitorId} reconectou sem sessão AI mas chat é recente (${Math.round(chatAgeMs/1000)}s < grace ${GRACE_PERIOD_MS/1000}s) — mantendo chat.`);
-                  }
-                }
-              } catch (e) {
-                console.warn("[LiveChat] F5 check falhou:", e);
-              }
+              // — F5 / Reconexão: NUNCA fechar chats na reconexão.
+              // O visitante pode estar navegando entre páginas no site VTEX (MPA).
+              // O sweepOrphanedChats cuida de fechar chats realmente abandonados (>90min).
+              // Essa lógica foi REMOVIDA pois causava fragmentação de chats.
+              // A sessão AI será reconstruída do banco quando necessário.
             } else {
               // New visitor
               const geo = await geoLookup(ip);
@@ -560,6 +517,22 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             } else {
               // Busca chat ativo primeiro
               chat = await lcStorage.getActiveChatByVisitor(visitorId);
+              if (!chat) {
+                // ── SAFETY NET: Reabrir chat recém-fechado ao invés de criar novo ──
+                // Se o visitante tinha um chat que foi fechado nos últimos 30 min,
+                // reabrir ao invés de fragmentar a conversa.
+                const lastChat = await lcStorage.getLastChatByVisitor(visitorId);
+                if (lastChat && lastChat.status === 'closed') {
+                  const closedTs = lastChat.endedAt ?? lastChat.startedAt;
+                  const closedAgo = Date.now() - new Date(closedTs).getTime();
+                  const REOPEN_WINDOW_MS = 30 * 60 * 1000; // 30 minutos
+                  if (closedAgo < REOPEN_WINDOW_MS) {
+                    await lcStorage.updateChat(lastChat.id, { status: 'ai_active' });
+                    chat = await lcStorage.getChatById(lastChat.id);
+                    console.log(`[LiveChat] Chat ${lastChat.id} REABERTO (fechado há ${Math.round(closedAgo/60000)}min) ao invés de criar novo.`);
+                  }
+                }
+              }
               if (!chat) {
                 // Criar lock ANTES de iniciar a promise para bloquear chamadas paralelas
                 let resolveLock!: (c: any) => void;
@@ -976,10 +949,11 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   if (note) await lcStorage.addVisitorNote(currentVisitorId, "Sem Venda", note);
                   // Fagner define motivo automaticamente
                   await lcStorage.setChatCloseReason(chat.id, "venda_cancelada").catch(() => {});
-                  await lcStorage.closeChat(chat.id);
-                  clearAISession(chat.id);
+                  // ── NÃO FECHAR O CHAT — impede fragmentação ──
+                  // O chat permanece aberto com status ai_active.
+                  // Se o visitante quiser voltar a falar, a conversa continua no mesmo chat.
+                  // O sweepOrphanedChats (90min) cuida do encerramento natural.
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_sem_venda");
-                  broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id });
                 }
 
                 // ── Detectar tags de estágio [STAGE:...] ──

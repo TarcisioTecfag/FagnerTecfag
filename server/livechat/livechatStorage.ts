@@ -265,13 +265,15 @@ export const lcStorage = {
   // Executar a cada 5 minutos. Garante que o estágio funcione mesmo após restarts.
   async sweepStaleVisitors(): Promise<number> {
     const STALE_THRESHOLD_MINUTES = 15;
-    const cutoff = new Date(Date.now() - STALE_THRESHOLD_MINUTES * 60 * 1000).toISOString();
+    // ── FIX CRÍTICO: usar casting para timestamptz em vez de comparação TEXT ──
+    // O campo lastSeenAt é TEXT e pode ter formato PG ('2026-04-08 12:00+00') ou JS ('2026-04-08T12:00Z').
+    // Comparação TEXT pura quebra porque espaço (0x20) < T (0x54), causando match indevido.
     const result = await db.execute(sql`
       UPDATE lc_visitors
       SET "pipelineStage" = 'sem_resposta',
           "lastSeenAt" = ${new Date().toISOString()}
       WHERE "isOnline" = 'false'
-        AND "lastSeenAt" < ${cutoff}
+        AND "lastSeenAt"::timestamptz < (now() - interval '${sql.raw(String(STALE_THRESHOLD_MINUTES))} minutes')
         AND "pipelineStage" IN ('novo_atendimento', 'em_atendimento')
     `) as any;
     const count = result?.rowCount ?? 0;
@@ -502,14 +504,22 @@ export const lcStorage = {
   async sweepOrphanedChats(): Promise<void> {
     // Fecha chats ativos há mais de 90 minutos sem resposta ou sem encerramento
     // (Protege contra crash do servidor que mata os timers in-memory de 10 min)
-    const cutoff = new Date(Date.now() - 90 * 60 * 1000).toISOString();
-    
+    //
+    // ── FIX CRÍTICO: usar casting para timestamptz ──
+    // O campo startedAt é TEXT com formato PG ('2026-04-08 12:00+00').
+    // Comparação TEXT com toISOString() ('2026-04-08T12:00Z') SEMPRE retorna TRUE
+    // porque espaço (0x20) < T (0x54), fazendo o sweeper fechar TODOS os chats a cada execução.
+    // Solução: cast para timestamptz e comparar com interval do PostgreSQL.
     const orphans = await db.select().from(lcChats)
       .where(and(
         sql`status != 'closed'`,
-        sql`"startedAt" < ${cutoff}`
+        sql`"startedAt"::timestamptz < (now() - interval '90 minutes')`
       ));
       
+    if (orphans.length > 0) {
+      console.log(`[LiveChat Sweeper] Encontrados ${orphans.length} chats órfãos (>90min).`);
+    }
+
     for (const chat of orphans) {
       await this.closeChat(chat.id);
       // Só move para sem_resposta se o visitante ainda não foi movido para um estágio final
