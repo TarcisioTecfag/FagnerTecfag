@@ -39,6 +39,13 @@ import {
   Layers,
   FileText,
   X,
+  Filter,
+  Settings,
+  Calendar,
+  Plus,
+  Trash2,
+  RotateCcw,
+  UserCheck,
 } from "lucide-react";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -269,6 +276,46 @@ function playNotificationSound() {
   }
 }
 
+// ——— Funnel Config Types ————————————————————————————————————————————
+interface FunnelOperator {
+  id: string; // RD CRM user ID or name
+  name: string;
+}
+
+interface FunnelConfig {
+  mode: "single" | "rotation";
+  operators: FunnelOperator[];
+  currentIndex: number; // used for rotation
+}
+
+interface LiveChatSettings {
+  funnels: {
+    pos_venda: FunnelConfig;
+    pecas: FunnelConfig;
+    maquinas: FunnelConfig;
+  };
+}
+
+const DEFAULT_SETTINGS: LiveChatSettings = {
+  funnels: {
+    pos_venda: { mode: "single", operators: [], currentIndex: 0 },
+    pecas: { mode: "single", operators: [], currentIndex: 0 },
+    maquinas: { mode: "single", operators: [], currentIndex: 0 },
+  },
+};
+
+function loadSettings(): LiveChatSettings {
+  try {
+    const raw = localStorage.getItem("livechat_settings");
+    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch {}
+  return DEFAULT_SETTINGS;
+}
+
+function saveSettings(s: LiveChatSettings) {
+  localStorage.setItem("livechat_settings", JSON.stringify(s));
+}
+
 function LiveChat() {
   const [activeTab, setActiveTab] = useState<"chats" | "visitors" | "crm" | "arquivados" | "atencao" | "stats">("chats");
   const [visitors, setVisitors] = useState<Visitor[]>([]);
@@ -297,6 +344,20 @@ function LiveChat() {
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // ——— Refresh animation ———
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // ——— Date Filter ———
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [dateFilter, setDateFilter] = useState<string>(""); // ISO date "YYYY-MM-DD"
+  const [dateFilterActive, setDateFilterActive] = useState(false);
+
+  // ——— Settings Modal ———
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [liveSettings, setLiveSettings] = useState<LiveChatSettings>(loadSettings);
+  const [activeFunnel, setActiveFunnel] = useState<"pos_venda" | "pecas" | "maquinas">("pos_venda");
+  const [newOperatorName, setNewOperatorName] = useState("");
 
   // Manter refs sincronizados para uso dentro do WS handler (closure)
   useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
@@ -714,18 +775,35 @@ function LiveChat() {
 
   // ——— Derived data —————————————————————————————————————————————————
   const sq = searchQuery.toLowerCase().trim();
-  const activeChats = chats.filter((c) => c.status !== "closed" && (
-    !sq || (c.visitorName ?? "").toLowerCase().includes(sq)
-  ));
-  const archivedChats = chats.filter((c) => c.status === "closed" && (
-    !sq || (c.visitorName ?? "").toLowerCase().includes(sq)
-  ));
-  const attentionChats = chats.filter((c) => c.needsHuman === "attention");
-  const needsHumanChats = chats.filter((c) => c.needsHuman === "true" && c.status !== "closed");
-  const filteredVisitors = visitors.filter((v) => !sq ||
-    (v.name ?? "").toLowerCase().includes(sq) ||
-    (v.city ?? "").toLowerCase().includes(sq) ||
-    (v.source ?? "").toLowerCase().includes(sq)
+
+  // Date filter helper
+  const passesDateFilter = (dateStr?: string) => {
+    if (!dateFilterActive || !dateFilter || !dateStr) return true;
+    const d = new Date(dateStr);
+    const target = dateFilter; // "YYYY-MM-DD"
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}` === target;
+  };
+
+  const activeChats = chats.filter((c) => c.status !== "closed" &&
+    passesDateFilter(c.startedAt) &&
+    (!sq || (c.visitorName ?? "").toLowerCase().includes(sq))
+  );
+  const archivedChats = chats.filter((c) => c.status === "closed" &&
+    passesDateFilter(c.startedAt) &&
+    (!sq || (c.visitorName ?? "").toLowerCase().includes(sq))
+  );
+  const attentionChats = chats.filter((c) => c.needsHuman === "attention" && passesDateFilter(c.startedAt));
+  const needsHumanChats = chats.filter((c) => c.needsHuman === "true" && c.status !== "closed" && passesDateFilter(c.startedAt));
+  const filteredVisitors = visitors.filter((v) =>
+    passesDateFilter(v.lastSeenAt) && (
+      !sq ||
+      (v.name ?? "").toLowerCase().includes(sq) ||
+      (v.city ?? "").toLowerCase().includes(sq) ||
+      (v.source ?? "").toLowerCase().includes(sq)
+    )
   );
 
   // ——— TABS —————————————————————————————————————————————————————————————
@@ -882,15 +960,55 @@ function LiveChat() {
             </div>
           )}
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchData}
-            className="h-8 gap-1.5 text-xs border-zinc-200 hover:border-red-300 hover:bg-red-50/50 transition-all"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Atualizar
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Refresh Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsRefreshing(true);
+                setTimeout(() => window.location.reload(), 600);
+              }}
+              className="h-8 gap-1.5 text-xs border-zinc-200 hover:border-red-300 hover:bg-red-50/50 transition-all"
+              title="Atualizar página"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 transition-transform duration-500 ${isRefreshing ? "animate-spin" : ""}`} />
+              Atualizar
+            </Button>
+
+            {/* Filter Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setFilterOpen(true)}
+              className={`h-8 gap-1.5 text-xs transition-all ${
+                dateFilterActive
+                  ? "border-red-400 bg-red-50 text-red-700 hover:bg-red-100"
+                  : "border-zinc-200 hover:border-red-300 hover:bg-red-50/50"
+              }`}
+              title="Filtrar por data"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              {dateFilterActive ? `📅 ${dateFilter}` : "Filtro"}
+              {dateFilterActive && (
+                <span
+                  onClick={(e) => { e.stopPropagation(); setDateFilterActive(false); setDateFilter(""); }}
+                  className="ml-1 w-4 h-4 flex items-center justify-center rounded-full bg-red-200 hover:bg-red-300 text-red-700 cursor-pointer transition-colors"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </span>
+              )}
+            </Button>
+
+            {/* Settings Gear */}
+            <button
+              onClick={() => setSettingsOpen(true)}
+              title="Configurações do Live Chat"
+              className="h-8 w-8 flex items-center justify-center rounded-lg border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 transition-all group"
+            >
+              <Settings className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 transition-colors group-hover:rotate-45" style={{ transition: "transform 0.3s ease" }} />
+            </button>
+          </div>
         </div>
 
         {/* Row 2: Tabs */}
@@ -2061,24 +2179,363 @@ function LiveChat() {
         )}
 
         {/* ─── Tab: Estatísticas (Melhoria 4) */}
-        {activeTab === "stats" && <StatsTab />}
+        {activeTab === "stats" && <StatsTab dateFilter={dateFilterActive ? dateFilter : undefined} />}
       </div>
+
+      {/* ══════════════ FILTER MODAL ══════════════ */}
+      {filterOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setFilterOpen(false); }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-zinc-200/60 w-full max-w-sm mx-4 overflow-hidden"
+            style={{ animation: "popIn 0.25s cubic-bezier(.22,1,.36,1)" }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100"
+              style={{ background: "linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)" }}
+            >
+              <div className="flex items-center gap-2.5">
+                <Filter className="w-4 h-4 text-white" />
+                <h2 className="text-sm font-bold text-white">Filtro por Data</h2>
+              </div>
+              <button onClick={() => setFilterOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                Selecione uma data para filtrar <strong>todas as abas</strong> do Live Chat — Chats, Visitantes, CRM, Arquivados, Atenção e Estatísticas.
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-red-500" />
+                  Data exata
+                </label>
+                <input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  max={new Date().toISOString().split("T")[0]}
+                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-zinc-200 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 transition-all bg-zinc-50"
+                />
+              </div>
+
+              {dateFilterActive && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
+                  <Filter className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                  <p className="text-xs text-red-700">
+                    Filtro ativo: <strong>{new Date(dateFilter + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}</strong>
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                {dateFilterActive && (
+                  <button
+                    onClick={() => { setDateFilterActive(false); setDateFilter(""); setFilterOpen(false); }}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <RotateCcw className="w-3 h-3" /> Limpar Filtro
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (!dateFilter) { toast({ description: "Selecione uma data para filtrar.", variant: "destructive" }); return; }
+                    setDateFilterActive(true);
+                    setFilterOpen(false);
+                    toast({ title: "📅 Filtro aplicado", description: `Exibindo dados de ${new Date(dateFilter + "T00:00:00").toLocaleDateString("pt-BR")} em todas as abas.` });
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 flex items-center justify-center gap-1.5"
+                  style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
+                >
+                  <Filter className="w-3 h-3" /> Aplicar Filtro
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════ SETTINGS MODAL ══════════════ */}
+      {settingsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setSettingsOpen(false); }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-zinc-200/60 w-full max-w-2xl mx-4 overflow-hidden"
+            style={{ maxHeight: "90vh", animation: "popIn 0.25s cubic-bezier(.22,1,.36,1)" }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100"
+              style={{ background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)" }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)" }}>
+                  <Settings className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white">Configurações do Live Chat</h2>
+                  <p className="text-[10px] text-slate-300">Operadores e regras por funil</p>
+                </div>
+              </div>
+              <button onClick={() => setSettingsOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="flex overflow-hidden" style={{ height: "calc(90vh - 72px)" }}>
+              {/* Sidebar: Funnels */}
+              <div className="w-48 flex-shrink-0 border-r border-zinc-100 bg-zinc-50 p-3 flex flex-col gap-1">
+                <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider px-2 mb-2">Funis ativos</p>
+                {([
+                  { key: "pos_venda" as const, label: "Pós Venda", emoji: "🎫", color: "#8b5cf6" },
+                  { key: "pecas" as const, label: "Peças", emoji: "⚙️", color: "#f59e0b" },
+                  { key: "maquinas" as const, label: "Máquinas", emoji: "🏭", color: "#3b82f6" },
+                ]).map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setActiveFunnel(f.key)}
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all ${
+                      activeFunnel === f.key
+                        ? "text-white shadow-md"
+                        : "text-zinc-600 hover:bg-white hover:shadow-sm"
+                    }`}
+                    style={activeFunnel === f.key ? { background: f.color } : {}}
+                  >
+                    <span className="text-base">{f.emoji}</span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold leading-tight">{f.label}</p>
+                      <p className={`text-[9px] leading-tight ${
+                        activeFunnel === f.key ? "text-white/70" : "text-zinc-400"
+                      }`}>
+                        {liveSettings.funnels[f.key].operators.length} operador(es)
+                      </p>
+                    </div>
+                  </button>
+                ))}
+
+                <div className="flex-1" />
+                <div className="px-2 py-3 rounded-xl bg-amber-50 border border-amber-100">
+                  <p className="text-[9px] text-amber-700 font-semibold leading-relaxed">
+                    💡 <strong>Peças</strong> e <strong>Máquinas</strong> ainda não estão ativos no sistema, mas já podem ser configurados para quando forem habilitados.
+                  </p>
+                </div>
+              </div>
+
+              {/* Main Config Area */}
+              <div className="flex-1 overflow-y-auto p-5">
+                {([
+                  { key: "pos_venda" as const, label: "Pós Venda", emoji: "🎫", color: "#8b5cf6", active: true },
+                  { key: "pecas" as const, label: "Peças", emoji: "⚙️", color: "#f59e0b", active: false },
+                  { key: "maquinas" as const, label: "Máquinas", emoji: "🏭", color: "#3b82f6", active: false },
+                ]).filter(f => f.key === activeFunnel).map((f) => {
+                  const cfg = liveSettings.funnels[f.key];
+
+                  const updateFunnel = (patch: Partial<FunnelConfig>) => {
+                    const next: LiveChatSettings = {
+                      ...liveSettings,
+                      funnels: {
+                        ...liveSettings.funnels,
+                        [f.key]: { ...cfg, ...patch },
+                      },
+                    };
+                    setLiveSettings(next);
+                    saveSettings(next);
+                  };
+
+                  const addOperator = () => {
+                    const name = newOperatorName.trim();
+                    if (!name) return;
+                    const newOp: FunnelOperator = { id: `op-${Date.now()}`, name };
+                    updateFunnel({ operators: [...cfg.operators, newOp] });
+                    setNewOperatorName("");
+                  };
+
+                  const removeOperator = (id: string) => {
+                    updateFunnel({ operators: cfg.operators.filter(o => o.id !== id) });
+                  };
+
+                  return (
+                    <div key={f.key} className="space-y-5">
+                      {/* Title */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-md" style={{ background: f.color }}>
+                          {f.emoji}
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-zinc-800">Funil: {f.label}</h3>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                              f.active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"
+                            }`}>
+                              {f.active ? "🟢 Ativo no sistema" : "⚪ Aguardando habilitação"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Atendimento Mode */}
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-zinc-600">Modo de atendimento</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => updateFunnel({ mode: "single" })}
+                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-xs font-semibold transition-all ${
+                              cfg.mode === "single"
+                                ? "border-slate-500 bg-slate-50 text-slate-700"
+                                : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
+                            }`}
+                          >
+                            <UserCheck className="w-5 h-5" />
+                            Operador Único
+                            <p className="text-[9px] font-normal text-zinc-400 text-center leading-tight">Sempre o mesmo atendente recebe os chats</p>
+                          </button>
+                          <button
+                            onClick={() => updateFunnel({ mode: "rotation" })}
+                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-xs font-semibold transition-all ${
+                              cfg.mode === "rotation"
+                                ? "border-amber-500 bg-amber-50 text-amber-700"
+                                : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
+                            }`}
+                          >
+                            <RotateCcw className="w-5 h-5" />
+                            Rodízio
+                            <p className="text-[9px] font-normal text-zinc-400 text-center leading-tight">Chats são distribuídos em rotação entre os atendentes</p>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Operators list */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5 text-slate-500" />
+                            Operadores cadastrados
+                          </label>
+                          <span className="text-[10px] text-zinc-400">{cfg.operators.length} cadastrado(s)</span>
+                        </div>
+
+                        {cfg.operators.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-6 rounded-xl bg-zinc-50 border border-dashed border-zinc-200">
+                            <UserCheck className="w-8 h-8 text-zinc-200 mb-2" />
+                            <p className="text-xs text-zinc-400 text-center">Nenhum operador cadastrado.<br />Adicione abaixo.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {cfg.operators.map((op, idx) => (
+                              <div key={op.id} className="flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-zinc-200 shadow-sm">
+                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: `hsl(${(idx * 60) % 360},60%,50%)` }}>
+                                  {op.name.charAt(0).toUpperCase()}
+                                </div>
+                                <span className="flex-1 text-xs font-semibold text-zinc-700">{op.name}</span>
+                                {cfg.mode === "rotation" && (
+                                  <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
+                                    cfg.currentIndex % cfg.operators.length === idx
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-zinc-100 text-zinc-400"
+                                  }`}>
+                                    {cfg.currentIndex % cfg.operators.length === idx ? "Próximo" : `${idx + 1}º`}
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => removeOperator(op.id)}
+                                  className="w-6 h-6 flex items-center justify-center rounded-lg text-zinc-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Add operator */}
+                        <div className="flex gap-2 mt-2">
+                          <input
+                            type="text"
+                            value={newOperatorName}
+                            onChange={(e) => setNewOperatorName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") addOperator(); }}
+                            placeholder="Nome do operador RD CRM..."
+                            className="flex-1 px-3 py-2 text-xs rounded-xl border border-zinc-200 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition-all bg-zinc-50"
+                          />
+                          <button
+                            onClick={addOperator}
+                            disabled={!newOperatorName.trim()}
+                            className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40 flex items-center gap-1.5"
+                            style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Adicionar
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Info box */}
+                      {cfg.mode === "rotation" && cfg.operators.length > 0 && (
+                        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                          <RotateCcw className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-semibold text-amber-800 mb-0.5">Modo Rodízio ativo</p>
+                            <p className="text-[10px] text-amber-600 leading-relaxed">
+                              Os chats serão distribuídos sequencialmente entre os {cfg.operators.length} operador(es) cadastrado(s). O próximo a receber é: <strong>{cfg.operators[cfg.currentIndex % cfg.operators.length]?.name}</strong>
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {cfg.mode === "single" && cfg.operators.length > 1 && (
+                        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-blue-50 border border-blue-100">
+                          <UserCheck className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-[10px] text-blue-700 leading-relaxed">
+                            <strong>Dica:</strong> No modo Operador Único, o primeiro da lista será o principal. Os demais ficam registrados como substitutos. Mude para <em>Rodízio</em> para distribuir automaticamente.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-zinc-100 flex items-center justify-between bg-zinc-50">
+              <p className="text-[10px] text-zinc-400">Configurações salvas automaticamente no navegador.</p>
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── StatsTab Component ─────────────────────────────────────────────────────────
-function StatsTab() {
+function StatsTab({ dateFilter }: { dateFilter?: string }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch("/api/livechat/enhanced-stats", { credentials: "include" })
+    const url = dateFilter
+      ? `/api/livechat/enhanced-stats?date=${dateFilter}`
+      : "/api/livechat/enhanced-stats";
+    fetch(url, { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [dateFilter]);
 
   if (loading) {
     return (
