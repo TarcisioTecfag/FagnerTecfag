@@ -930,6 +930,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 // Detectar desfecho usando rawReply (ainda contém as tags originais)
                 const hasSale = /\[OUTCOME:SALE\]/i.test(rawReply);
                 const hasNoSale = /\[OUTCOME:NO_SALE\]/i.test(rawReply);
+                // Se tem [MAQUINAS_DADOS] na mensagem atual, o NO_SALE deve ser IGNORADO para fins de stage
+                // (a finalização do fluxo de máquinas é sem checkout, mas o stage é 'maquinas', não 'sem_resposta')
+                const hasMaquinasDados = /\[MAQUINAS_DADOS:/i.test(rawReply);
+                // Também verifica o stage atual — se já está em 'maquinas', protege de reset
+                const currentStageNow = (await lcStorage.getVisitorById(currentVisitorId))?.pipelineStage ?? '';
+                const isMaquinasStage = currentStageNow === 'maquinas' || hasMaquinasDados;
 
                 if (hasSale) {
                   // ✅ OUTCOME:SALE detectado: apenas marca o pipeline e gera nota.
@@ -943,8 +949,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   await lcStorage.setChatCloseReason(chat.id, "venda_fechada").catch(() => {});
                   // ✅ NÃO fechar nem limpar sessão — visitante ainda pode confirmar CEP, pagamento, etc.
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_com_venda");
-                } else if (hasNoSale) {
-                  // Gerar nota ANTES de limpar a sessão
+                } else if (hasNoSale && !isMaquinasStage) {
+                  // NO_SALE só muda stage se NÃO for um atendimento de máquinas
                   const note = await generateConversationNote(chat.id);
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "sem_resposta");
                   if (note) await lcStorage.addVisitorNote(currentVisitorId, "Sem Venda", note);
@@ -952,6 +958,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   await lcStorage.setChatCloseReason(chat.id, "venda_cancelada").catch(() => {});
                   // ── NÃO FECHAR O CHAT — impede fragmentação ──
                   broadcastPipelineUpdate(currentVisitorId, "sem_resposta");
+                } else if (hasNoSale && isMaquinasStage) {
+                  console.log(`[LiveChat] NO_SALE ignorado — visitante ${currentVisitorId} está em estágio maquinas (protegido)`);
                 }
 
                 // ── Detectar tags de estágio [STAGE:...] ──
