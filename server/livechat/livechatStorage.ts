@@ -523,8 +523,10 @@ export const lcStorage = {
     for (const chat of orphans) {
       await this.closeChat(chat.id);
       // Só move para sem_resposta se o visitante ainda não foi movido para um estágio final
+      // IMPORTANTE: 'outros' é estágio PERMANENTE (ex: candidatos de emprego, perguntas diversas)
+      // NÃO mover esses visitantes para sem_resposta
       const visitor = await this.getVisitorById(chat.visitorId);
-      const finalStages = ['pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
+      const finalStages = ['pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta', 'outros'];
       if (visitor && !finalStages.includes(visitor.pipelineStage ?? '')) {
         await this.updateVisitorPipeline(chat.visitorId, "sem_resposta");
       }
@@ -635,8 +637,12 @@ export const lcStorage = {
     );
   },
 
-  // ── Melhoria 4: Estatísticas enriquecidas para o dashboard ──────────────────
-  async getEnhancedStats(): Promise<{
+  // ── Melhoria 4: Estatísticas enriquecidas para o dashboard (filtro de datas) ──
+  async getEnhancedStats(
+    date?: string,      // data exata: YYYY-MM-DD
+    dateFrom?: string,  // início do range: YYYY-MM-DD
+    dateTo?: string,    // fim do range: YYYY-MM-DD
+  ): Promise<{
     avgEngagementScore: number;
     hotLeads: number;
     warmLeads: number;
@@ -648,29 +654,61 @@ export const lcStorage = {
     closedWithSale: number;
     closedWithoutSale: number;
   }> {
-    const avgResult = await db.execute(
-      sql`SELECT COALESCE(AVG("engagementScore"), 0)::int AS avg FROM lc_chats`
-    ) as any;
+    // Constrói cláusula WHERE para filtro de data nos chats
+    let dateWhereSQL = '';
+    if (date) {
+      dateWhereSQL = `"startedAt"::date = '${date}'::date`;
+    } else if (dateFrom && dateTo) {
+      dateWhereSQL = `"startedAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND "startedAt"::timestamptz <= '${dateTo}T23:59:59Z'`;
+    } else if (dateFrom) {
+      dateWhereSQL = `"startedAt"::timestamptz >= '${dateFrom}T00:00:00Z'`;
+    } else if (dateTo) {
+      dateWhereSQL = `"startedAt"::timestamptz <= '${dateTo}T23:59:59Z'`;
+    }
+
+    const w    = dateWhereSQL ? `WHERE ${dateWhereSQL}` : '';
+    const wAnd = dateWhereSQL ? `AND ${dateWhereSQL}` : '';
+
+    const avgResult   = await db.execute(sql.raw(`SELECT COALESCE(AVG("engagementScore"), 0)::int AS avg FROM lc_chats ${w}`)) as any;
     const avgEngagementScore = Number(avgResult?.rows?.[0]?.avg ?? avgResult?.[0]?.avg ?? 0);
 
-    const hotResult  = await db.execute(sql`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "engagementScore" >= 70`) as any;
-    const warmResult = await db.execute(sql`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "engagementScore" >= 40 AND "engagementScore" < 70`) as any;
-    const coldResult = await db.execute(sql`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "engagementScore" < 40`) as any;
-    const vtexResult = await db.execute(sql`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "vtexProduct" IS NOT NULL`) as any;
-    const noiseResult = await db.execute(sql`SELECT COALESCE(SUM("noiseFiltered"), 0)::int AS c FROM lc_chats`) as any;
-    const totalResult = await db.execute(sql`SELECT COUNT(*)::int AS c FROM lc_chats`) as any;
+    const hotResult   = await db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "engagementScore" >= 70 ${wAnd}`)) as any;
+    const warmResult  = await db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "engagementScore" >= 40 AND "engagementScore" < 70 ${wAnd}`)) as any;
+    const coldResult  = await db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "engagementScore" < 40 ${wAnd}`)) as any;
+    const vtexResult  = await db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "vtexProduct" IS NOT NULL ${wAnd}`)) as any;
+    const noiseResult = await db.execute(sql.raw(`SELECT COALESCE(SUM("noiseFiltered"), 0)::int AS c FROM lc_chats ${w}`)) as any;
+    const totalResult = await db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats ${w}`)) as any;
 
     const g = (r: any, key = 'c') => Number(r?.rows?.[0]?.[key] ?? r?.[0]?.[key] ?? 0);
 
     const topResult = await db.execute(
-      sql`SELECT "vtexProduct" AS name, COUNT(*)::int AS count FROM lc_chats WHERE "vtexProduct" IS NOT NULL GROUP BY "vtexProduct" ORDER BY count DESC LIMIT 5`
+      sql.raw(`SELECT "vtexProduct" AS name, COUNT(*)::int AS count FROM lc_chats WHERE "vtexProduct" IS NOT NULL ${wAnd} GROUP BY "vtexProduct" ORDER BY count DESC LIMIT 5`)
     ) as any;
     const rows = topResult?.rows ?? topResult ?? [];
     const topVtexProducts = Array.isArray(rows)
       ? rows.map((r: any) => ({ name: r.name, count: Number(r.count) }))
       : [];
 
-    const visitorStats = await this.getPipelineStats();
+    // Para closedWithSale/Without: filtrar visitantes por data lastSeenAt
+    let visitSaleCount   = 0;
+    let visitNoSaleCount = 0;
+    if (dateWhereSQL) {
+      const visitorW = date
+        ? `"lastSeenAt"::date = '${date}'::date`
+        : dateFrom && dateTo
+          ? `"lastSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND "lastSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+          : dateFrom
+            ? `"lastSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z'`
+            : `"lastSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`;
+      const saleR   = await db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE "pipelineStage" = 'finalizado_com_venda' AND ${visitorW}`)) as any;
+      const noSaleR = await db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE "pipelineStage" = 'finalizado_sem_venda' AND ${visitorW}`)) as any;
+      visitSaleCount   = g(saleR);
+      visitNoSaleCount = g(noSaleR);
+    } else {
+      const visitorStats = await this.getPipelineStats();
+      visitSaleCount   = visitorStats['finalizado_com_venda'] ?? 0;
+      visitNoSaleCount = visitorStats['finalizado_sem_venda'] ?? 0;
+    }
 
     return {
       avgEngagementScore,
@@ -681,8 +719,8 @@ export const lcStorage = {
       noiseTotal: g(noiseResult),
       topVtexProducts,
       totalChats: g(totalResult),
-      closedWithSale: visitorStats['finalizado_com_venda'] ?? 0,
-      closedWithoutSale: visitorStats['finalizado_sem_venda'] ?? 0,
+      closedWithSale: visitSaleCount,
+      closedWithoutSale: visitNoSaleCount,
     };
   },
 

@@ -350,7 +350,8 @@ function LiveChat() {
 
   // ——— Date Filter ———
   const [filterOpen, setFilterOpen] = useState(false);
-  const [dateFilter, setDateFilter] = useState<string>(""); // ISO date "YYYY-MM-DD"
+  const [dateFrom, setDateFrom] = useState<string>(""); // De: YYYY-MM-DD
+  const [dateTo, setDateTo] = useState<string>("");     // Até: YYYY-MM-DD
   const [dateFilterActive, setDateFilterActive] = useState(false);
 
   // ——— Settings Modal ———
@@ -358,10 +359,24 @@ function LiveChat() {
   const [liveSettings, setLiveSettings] = useState<LiveChatSettings>(loadSettings);
   const [activeFunnel, setActiveFunnel] = useState<"pos_venda" | "pecas" | "maquinas">("pos_venda");
   const [newOperatorName, setNewOperatorName] = useState("");
+  // Fix 6: usuários reais do RD CRM para dropdown de operadores
+  const [rdUsers, setRdUsers] = useState<{ id: string; name: string; email?: string }[]>([]);
+  const [rdUsersLoading, setRdUsersLoading] = useState(false);
 
   // Manter refs sincronizados para uso dentro do WS handler (closure)
   useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
+  // Fix 6: Buscar usuários do RD CRM quando Settings abre
+  useEffect(() => {
+    if (!settingsOpen) return;
+    setRdUsersLoading(true);
+    fetch("/api/livechat/rd-users", { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then(users => { setRdUsers(Array.isArray(users) ? users : []); })
+      .catch(() => setRdUsers([]))
+      .finally(() => setRdUsersLoading(false));
+  }, [settingsOpen]);
 
   // Dismiss popup por id
   const dismissPopup = (id: string) =>
@@ -776,15 +791,20 @@ function LiveChat() {
   // ——— Derived data —————————————————————————————————————————————————
   const sq = searchQuery.toLowerCase().trim();
 
-  // Date filter helper
+  // Date filter helper — suporta range De/Até
   const passesDateFilter = (dateStr?: string) => {
-    if (!dateFilterActive || !dateFilter || !dateStr) return true;
+    if (!dateFilterActive || (!dateFrom && !dateTo) || !dateStr) return true;
     const d = new Date(dateStr);
-    const target = dateFilter; // "YYYY-MM-DD"
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}` === target;
+    if (isNaN(d.getTime())) return true;
+    if (dateFrom) {
+      const from = new Date(dateFrom + 'T00:00:00');
+      if (d < from) return false;
+    }
+    if (dateTo) {
+      const to = new Date(dateTo + 'T23:59:59');
+      if (d > to) return false;
+    }
+    return true;
   };
 
   const activeChats = chats.filter((c) => c.status !== "closed" &&
@@ -989,10 +1009,12 @@ function LiveChat() {
               title="Filtrar por data"
             >
               <Filter className="w-3.5 h-3.5" />
-              {dateFilterActive ? `📅 ${dateFilter}` : "Filtro"}
+              {dateFilterActive
+                ? `📅 ${dateFrom}${dateTo && dateTo !== dateFrom ? ' → ' + dateTo : ''}`
+                : "Filtro"}
               {dateFilterActive && (
                 <span
-                  onClick={(e) => { e.stopPropagation(); setDateFilterActive(false); setDateFilter(""); }}
+                  onClick={(e) => { e.stopPropagation(); setDateFilterActive(false); setDateFrom(""); setDateTo(""); }}
                   className="ml-1 w-4 h-4 flex items-center justify-center rounded-full bg-red-200 hover:bg-red-300 text-red-700 cursor-pointer transition-colors"
                 >
                   <X className="w-2.5 h-2.5" />
@@ -2179,7 +2201,7 @@ function LiveChat() {
         )}
 
         {/* ─── Tab: Estatísticas (Melhoria 4) */}
-        {activeTab === "stats" && <StatsTab dateFilter={dateFilterActive ? dateFilter : undefined} />}
+        {activeTab === "stats" && <StatsTab dateFrom={dateFilterActive ? dateFrom : undefined} dateTo={dateFilterActive ? dateTo : undefined} />}
       </div>
 
       {/* ══════════════ FILTER MODAL ══════════════ */}
@@ -2199,7 +2221,7 @@ function LiveChat() {
             >
               <div className="flex items-center gap-2.5">
                 <Filter className="w-4 h-4 text-white" />
-                <h2 className="text-sm font-bold text-white">Filtro por Data</h2>
+                <h2 className="text-sm font-bold text-white">Filtro por Período</h2>
               </div>
               <button onClick={() => setFilterOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all">
                 <X className="w-3.5 h-3.5" />
@@ -2208,28 +2230,48 @@ function LiveChat() {
 
             <div className="p-5 space-y-4">
               <p className="text-xs text-zinc-500 leading-relaxed">
-                Selecione uma data para filtrar <strong>todas as abas</strong> do Live Chat — Chats, Visitantes, CRM, Arquivados, Atenção e Estatísticas.
+                Selecione um período para filtrar <strong>todas as abas</strong> do Live Chat — Chats, Visitantes, CRM e Estatísticas.
               </p>
 
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-red-500" />
-                  Data exata
-                </label>
-                <input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  max={new Date().toISOString().split("T")[0]}
-                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-zinc-200 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 transition-all bg-zinc-50"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-red-500" />
+                    De
+                  </label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    max={dateTo || new Date().toISOString().split("T")[0]}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 transition-all bg-zinc-50"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-red-500" />
+                    Até
+                  </label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    min={dateFrom || undefined}
+                    max={new Date().toISOString().split("T")[0]}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 transition-all bg-zinc-50"
+                  />
+                </div>
               </div>
 
               {dateFilterActive && (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
                   <Filter className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
                   <p className="text-xs text-red-700">
-                    Filtro ativo: <strong>{new Date(dateFilter + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}</strong>
+                    Filtro ativo: <strong>
+                      {dateFrom ? new Date(dateFrom + "T00:00:00").toLocaleDateString("pt-BR") : 'início'}
+                      {' → '}
+                      {dateTo ? new Date(dateTo + "T00:00:00").toLocaleDateString("pt-BR") : 'hoje'}
+                    </strong>
                   </p>
                 </div>
               )}
@@ -2237,7 +2279,7 @@ function LiveChat() {
               <div className="flex gap-2 pt-1">
                 {dateFilterActive && (
                   <button
-                    onClick={() => { setDateFilterActive(false); setDateFilter(""); setFilterOpen(false); }}
+                    onClick={() => { setDateFilterActive(false); setDateFrom(""); setDateTo(""); setFilterOpen(false); }}
                     className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-all flex items-center justify-center gap-1.5"
                   >
                     <RotateCcw className="w-3 h-3" /> Limpar Filtro
@@ -2245,10 +2287,12 @@ function LiveChat() {
                 )}
                 <button
                   onClick={() => {
-                    if (!dateFilter) { toast({ description: "Selecione uma data para filtrar.", variant: "destructive" }); return; }
+                    if (!dateFrom && !dateTo) { toast({ description: "Selecione pelo menos uma data.", variant: "destructive" }); return; }
                     setDateFilterActive(true);
                     setFilterOpen(false);
-                    toast({ title: "📅 Filtro aplicado", description: `Exibindo dados de ${new Date(dateFilter + "T00:00:00").toLocaleDateString("pt-BR")} em todas as abas.` });
+                    const fromStr = dateFrom ? new Date(dateFrom + "T00:00:00").toLocaleDateString("pt-BR") : 'início';
+                    const toStr = dateTo ? new Date(dateTo + "T00:00:00").toLocaleDateString("pt-BR") : 'hoje';
+                    toast({ title: "📅 Filtro aplicado", description: `Período: ${fromStr} → ${toStr}` });
                   }}
                   className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 flex items-center justify-center gap-1.5"
                   style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
@@ -2353,7 +2397,11 @@ function LiveChat() {
                   const addOperator = () => {
                     const name = newOperatorName.trim();
                     if (!name) return;
-                    const newOp: FunnelOperator = { id: `op-${Date.now()}`, name };
+                    // Verifica se já está na lista
+                    if (cfg.operators.some(o => o.name === name)) return;
+                    // Tenta usar o ID real do RD CRM se estiver disponível
+                    const rdUser = rdUsers.find(u => u.name === name);
+                    const newOp: FunnelOperator = { id: rdUser?.id ?? `op-${Date.now()}`, name };
                     updateFunnel({ operators: [...cfg.operators, newOp] });
                     setNewOperatorName("");
                   };
@@ -2455,24 +2503,61 @@ function LiveChat() {
                           </div>
                         )}
 
-                        {/* Add operator */}
-                        <div className="flex gap-2 mt-2">
-                          <input
-                            type="text"
-                            value={newOperatorName}
-                            onChange={(e) => setNewOperatorName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") addOperator(); }}
-                            placeholder="Nome do operador RD CRM..."
-                            className="flex-1 px-3 py-2 text-xs rounded-xl border border-zinc-200 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition-all bg-zinc-50"
-                          />
-                          <button
-                            onClick={addOperator}
-                            disabled={!newOperatorName.trim()}
-                            className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40 flex items-center gap-1.5"
-                            style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
-                          >
-                            <Plus className="w-3.5 h-3.5" /> Adicionar
-                          </button>
+                        {/* Add operator — dropdown se houver usuários do RD CRM, campo manual como fallback */}
+                        <div className="mt-2">
+                          {rdUsersLoading ? (
+                            <div className="flex items-center gap-2 px-3 py-2 text-xs text-zinc-400">
+                              <div className="w-3 h-3 border border-slate-400 border-t-transparent rounded-full animate-spin" />
+                              Buscando usuários do RD CRM...
+                            </div>
+                          ) : rdUsers.length > 0 ? (
+                            <div className="flex gap-2">
+                              <select
+                                value={newOperatorName}
+                                onChange={(e) => setNewOperatorName(e.target.value)}
+                                className="flex-1 px-3 py-2 text-xs rounded-xl border border-zinc-200 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition-all bg-zinc-50"
+                              >
+                                <option value="">Selecionar operador RD CRM...</option>
+                                {rdUsers
+                                  .filter(u => !cfg.operators.some(op => op.id === u.id || op.name === u.name))
+                                  .map(u => (
+                                    <option key={u.id} value={u.name}>{u.name}{u.email ? ` (${u.email})` : ''}</option>
+                                  ))}
+                              </select>
+                              <button
+                                onClick={addOperator}
+                                disabled={!newOperatorName.trim()}
+                                className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40 flex items-center gap-1.5 flex-shrink-0"
+                                style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
+                              >
+                                <Plus className="w-3.5 h-3.5" /> Adicionar
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-[10px] text-zinc-400">
+                                RD CRM não configurado ou sem resposta. Adicione manualmente:
+                              </p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={newOperatorName}
+                                  onChange={(e) => setNewOperatorName(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") addOperator(); }}
+                                  placeholder="Nome do operador..."
+                                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-zinc-200 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition-all bg-zinc-50"
+                                />
+                                <button
+                                  onClick={addOperator}
+                                  disabled={!newOperatorName.trim()}
+                                  className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40 flex items-center gap-1.5"
+                                  style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
+                                >
+                                  <Plus className="w-3.5 h-3.5" /> Adicionar
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2522,20 +2607,23 @@ function LiveChat() {
 }
 
 // ─── StatsTab Component ─────────────────────────────────────────────────────────
-function StatsTab({ dateFilter }: { dateFilter?: string }) {
+function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    const url = dateFilter
-      ? `/api/livechat/enhanced-stats?date=${dateFilter}`
+    const params = new URLSearchParams();
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo)   params.set("dateTo", dateTo);
+    const url = params.toString()
+      ? `/api/livechat/enhanced-stats?${params.toString()}`
       : "/api/livechat/enhanced-stats";
     fetch(url, { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [dateFilter]);
+  }, [dateFrom, dateTo]);
 
   if (loading) {
     return (

@@ -237,14 +237,20 @@ Quando você identificar que o assunto do cliente é QUALQUER um destes:
 > Exemplo PROIBIDO: você já tem nome e telefone → você NÃO pode pedir o nome de novo.
 > Se você tiver dúvida de qual passo está, releia o histórico e conte quantos dados já coletou.
 
-**Passo 1 — Nome** (só pergunte se ainda NÃO tem no histórico):
-"Para agilizar o seu atendimento, preciso de algumas informações. Pode me informar o nome completo de quem realizou a compra?"
+**Passo 0 — Problema** (SEMPRE o primeiro passo — OBRIGATÓRIO antes de qualquer outro dado):
+Depois de identificar que é pós venda, faça UMA pergunta breve e natural para entender o problema:
+"Claro! Para eu já registrar e direcionar corretamente, pode me contar brevemente o que está acontecendo? Qual é o problema ou necessidade?"
+Armazene a resposta do cliente como o "problema" — ela NÃO precisa ser longa. Uma frase ou duas já basta.
+⚠️ NUNCA pule este passo. Mesmo que já saiba o assunto geral (ex: "minha máquina não chegou"), pergunte para ter os detalhes.
+
+**Passo 1 — Nome** (só pergunte se já tem o problema mas ainda NÃO tem nome no histórico):
+"Perfeito, anotei! Para agilizar o seu atendimento, pode me informar o nome completo de quem realizou a compra?"
 
 **Passo 2 — Telefone** (só pergunte se já tem nome mas ainda NÃO tem telefone):
-"Perfeito! E qual é o número de telefone para contato via WhatsApp e ligação?"
+"E qual é o número de telefone para contato via WhatsApp e ligação?"
 
 **Passo 3 — E-mail** (só pergunte se já tem nome e telefone mas ainda NÃO tem e-mail):
-"Ótimo! Qual o e-mail do responsável para receber o suporte?"
+"Qual o e-mail do responsável para receber o retorno do suporte?"
 
 **Passo 4 — Nota do pedido** (OPCIONAL — só pergunte se já tem nome, telefone e e-mail):
 "E o número da nota fiscal do pedido?"
@@ -270,6 +276,8 @@ NÃO faça o overview ainda. O sistema irá interceptar essa tag e devolver o re
 Mostre um resumo. ATENÇÃO: CADA dado deve ficar em uma linha separada com uma linha em branco entre eles, para que o sistema quebre os balões de forma organizada:
 "Anotei tudo! Vou confirmar os dados abaixo:
 
+• Problema: [problema]
+
 • Nome: [nome]
 
 • Telefone: [tel]
@@ -291,6 +299,8 @@ Depois que o cliente confirmar os dados, diga:
 
 E adicione a tag SILENCIOSA com os dados coletados:
 [POS_VENDA_DADOS:{"nome":"...","telefone":"...","email":"...","cnpjCpf":"...","notaPedido":"...","problema":"..."}]
+
+⚠️ REGRA CRÍTICA DO CAMPO "problema": Preencha sempre com a descrição que o cliente deu no Passo 0. NUNCA deixe este campo vazio ou com placeholder como "Suporte". Se o cliente foi vago, escreva o que ele disse mesmo assim (ex: "Cliente informou que a máquina não chegou após a compra").
 
 ### DADOS DE PÓS VENDA JÁ EXISTENTES (quando o contexto informar que há dados salvos)
 Se o contexto incluir a seção ## DADOS PÓS VENDA DO CLIENTE, isso significa que já temos os dados desse cliente.
@@ -1117,10 +1127,22 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
 
   const lines: string[] = [];
   
-  lines.push(`RELATÓRIO DE TRIAGEM — FAGNER`);
-  lines.push(`-------------------------------------------------------`);
+  // ─── Cabeçalho ────────────────────────────────────────────────────────────
+  lines.push(`RELATÓRIO DE TRIAGEM — FAGNER IA`);
+  lines.push(`=======================================================`);
   lines.push(``);
+
+  // ─── Problema Principal (destaque) ────────────────────────────────────────
+  lines.push(`▶ PROBLEMA DO CLIENTE`);
+  lines.push(`-------------------------------------------------------`);
+  lines.push(input.problema
+    ? input.problema
+    : `(Não informado)`);
+  lines.push(``);
+
+  // ─── Identificação do Cliente ──────────────────────────────────────────────
   lines.push(`IDENTIFICAÇÃO DO CLIENTE`);
+  lines.push(`-------------------------------------------------------`);
   lines.push(`Nome: ${input.nome}`);
   if (input.cnpjData?.nome && input.cnpjData.nome !== input.nome) {
     lines.push(`Empresa: ${input.cnpjData.nome}`);
@@ -1134,9 +1156,11 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
   lines.push(`Nota Fiscal: ${input.notaPedido || 'Não informado'}`);
   lines.push(``);
 
+  // ─── Perfil da Empresa (CNPJ) ──────────────────────────────────────────────
   if (input.cnpjData) {
     const cd = input.cnpjData;
     lines.push(`PERFIL DA EMPRESA (RECEITA FEDERAL)`);
+    lines.push(`-------------------------------------------------------`);
     lines.push(`Razão Social: ${cd.nome || "Não encontrado"}`);
     if (cd.fantasia) lines.push(`Nome Fantasia: ${cd.fantasia}`);
     lines.push(`CNPJ: ${cd.cnpj || input.cnpjCpf || "Não encontrado"}`);
@@ -1156,20 +1180,26 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
     lines.push(``);
   }
 
+  // ─── Informações de Pós Venda ──────────────────────────────────────────────
+  lines.push(`INFORMAÇÕES DE PÓS VENDA`);
+  lines.push(`-------------------------------------------------------`);
+  lines.push(`Urgência: A definir pela equipe`);
+  lines.push(`Próximos passos: Equipe de pós venda entrará em contato em até 24 horas`);
+  lines.push(`Observações: Atendimento registrado automaticamente pelo Fagner IA`);
+  lines.push(``);
+
+  // ─── Transcrição ──────────────────────────────────────────────────────────
   lines.push(`=======================================================`);
   lines.push(`TRANSCRIÇÃO DO ATENDIMENTO`);
+  lines.push(`-------------------------------------------------------`);
   
   if (input.transcricaoCompleta) {
-    // O join final já usa '<br>' como separador de linhas do array.
-    // Para ter duplo espaçamento ENTRE turnos diferentes (Cliente <-> Fagner),
-    // inserimos uma linha vazia entre cada fala — ela vira '<br><br>' no output.
     const transcricaoLines = input.transcricaoCompleta.split('\n');
     let lastPrefix = '';
     for (const tl of transcricaoLines) {
       const trimmed = tl.trim();
       if (!trimmed) continue;
       const currentPrefix = trimmed.startsWith('[CLIENTE]') ? '[CLIENTE]' : '[FAGNER]';
-      // Insere linha vazia para separar turnos diferentes (gera '<br><br>' no join)
       if (lastPrefix && currentPrefix !== lastPrefix) {
         lines.push('');
       }
@@ -1180,11 +1210,12 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
     lines.push(`(Nenhuma transcrição disponível)`);
   }
   
-  lines.push(`<br>`);
+  lines.push(``);
+  lines.push(`=======================================================`);
   lines.push(`DATA / HORA: ${dataAtual}`);
   lines.push(`STATUS: Aguardando primeiro contato da equipe de Pós Venda`);
-  lines.push(`=======================================================`);
   lines.push(`Gerado automaticamente pelo sistema Fagner IA — Tecfag`);
+  lines.push(`=======================================================`);
 
   const reportText = lines.join("<br>");
   return reportText;

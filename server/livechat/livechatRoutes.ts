@@ -185,13 +185,39 @@ export function registerLiveChatRoutes(app: any): void {
   });
 
   // ── Melhoria 4: Estatísticas enriquecidas (engagement, VTEX, ruído) ─────────
-  router.get("/enhanced-stats", requireAuth, async (_req: Request, res: Response) => {
+  router.get("/enhanced-stats", requireAuth, async (req: Request, res: Response) => {
     try {
-      const stats = await lcStorage.getEnhancedStats();
+      // Suporta: ?date=YYYY-MM-DD (data exata) ou ?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD (range)
+      const { date, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+      const stats = await lcStorage.getEnhancedStats(date, dateFrom, dateTo);
       return res.json(stats);
     } catch (err: any) {
       console.error("[LiveChat] GET /enhanced-stats error:", err?.message);
       return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
+  // ── Usuários do RD CRM (para dropdown de operadores nas configurações) ─────
+  router.get("/rd-users", requireAuth, async (_req: Request, res: Response) => {
+    try {
+      const at = await getRdValidToken();
+      const r = await fetch("https://api.rd.services/crm/v2/users", {
+        headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" }
+      });
+      if (!r.ok) {
+        const errBody = await r.text();
+        console.warn(`[LiveChat] rd-users error: ${r.status} ${errBody.slice(0, 200)}`);
+        return res.status(r.status).json({ message: `RD CRM respondeu ${r.status}` });
+      }
+      const data = await r.json();
+      // A API retorna { data: [...] } — normalizar para array de { id, name, email }
+      const users = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+      const normalized = users.map((u: any) => ({ id: u.id, name: u.name, email: u.email }));
+      return res.json(normalized);
+    } catch (err: any) {
+      console.error("[LiveChat] GET /rd-users error:", err?.message);
+      // Retorna array vazio em vez de 500 — o frontend trata graciosamente
+      return res.json([]);
     }
   });
 

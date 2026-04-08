@@ -963,6 +963,13 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   await lcStorage.updateVisitorPipeline(currentVisitorId, newStage);
                   broadcastPipelineUpdate(currentVisitorId, newStage);
                   console.log(`[LiveChat] Visitante ${currentVisitorId} movido para '${newStage}' via tag do Fagner`);
+
+                  // Para "outros": cancelar follow-up timers (não faz sentido perguntar
+                  // "Ainda posso ajudar?" para quem enviou currículo ou quer falar com pessoa específica)
+                  if (newStage === 'outros') {
+                    clearFollowUpTimers(currentVisitorId);
+                    console.log(`[LiveChat] Follow-up timers cancelados para visitante ${currentVisitorId} (estágio: outros)`);
+                  }
                 } else {
                   // Fallback: detecção por regex na mensagem do USUÁRIO (para capturar intenção não marcada pelo Gemini)
                   const intentFromUserMsg = detectStageIntent(combinedContent);
@@ -970,6 +977,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     await lcStorage.updateVisitorPipeline(currentVisitorId, intentFromUserMsg);
                     broadcastPipelineUpdate(currentVisitorId, intentFromUserMsg);
                     console.log(`[LiveChat] Visitante ${currentVisitorId} movido para '${intentFromUserMsg}' via regex na mensagem do user`);
+
+                    // Para "outros": cancelar follow-up timers também no fallback regex
+                    if (intentFromUserMsg === 'outros') {
+                      clearFollowUpTimers(currentVisitorId);
+                      console.log(`[LiveChat] Follow-up timers cancelados para visitante ${currentVisitorId} (estágio: outros, via regex)`);
+                    }
                   }
                 }
 
@@ -1132,8 +1145,20 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   }
                 }
 
-                // Start follow-ups (3m, 8m, 10m)
-                startFollowUpTimers(currentVisitorId, chat.id);
+                // Start follow-ups (3m, 8m) — só se não for estágio "outros"
+                // Para "outros": follow-up já foi cancelado acima quando a tag foi detectada
+                // Mas se ainda não houve tag, só inicia timers se não está em estágio protegido
+                try {
+                  const visitorNow = await lcStorage.getVisitorById(currentVisitorId);
+                  const PROTECTED_STAGES = ['outros', 'finalizado_com_venda', 'finalizado_sem_venda', 'pos_venda'];
+                  if (!PROTECTED_STAGES.includes(visitorNow?.pipelineStage ?? '')) {
+                    startFollowUpTimers(currentVisitorId, chat.id);
+                  } else {
+                    console.log(`[LiveChat] Follow-up timers não iniciados — estágio protegido: ${visitorNow?.pipelineStage}`);
+                  }
+                } catch {
+                  startFollowUpTimers(currentVisitorId, chat.id);
+                }
               }, 5000); // 5 sec cooldown
             }
             break;

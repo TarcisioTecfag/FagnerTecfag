@@ -380,12 +380,17 @@ async function upsertContact(posVenda: PosVendaData, organizationId?: string | n
       if (Array.isArray(byDoc) && byDoc.length > 0) {
         const existingId = byDoc[0].id;
         console.log(`[RD CRM] Contato existente (por doc): ${existingId}`);
-        // Vincula à empresa se ainda não estiver vinculado
-        if (organizationId && !byDoc[0].organization_id) {
+        // Atualiza organização e email se estiverem faltando
+        const needsEmailUpdate = posVenda.email && (!byDoc[0].emails || byDoc[0].emails.length === 0);
+        const needsOrgUpdate = organizationId && !byDoc[0].organization_id;
+        if (needsEmailUpdate || needsOrgUpdate) {
+          const updatePayload: Record<string, any> = {};
+          if (needsEmailUpdate) updatePayload.emails = [{ email: posVenda.email!.trim().toLowerCase() }];
+          if (needsOrgUpdate) updatePayload.organization_id = organizationId;
           try {
-            await rdRequest("PUT", `/contacts/${existingId}`, { organization_id: organizationId });
-            console.log(`[RD CRM] Contato ${existingId} vinculado à empresa ${organizationId}`);
-          } catch (e: any) { console.warn(`[RD CRM] Falha ao vincular contato à empresa:`, e.message); }
+            await rdRequest("PUT", `/contacts/${existingId}`, updatePayload);
+            console.log(`[RD CRM] Contato ${existingId} atualizado (email/empresa).`);
+          } catch (e: any) { console.warn(`[RD CRM] Falha ao atualizar contato ${existingId}:`, e.message); }
         }
         return existingId;
       }
@@ -398,12 +403,17 @@ async function upsertContact(posVenda: PosVendaData, organizationId?: string | n
     if (Array.isArray(byPhone) && byPhone.length > 0) {
       const existingId = byPhone[0].id;
       console.log(`[RD CRM] Contato existente (por telefone): ${existingId}`);
-      // Vincula à empresa se ainda não estiver vinculado
-      if (organizationId && !byPhone[0].organization_id) {
+      // Atualiza email se estiver faltando no contato existente
+      const needsEmailUpdate = posVenda.email && (!byPhone[0].emails || byPhone[0].emails.length === 0);
+      const needsOrgUpdate = organizationId && !byPhone[0].organization_id;
+      if (needsEmailUpdate || needsOrgUpdate) {
+        const updatePayload: Record<string, any> = {};
+        if (needsEmailUpdate) updatePayload.emails = [{ email: posVenda.email!.trim().toLowerCase() }];
+        if (needsOrgUpdate) updatePayload.organization_id = organizationId;
         try {
-          await rdRequest("PUT", `/contacts/${existingId}`, { organization_id: organizationId });
-          console.log(`[RD CRM] Contato ${existingId} vinculado à empresa ${organizationId}`);
-        } catch (e: any) { console.warn(`[RD CRM] Falha ao vincular contato à empresa:`, e.message); }
+          await rdRequest("PUT", `/contacts/${existingId}`, updatePayload);
+          console.log(`[RD CRM] Contato ${existingId} atualizado (email/empresa).`);
+        } catch (e: any) { console.warn(`[RD CRM] Falha ao atualizar contato:`, e.message); }
       }
       return existingId;
     }
@@ -495,10 +505,11 @@ async function createDeal(
   if (sourceId)       dealPayload.deal_source_id  = sourceId;
   if (campaignId)     dealPayload.campaign_id     = campaignId;
   
+  // Vincular empresa usando apenas organization_id (campo oficial API v2)
+  // NÃO usar company_id ou organization{} — são campos não suportados pela API v2
   if (organizationId) {
     dealPayload.organization_id = organizationId;
-    dealPayload.organization = { _id: organizationId };
-    dealPayload.company_id = organizationId; // V1 fallback
+    console.log(`[RD CRM] Vinculando empresa ${organizationId} à negociação`);
   }
 
   // Busca campos personalizados dinamicamente 
