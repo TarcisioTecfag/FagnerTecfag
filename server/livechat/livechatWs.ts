@@ -1236,14 +1236,17 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                           // Resumo para informações complementares do deal
                           const conversationSummary = `Máquina: ${maqData.maquinaDesejada}. ${maqData.detalhes || ''}`.trim().slice(0, 400);
 
-                          // Resolver owner do Settings (rodízio do funil maquinas)
+                          // Resolver owner via rodízio do funil maquinas (persistido no banco)
                           let ownerId: string | undefined;
                           try {
-                            const settingsRaw = typeof localStorage !== 'undefined'
-                              ? localStorage.getItem('livechat_settings') : null;
-                            // Settings está no frontend — precisamos buscar de outra forma
-                            // O owner vem do env como fallback
-                          } catch {}
+                            const rotationOwnerId = await lcStorage.getNextOwnerForFunnel('maquinas');
+                            if (rotationOwnerId) {
+                              ownerId = rotationOwnerId;
+                              console.log(`[LiveChat] Owner MÁQUINAS via rodízio: ${ownerId}`);
+                            }
+                          } catch (rotErr: any) {
+                            console.warn(`[LiveChat] Falha no rodízio de máquinas:`, rotErr.message);
+                          }
 
                           const dealId = await createMaquinasOS(
                             currentVisitorId,

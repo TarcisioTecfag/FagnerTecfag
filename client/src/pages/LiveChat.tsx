@@ -314,6 +314,13 @@ function loadSettings(): LiveChatSettings {
 
 function saveSettings(s: LiveChatSettings) {
   localStorage.setItem("livechat_settings", JSON.stringify(s));
+  // Sincroniza com o servidor para que o backend possa usar os operadores em rodízio
+  fetch("/api/livechat/funnel-settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(s),
+  }).catch(() => {});
 }
 
 function LiveChat() {
@@ -2368,7 +2375,7 @@ function LiveChat() {
                 <div className="flex-1" />
                 <div className="px-2 py-3 rounded-xl bg-amber-50 border border-amber-100">
                   <p className="text-[9px] text-amber-700 font-semibold leading-relaxed">
-                    💡 <strong>Peças</strong> e <strong>Máquinas</strong> ainda não estão ativos no sistema, mas já podem ser configurados para quando forem habilitados.
+                    💡 <strong>Peças</strong> ainda não está ativo no sistema, mas já pode ser configurado para quando for habilitado. <strong>Pós Venda</strong> e <strong>Máquinas</strong> já estão operacionais.
                   </p>
                 </div>
               </div>
@@ -2378,7 +2385,7 @@ function LiveChat() {
                 {([
                   { key: "pos_venda" as const, label: "Pós Venda", emoji: "🎫", color: "#8b5cf6", active: true },
                   { key: "pecas" as const, label: "Peças", emoji: "⚙️", color: "#f59e0b", active: false },
-                  { key: "maquinas" as const, label: "Máquinas", emoji: "🏭", color: "#3b82f6", active: false },
+                  { key: "maquinas" as const, label: "Máquinas", emoji: "🏭", color: "#ea580c", active: true },
                 ]).filter(f => f.key === activeFunnel).map((f) => {
                   const cfg = liveSettings.funnels[f.key];
 

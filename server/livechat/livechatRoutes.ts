@@ -221,6 +221,32 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
+  // ── Configurações de Funil (persistidas no servidor para uso no backend) ────
+  router.get("/funnel-settings", requireAuth, async (_req: Request, res: Response) => {
+    try {
+      const settings = await lcStorage.getFunnelSettings();
+      return res.json(settings);
+    } catch (err: any) {
+      console.error("[LiveChat] GET /funnel-settings error:", err?.message);
+      return res.json(null);
+    }
+  });
+
+  router.put("/funnel-settings", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const body = req.body;
+      if (!body || typeof body !== 'object') {
+        return res.status(400).json({ message: "Body inválido" });
+      }
+      await lcStorage.saveFunnelSettings(body);
+      console.log("[LiveChat] ⚙️ Funnel settings atualizadas via admin");
+      return res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[LiveChat] PUT /funnel-settings error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
   // ── Reset Completo (Admin only) ─────────────────────────────────────────────
   router.delete("/reset-all", requireAuth, async (_req: Request, res: Response) => {
     try {

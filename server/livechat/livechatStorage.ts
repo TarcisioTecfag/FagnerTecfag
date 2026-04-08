@@ -724,6 +724,70 @@ export const lcStorage = {
     };
   },
 
+  // ── Funnel Settings (persistência no servidor para uso no backend) ──────
+  async getFunnelSettings(): Promise<any | null> {
+    try {
+      const [row] = await db.select()
+        .from(lcSettings)
+        .where(eq(lcSettings.key, "funnel_settings"));
+      if (!row?.value) return null;
+      return typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+    } catch {
+      return null;
+    }
+  },
+
+  async saveFunnelSettings(data: any): Promise<void> {
+    const jsonStr = JSON.stringify(data);
+    await db.execute(sql`
+      INSERT INTO lc_settings (key, value)
+      VALUES ('funnel_settings', ${jsonStr})
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    `);
+  },
+
+  /**
+   * Retorna o próximo owner_id para o funil especificado usando rodízio round-robin.
+   * Lê os operadores de funnel_settings e mantém um contador atômico em lc_settings.
+   */
+  async getNextOwnerForFunnel(funnelKey: string): Promise<string | null> {
+    const settings = await this.getFunnelSettings();
+    if (!settings?.funnels?.[funnelKey]) return null;
+
+    const funnelCfg = settings.funnels[funnelKey];
+    const operators: { id: string; name: string }[] = funnelCfg.operators || [];
+    if (operators.length === 0) return null;
+
+    // Se só tem 1 operador, retorna direto
+    if (operators.length === 1) {
+      console.log(`[LiveChat] Funil ${funnelKey}: único operador ${operators[0].name}`);
+      return operators[0].id;
+    }
+
+    // Rodízio: busca e incrementa contador atômico
+    const counterKey = `rotation_counter_${funnelKey}`;
+    let counter = 0;
+    try {
+      const [row] = await db.select()
+        .from(lcSettings)
+        .where(eq(lcSettings.key, counterKey));
+      counter = parseInt(row?.value ?? "0", 10);
+    } catch {}
+
+    const index = counter % operators.length;
+    const nextCounter = counter + 1;
+
+    // Salva próximo valor do contador
+    await db.execute(sql`
+      INSERT INTO lc_settings (key, value)
+      VALUES (${counterKey}, ${String(nextCounter)})
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    `);
+
+    console.log(`[LiveChat] Rodízio ${funnelKey}: operador ${operators[index].name} (${index + 1}/${operators.length})`);
+    return operators[index].id;
+  },
+
 };
 
 /**
