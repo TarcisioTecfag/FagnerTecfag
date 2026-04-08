@@ -117,33 +117,10 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
     } catch (err: any) { console.error("[Timers] 8m err:", err.message); }
   }, 8 * 60 * 1000);
 
-  // 10 minutes closure
-  timers.t10m = setTimeout(async () => {
-    try {
-      const chat = await lcStorage.getChatById(chatId);
-      if (chat && chat.status !== "closed") {
-        // ── Proteção: não mover visitante que já está num estágio finalizado ──
-        // Isso acontece quando o POS_VENDA_DADOS cria o card CRM de forma
-        // assíncrona e fecha o chat — o timer já estava armado.
-        const visitor = await lcStorage.getVisitorById(visitorId);
-        const FINAL_STAGES = ["finalizado_com_venda", "finalizado_sem_venda", "outros", "pos_venda"];
-        if (visitor && FINAL_STAGES.includes(visitor.pipelineStage ?? "")) {
-          // Atendimento já concluído — apenas encerra o chat sem mover o card
-          console.log(`[LiveChat] Visitante ${visitorId} já em '${visitor.pipelineStage}' — timer cancelado sem mover.`);
-          await lcStorage.closeChat(chatId).catch(() => {});
-          clearAISession(chatId);
-          return;
-        }
-        await lcStorage.closeChat(chatId);
-        await lcStorage.updateVisitorPipeline(visitorId, "sem_resposta");
-        clearAISession(chatId);
-        broadcastToAgents({ type: "CHAT_CLOSED", chatId });
-        broadcastPipelineUpdate(visitorId, "sem_resposta");
-        console.log(`[LiveChat] Visitante ${visitorId} movido para 'sem_resposta' (timeout 10min)`);
-      }
-    } catch (err: any) { console.error("[Timers] 10m err:", err.message); }
-  }, 10 * 60 * 1000);
-
+  // 10 minutes closure - REMOVIDO para impedir a fragmentação dos chats.
+  // O chat permanecerá aberto até que o cliente saia do site (o fallback sweepOrphanedChats fechará após 90min).
+  // timers.t10m = setTimeout(...) removido.
+  
   followUpTimers.set(visitorId, timers);
 }
 
