@@ -263,22 +263,28 @@ async function getOrCreateCampaignId(): Promise<string> {
   return _campaignId!;
 }
 
-// ─── Busca dinâmica de custom fields de Deals ──────────────────────────────────
-async function loadDealCustomFields(): Promise<{ id: string; name: string }[]> {
-  if (_customFieldsCache && _customFieldsCache.length > 0) return _customFieldsCache;
+// ── Busca dinâmica de custom fields de Deals ──────────────────────────────────────
+// Endpoint oficial API v2: GET /custom_fields?filter=entity:deal
+// Retorna lista com id, name e SLUG dos campos personalizados de Negociação
+async function loadDealCustomFields(): Promise<{ id: string; name: string; slug: string }[]> {
+  if (_customFieldsCache && (_customFieldsCache as any[]).length > 0) return _customFieldsCache as any[];
   try {
-    // Tenta primeiro sem filtro de pipeline (retorna TODOS os campos)
-    const data = await rdRequest<any[]>("GET", "/deals/custom_fields");
-    if (Array.isArray(data) && data.length > 0) {
-      _customFieldsCache = data.map(f => ({ id: f.id, name: (f.name || "").toLowerCase() }));
-      console.log(`[RD CRM] Custom fields carregados (${_customFieldsCache.length}):`,
-        _customFieldsCache.map(f => `"${f.name}"`).join(', '));
-      return _customFieldsCache;
+    const data = await rdRequest<any>("GET", "/custom_fields?filter=entity:deal&page[size]=100");
+    // rdRequest faz unwrap automatico de { data: [...] } porem pode retornar diretamente
+    const list: any[] = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+    if (list.length > 0) {
+      _customFieldsCache = list.map((f: any) => ({
+        id:   f.id   ?? '',
+        name: (f.name  || '').toLowerCase(),
+        slug: (f.slug  || '').toLowerCase(),
+      })) as any;
+      console.log(`[RD CRM] ${list.length} campos carregados:`,
+        (_customFieldsCache as any[]).map((f: any) => `${f.name}(slug:${f.slug})`).join(', '));
+      return _customFieldsCache as any[];
     }
-    // Se vier vazio ou não-array, loga a resposta bruta para diagnóstico
-    console.warn("[RD CRM] /deals/custom_fields retornou vazio ou formato inesperado:", JSON.stringify(data).slice(0, 300));
+    console.warn('[RD CRM] /custom_fields?filter=entity:deal retornou vazio:', JSON.stringify(data).slice(0, 400));
   } catch (e: any) {
-    console.warn("[RD CRM] Falha ao carregar campos personalizados do deal:", e.message);
+    console.warn('[RD CRM] Falha ao carregar custom fields:', e.message);
   }
   return [];
 }
@@ -639,28 +645,25 @@ async function createMaquinasDeal(
 ): Promise<string> {
   const titulo = `FAGNER | ${maqData.nome}`;
 
-  // Informações complementares
   let infoCompl: string;
   if (maqData.conversationSummary) {
     infoCompl = maqData.conversationSummary;
   } else {
-    const partes: string[] = [];
-    partes.push(`Máquina: ${maqData.maquinaDesejada}`);
-    if (maqData.detalhes) partes.push(`Detalhes: ${maqData.detalhes}`);
-    if (maqData.produtoFabricado) partes.push(`Produto fabricado: ${maqData.produtoFabricado}`);
-    infoCompl = partes.join(" | ");
+    const partes: string[] = [`Máquina: ${maqData.maquinaDesejada}`];
+    if (maqData.detalhes)        partes.push(`Detalhes: ${maqData.detalhes}`);
+    if (maqData.produtoFabricado) partes.push(`Produto: ${maqData.produtoFabricado}`);
+    infoCompl = partes.join(' | ');
   }
 
   const pipelineId = RD_MAQUINAS_PIPELINE_ID;
   const stageId    = RD_MAQUINAS_FIRST_STAGE_ID;
-  const ownerId    = maqData.ownerId || (process.env.RD_CRM_OWNER_MAQUINAS_ID ?? "").trim();
+  const ownerId    = (maqData.ownerId || (process.env.RD_CRM_OWNER_MAQUINAS_ID ?? '')).trim();
 
-  if (!ownerId) throw new Error("[RD CRM] Owner ID para máquinas não configurado (nem no Settings nem no env)");
+  if (!ownerId) {
+    console.warn('[RD CRM] Owner ID para máquinas não configurado — deal sem responsável definido');
+  }
 
-  const [sourceId, campaignId] = await Promise.all([
-    getOrCreateSourceId(),
-    getOrCreateCampaignId(),
-  ]);
+  const [sourceId, campaignId] = await Promise.all([getOrCreateSourceId(), getOrCreateCampaignId()]);
 
   console.log(`[RD CRM] Criando deal MÁQUINAS "${titulo}": pipeline=${pipelineId} stage=${stageId} owner=${ownerId}`);
 
@@ -668,109 +671,78 @@ async function createMaquinasDeal(
     name:        titulo,
     pipeline_id: pipelineId,
     stage_id:    stageId,
-    owner_id:    ownerId,
     contact_ids: [contactId],
-    status:      "ongoing",
-    rating:      3,  // Intenção média (sales, não frio)
-    deal_custom_fields: [],
+    status:      'ongoing',
+    rating:      3,
   };
 
-  if (sourceId)   dealPayload.deal_source_id = sourceId;
-  if (campaignId) dealPayload.campaign_id    = campaignId;
-
+  if (ownerId)    dealPayload.owner_id        = ownerId;
+  if (sourceId)   dealPayload.deal_source_id  = sourceId;
+  if (campaignId) dealPayload.campaign_id     = campaignId;
   if (organizationId) {
     dealPayload.organization_id = organizationId;
     console.log(`[RD CRM] Vinculando empresa ${organizationId} à negociação de máquinas`);
   }
 
-  // ── Campos personalizados (/deals/custom_fields — rota correta) ───────────
-  // CORREÇÃO: loadMaquinasCustomFields usava /deal_custom_fields (rota inválida).
-  // Usando loadDealCustomFields() que já funciona no fluxo pos_venda.
-  const cfs = await loadDealCustomFields();
+  // ── Campos personalizados via SLUG (formato oficial API v2) ─────────────────
+  // Endpoint: GET /custom_fields?filter=entity:deal
+  // Formato no deal: custom_fields: { "slug_do_campo": "valor" }
+  const cfs = await loadDealCustomFields() as any[];
+  console.log(`[RD CRM] Custom fields disponíveis (${cfs.length}):`,
+    cfs.map((f: any) => `${f.name}(slug:${f.slug})`).join(' | '));
 
-  console.log(`[RD CRM] Campos disponíveis (${cfs.length}):`, cfs.map(f => f.name).join(' | '));
+  const findF = (partial: string): any =>
+    cfs.find((f: any) =>
+      f.name.includes(partial.toLowerCase()) ||
+      f.slug.includes(partial.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''))
+    );
 
-  // Helper: busca por substring no nome (já em lowercase)
-  const findField = (partialName: string) =>
-    cfs.find((f) => f.name.includes(partialName.toLowerCase()));
+  const fClienteNovo = findF('cliente novo');
+  const fSdr         = findF('qualificado por sdr') || findF('qualificado');
+  const fProduto     = findF('produto fabricado')   || findF('produto');
+  const fVolume      = findF('volume de produ')      || findF('volume');
+  const fInfo        = findF('complementar');
 
-  const clienteNovoField = findField("cliente novo");
-  const sdrField         = findField("qualificado por sdr") || findField("qualificado");
-  const produtoField     = findField("produto fabricado") || findField("produto");
-  const volumeField      = findField("volume de produ") || findField("volume");
-  const infoField        = findField("complementar");
-
-  console.log(`[RD CRM] Mapeamento de campos:`, {
-    clienteNovo:  clienteNovoField  ? `${clienteNovoField.id} ("${clienteNovoField.name}")` : "NÃO ENCONTRADO",
-    sdr:          sdrField          ? `${sdrField.id} ("${sdrField.name}")` : "NÃO ENCONTRADO",
-    produto:      produtoField      ? `${produtoField.id} ("${produtoField.name}")` : "NÃO ENCONTRADO",
-    volume:       volumeField       ? `${volumeField.id} ("${volumeField.name}")` : "NÃO ENCONTRADO",
-    complementar: infoField         ? `${infoField.id} ("${infoField.name}")` : "NÃO ENCONTRADO",
+  console.log('[RD CRM] Slugs mapeados:', {
+    clienteNovo:  fClienteNovo?.slug ?? 'NÃO ENCONTRADO',
+    sdr:          fSdr?.slug         ?? 'NÃO ENCONTRADO',
+    produto:      fProduto?.slug     ?? 'NÃO ENCONTRADO',
+    volume:       fVolume?.slug      ?? 'NÃO ENCONTRADO',
+    complementar: fInfo?.slug        ?? 'NÃO ENCONTRADO',
   });
 
   dealPayload.custom_fields = {};
 
-  // CLIENTE NOVO?
-  if (clienteNovoField && maqData.clienteNovo) {
-    dealPayload.deal_custom_fields.push({
-      custom_field_id: clienteNovoField.id,
-      value: maqData.clienteNovo.toUpperCase(),
-    });
-    dealPayload.custom_fields[clienteNovoField.id] = maqData.clienteNovo.toUpperCase();
-  }
+  if (fClienteNovo?.slug && maqData.clienteNovo)
+    dealPayload.custom_fields[fClienteNovo.slug] = maqData.clienteNovo.toUpperCase();
 
-  // QUALIFICADO POR SDR
   const SDR_OPTIONS: Record<string, string> = {
-    "1": "Decisor com Pressa (Falou com quem manda e ele quer solução rápida)",
-    "2": "Planejando Investimento (Interesse real, mas sem data definida)",
-    "3": "Troca de Máquina (Já tem o processo e quer apenas renovar)",
-    "4": "Curioso / Estudante (Não é empresa ou não tem intenção de compra)",
-    "5": "Fora de Portfólio (Quer algo que a Tecfag não fabrica)",
-    "6": "Sumiu / Sem contato (Não atendeu ou não retornou)",
+    '1': 'Decisor com Pressa (Falou com quem manda e ele quer solução rápida)',
+    '2': 'Planejando Investimento (Interesse real, mas sem data definida)',
+    '3': 'Troca de Máquina (Já tem o processo e quer apenas renovar)',
+    '4': 'Curioso / Estudante (Não é empresa ou não tem intenção de compra)',
+    '5': 'Fora de Portfólio (Quer algo que a Tecfag não fabrica)',
+    '6': 'Sumiu / Sem contato (Não atendeu ou não retornou)',
   };
-  if (sdrField && maqData.qualificacaoSDR) {
-    const sdrValue = SDR_OPTIONS[maqData.qualificacaoSDR] || SDR_OPTIONS["2"];
-    dealPayload.deal_custom_fields.push({
-      custom_field_id: sdrField.id,
-      value: sdrValue,
-    });
-    dealPayload.custom_fields[sdrField.id] = sdrValue;
-  }
+  if (fSdr?.slug && maqData.qualificacaoSDR)
+    dealPayload.custom_fields[fSdr.slug] = SDR_OPTIONS[maqData.qualificacaoSDR] ?? SDR_OPTIONS['2'];
 
-  // QUAL O PRODUTO FABRICADO?
-  if (produtoField && maqData.produtoFabricado) {
-    dealPayload.deal_custom_fields.push({
-      custom_field_id: produtoField.id,
-      value: maqData.produtoFabricado,
-    });
-    dealPayload.custom_fields[produtoField.id] = maqData.produtoFabricado;
-  }
+  if (fProduto?.slug && maqData.produtoFabricado)
+    dealPayload.custom_fields[fProduto.slug] = maqData.produtoFabricado;
 
-  // VOLUME DE PRODUÇÃO?
-  if (volumeField && maqData.volumeProducao) {
-    dealPayload.deal_custom_fields.push({
-      custom_field_id: volumeField.id,
-      value: maqData.volumeProducao,
-    });
-    dealPayload.custom_fields[volumeField.id] = maqData.volumeProducao;
-  }
+  if (fVolume?.slug && maqData.volumeProducao)
+    dealPayload.custom_fields[fVolume.slug] = maqData.volumeProducao;
 
-  // INFORMAÇÕES COMPLEMENTARES
-  if (infoField) {
-    dealPayload.deal_custom_fields.push({
-      custom_field_id: infoField.id,
-      value: infoCompl,
-    });
-    dealPayload.custom_fields[infoField.id] = infoCompl;
-  }
+  if (fInfo?.slug)
+    dealPayload.custom_fields[fInfo.slug] = infoCompl;
 
-  console.log(`[RD CRM] deal_custom_fields a enviar (${dealPayload.deal_custom_fields.length}):`,
-    JSON.stringify(dealPayload.deal_custom_fields));
+  console.log('[RD CRM] custom_fields a enviar:', JSON.stringify(dealPayload.custom_fields));
 
-  const deal = await rdRequest<{ id: string }>("POST", "/deals", dealPayload);
+  const deal = await rdRequest<{ id: string }>('POST', '/deals', dealPayload);
   console.log(`[RD CRM] Negociação MÁQUINAS criada: ${deal.id} — "${titulo}"`);
   return deal.id;
 }
+
 
 // ─── Função principal para MÁQUINAS ──────────────────────────────────────────
 export async function createMaquinasOS(

@@ -1332,7 +1332,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               lcStorage.getStats(),
             ]);
 
-            const stages = ['novo_atendimento', 'em_atendimento', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'];
+            const stages = ['novo_atendimento', 'em_atendimento', 'maquinas', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'];
             const pipeline: Record<string, any[]> = {};
             for (const stage of stages) {
               pipeline[stage] = await lcStorage.listVisitorsByPipeline(stage);
