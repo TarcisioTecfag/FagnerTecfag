@@ -265,13 +265,18 @@ async function getOrCreateCampaignId(): Promise<string> {
 
 // ─── Busca dinâmica de custom fields de Deals ──────────────────────────────────
 async function loadDealCustomFields(): Promise<{ id: string; name: string }[]> {
-  if (_customFieldsCache) return _customFieldsCache;
+  if (_customFieldsCache && _customFieldsCache.length > 0) return _customFieldsCache;
   try {
+    // Tenta primeiro sem filtro de pipeline (retorna TODOS os campos)
     const data = await rdRequest<any[]>("GET", "/deals/custom_fields");
-    if (Array.isArray(data)) {
-      _customFieldsCache = data.map(f => ({ id: f.id, name: f.name.toLowerCase() }));
+    if (Array.isArray(data) && data.length > 0) {
+      _customFieldsCache = data.map(f => ({ id: f.id, name: (f.name || "").toLowerCase() }));
+      console.log(`[RD CRM] Custom fields carregados (${_customFieldsCache.length}):`,
+        _customFieldsCache.map(f => `"${f.name}"`).join(', '));
       return _customFieldsCache;
     }
+    // Se vier vazio ou não-array, loga a resposta bruta para diagnóstico
+    console.warn("[RD CRM] /deals/custom_fields retornou vazio ou formato inesperado:", JSON.stringify(data).slice(0, 300));
   } catch (e: any) {
     console.warn("[RD CRM] Falha ao carregar campos personalizados do deal:", e.message);
   }
@@ -619,23 +624,8 @@ export async function createPosVendaOS(
 const RD_MAQUINAS_PIPELINE_ID    = "69cacc81e9770f001324bb44";
 const RD_MAQUINAS_FIRST_STAGE_ID = "69cacc81e9770f001324bb47"; // LEADS RECEBIDOS
 
-// Cache de custom fields do funil Máquinas
-let _maquinasCustomFieldsCache: { id: string; name: string }[] | null = null;
-
-async function loadMaquinasCustomFields(): Promise<{ id: string; name: string }[]> {
-  if (_maquinasCustomFieldsCache) return _maquinasCustomFieldsCache;
-  try {
-    const data = await rdRequest<any[]>("GET", "/deal_custom_fields?page[size]=100");
-    _maquinasCustomFieldsCache = (Array.isArray(data) ? data : []).map((f: any) => ({
-      id: f.id,
-      name: (f.name || "").toLowerCase(),
-    }));
-  } catch (e: any) {
-    console.warn("[RD CRM] Não foi possível carregar campos personalizados de deals:", e.message);
-    _maquinasCustomFieldsCache = [];
-  }
-  return _maquinasCustomFieldsCache!;
-}
+// NOTA: loadMaquinasCustomFields foi removida — usa loadDealCustomFields que já funciona
+// rota correta: /deals/custom_fields (não /deal_custom_fields)
 
 /**
  * Cria uma negociação no funil MÁQUINAS 2.0 do RD CRM.
@@ -693,18 +683,30 @@ async function createMaquinasDeal(
     console.log(`[RD CRM] Vinculando empresa ${organizationId} à negociação de máquinas`);
   }
 
-  // ── Campos personalizados ──────────────────────────────────────────────────
-  const cfs = await loadMaquinasCustomFields();
+  // ── Campos personalizados (/deals/custom_fields — rota correta) ───────────
+  // CORREÇÃO: loadMaquinasCustomFields usava /deal_custom_fields (rota inválida).
+  // Usando loadDealCustomFields() que já funciona no fluxo pos_venda.
+  const cfs = await loadDealCustomFields();
 
-  // Helper: encontra campo por parte do nome
+  console.log(`[RD CRM] Campos disponíveis (${cfs.length}):`, cfs.map(f => f.name).join(' | '));
+
+  // Helper: busca por substring no nome (já em lowercase)
   const findField = (partialName: string) =>
-    cfs.find((f: any) => f.name.includes(partialName));
+    cfs.find((f) => f.name.includes(partialName.toLowerCase()));
 
-  const clienteNovoField   = findField("cliente novo");
-  const sdrField           = findField("qualificado");
-  const produtoField       = findField("produto fabricado");
-  const volumeField        = findField("volume");
-  const infoField          = findField("complementar");
+  const clienteNovoField = findField("cliente novo");
+  const sdrField         = findField("qualificado por sdr") || findField("qualificado");
+  const produtoField     = findField("produto fabricado") || findField("produto");
+  const volumeField      = findField("volume de produ") || findField("volume");
+  const infoField        = findField("complementar");
+
+  console.log(`[RD CRM] Mapeamento de campos:`, {
+    clienteNovo:  clienteNovoField  ? `${clienteNovoField.id} ("${clienteNovoField.name}")` : "NÃO ENCONTRADO",
+    sdr:          sdrField          ? `${sdrField.id} ("${sdrField.name}")` : "NÃO ENCONTRADO",
+    produto:      produtoField      ? `${produtoField.id} ("${produtoField.name}")` : "NÃO ENCONTRADO",
+    volume:       volumeField       ? `${volumeField.id} ("${volumeField.name}")` : "NÃO ENCONTRADO",
+    complementar: infoField         ? `${infoField.id} ("${infoField.name}")` : "NÃO ENCONTRADO",
+  });
 
   dealPayload.custom_fields = {};
 
@@ -717,7 +719,7 @@ async function createMaquinasDeal(
     dealPayload.custom_fields[clienteNovoField.id] = maqData.clienteNovo.toUpperCase();
   }
 
-  // QUALIFICADO POR SDR — usar o texto completo da opção
+  // QUALIFICADO POR SDR
   const SDR_OPTIONS: Record<string, string> = {
     "1": "Decisor com Pressa (Falou com quem manda e ele quer solução rápida)",
     "2": "Planejando Investimento (Interesse real, mas sem data definida)",
@@ -761,6 +763,9 @@ async function createMaquinasDeal(
     });
     dealPayload.custom_fields[infoField.id] = infoCompl;
   }
+
+  console.log(`[RD CRM] deal_custom_fields a enviar (${dealPayload.deal_custom_fields.length}):`,
+    JSON.stringify(dealPayload.deal_custom_fields));
 
   const deal = await rdRequest<{ id: string }>("POST", "/deals", dealPayload);
   console.log(`[RD CRM] Negociação MÁQUINAS criada: ${deal.id} — "${titulo}"`);
