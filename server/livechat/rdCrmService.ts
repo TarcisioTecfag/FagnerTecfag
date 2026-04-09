@@ -21,6 +21,7 @@ const DB_KEY_EXPIRES = "rd_crm_token_expires_at";
 let _sourceId:   string | null = null;
 let _campaignId: string | null = null;
 let _customFieldsCache: { id: string; name: string }[] | null = null;
+let _orgCustomFieldsCache: { id: string; name: string; slug: string }[] | null = null;
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface CnpjData {
@@ -265,7 +266,7 @@ async function getOrCreateCampaignId(): Promise<string> {
 
 // ── Busca dinâmica de custom fields de Deals ──────────────────────────────────────
 // Endpoint oficial API v2: GET /custom_fields?filter=entity:deal
-// Retorna lista com id, name e SLUG dos campos personalizados de Negociação
+// Retorna lista com id, name e SLUG dos campos personalizados de Negociação
 async function loadDealCustomFields(): Promise<{ id: string; name: string; slug: string }[]> {
   if (_customFieldsCache && (_customFieldsCache as any[]).length > 0) return _customFieldsCache as any[];
   try {
@@ -278,7 +279,7 @@ async function loadDealCustomFields(): Promise<{ id: string; name: string; slug:
         name: (f.name  || '').toLowerCase(),
         slug: (f.slug  || '').toLowerCase(),
       })) as any;
-      console.log(`[RD CRM] ${list.length} campos carregados:`,
+      console.log(`[RD CRM] ${list.length} campos deal carregados:`,
         (_customFieldsCache as any[]).map((f: any) => `${f.name}(slug:${f.slug})`).join(', '));
       return _customFieldsCache as any[];
     }
@@ -287,6 +288,68 @@ async function loadDealCustomFields(): Promise<{ id: string; name: string; slug:
     console.warn('[RD CRM] Falha ao carregar custom fields:', e.message);
   }
   return [];
+}
+
+// ── Busca dinâmica de custom fields de Organizações ──────────────────────────
+async function loadOrgCustomFields(): Promise<{ id: string; name: string; slug: string }[]> {
+  if (_orgCustomFieldsCache && _orgCustomFieldsCache.length > 0) return _orgCustomFieldsCache;
+  try {
+    const data = await rdRequest<any>("GET", "/custom_fields?filter=entity:organization&page[size]=100");
+    const list: any[] = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+    if (list.length > 0) {
+      _orgCustomFieldsCache = list.map((f: any) => ({
+        id:   f.id   ?? '',
+        name: (f.name  || '').toLowerCase(),
+        slug: (f.slug  || '').toLowerCase(),
+      }));
+      console.log(`[RD CRM] ${list.length} campos org carregados:`,
+        _orgCustomFieldsCache.map(f => `${f.name}(${f.slug})`).join(', '));
+      return _orgCustomFieldsCache;
+    }
+    console.warn('[RD CRM] custom_fields org retornou vazio');
+  } catch (e: any) {
+    console.warn('[RD CRM] Falha ao carregar custom fields org:', e.message);
+  }
+  return [];
+}
+
+/** Monta o array de organization_custom_fields para o payload da empresa */
+async function buildOrgCustomFields(doc: string, cnpjData?: CnpjData): Promise<any[]> {
+  const fields = await loadOrgCustomFields();
+  const result: { custom_field_id: string; value: string }[] = [];
+
+  // Helper: encontra campo por nome ou slug (busca flexível por múltiplos padrões)
+  const findField = (patterns: string[]) =>
+    fields.find(f => patterns.some(p => f.name.includes(p) || f.slug.includes(p)));
+
+  // CNPJ ou CPF — campo obrigatório conforme screenshot
+  const cnpjField = findField(['cnpj', 'cpf', 'documento']);
+  if (cnpjField && doc) result.push({ custom_field_id: cnpjField.id, value: doc });
+
+  if (cnpjData) {
+    // Cidade
+    const cidadeField = findField(['cidade', 'municipio', 'city']);
+    if (cidadeField && cnpjData.municipio)
+      result.push({ custom_field_id: cidadeField.id, value: cnpjData.municipio });
+
+    // Bairro
+    const bairroField = findField(['bairro', 'district', 'neighbourhood']);
+    if (bairroField && cnpjData.bairro)
+      result.push({ custom_field_id: bairroField.id, value: cnpjData.bairro });
+
+    // Estado
+    const estadoField = findField(['estado', 'state', ' uf']);
+    if (estadoField && cnpjData.uf)
+      result.push({ custom_field_id: estadoField.id, value: cnpjData.uf });
+  }
+
+  if (result.length > 0) {
+    console.log(`[RD CRM] Org custom fields: ${result.map(r => r.custom_field_id + '=' + r.value).join(', ')}`);
+  } else {
+    console.warn('[RD CRM] Nenhum campo org encontrado — verifique GET /custom_fields?filter=entity:organization');
+  }
+
+  return result;
 }
 
 // ─── Empresa (Organization) — CNPJ ou CPF ────────────────────────────────────
@@ -334,20 +397,23 @@ async function findOrCreateOrganization(
         }
       } catch {}
 
-      // 3. Cria empresa nova (CNPJ)
+      // 3. Cria empresa nova (CNPJ) — custom fields dinâmicos conforme screenshot
+      const orgCustomFields = await buildOrgCustomFields(cnpjNum, cnpjData);
       const orgPayload: Record<string, any> = {
         name: cnpjData.nome,
-        organization_custom_fields: []
+        // Campos opcionais nativos (funciona quando aceito pela API)
+        ...(cnpjData.municipio ? { city:     cnpjData.municipio } : {}),
+        ...(cnpjData.uf        ? { state:    cnpjData.uf }        : {}),
+        ...(cnpjData.bairro    ? { district: cnpjData.bairro }    : {}),
       };
 
-      // Tenta enviar custom field via objeto (v1 fallback) ou array (v2 spec)
-      orgPayload.custom_fields = { cnpj: cnpjNum };
-
-      // Campos opcionais de endereço removidos permanentemente para evitar quebras silenciosas 
-      // na API do RD CRM v2 por falta de whitelist (municipio/estado inválidos pro CRM).
-      // if (cnpjData.municipio) orgPayload.city    = cnpjData.municipio;
-      // if (cnpjData.uf)        orgPayload.state   = cnpjData.uf;
-      // if (cnpjData.bairro)    orgPayload.district = cnpjData.bairro;
+      // Custom fields dinâmicos (array conforme API v2)
+      if (orgCustomFields.length > 0) {
+        orgPayload.organization_custom_fields = orgCustomFields;
+      } else {
+        // Fallback legado por nome de slug
+        orgPayload.custom_fields = { cnpj: cnpjNum };
+      }
 
       const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
       console.log(`[RD CRM] Empresa criada (CNPJ): ${org.id} — ${cnpjData.nome}`);
@@ -369,14 +435,14 @@ async function findOrCreateOrganization(
         }
       } catch {}
 
-      // Cria empresa com CPF no campo personalizado
-      const orgPayload: Record<string, any> = {
-        name: nomeEmpresa,
-        custom_fields: {
-          cpf: doc, // campo CPF da empresa no RD
-        },
-        organization_custom_fields: []
-      };
+      // Cria empresa com CPF no campo personalizado dinâmico
+      const orgCustomFields = await buildOrgCustomFields(doc);
+      const orgPayload: Record<string, any> = { name: nomeEmpresa };
+      if (orgCustomFields.length > 0) {
+        orgPayload.organization_custom_fields = orgCustomFields;
+      } else {
+        orgPayload.custom_fields = { cpf: doc };
+      }
 
       const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
       console.log(`[RD CRM] Empresa criada (CPF): ${org.id} — ${nomeEmpresa}`);
@@ -529,7 +595,12 @@ async function createDeal(
     deal_custom_fields: []
   };
 
-  if (sourceId)       dealPayload.deal_source_id  = sourceId;
+  if (sourceId) {
+    // A API v2 usa 'deal_source_id' no corpo; tentamos tambem 'source_id' por compatibilidade
+    dealPayload.deal_source_id = sourceId;
+    dealPayload.source_id = sourceId;
+    console.log(`[RD CRM] Fonte vinculada: ${sourceId}`);
+  }
   if (campaignId)     dealPayload.campaign_id     = campaignId;
   
   // Vincular empresa usando apenas organization_id (campo oficial API v2)
