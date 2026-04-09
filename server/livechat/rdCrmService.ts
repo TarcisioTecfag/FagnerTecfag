@@ -816,8 +816,9 @@ async function createMaquinasDeal(
 
   dealPayload.custom_fields = {};
 
-  if (fClienteNovo?.slug && maqData.clienteNovo)
-    dealPayload.custom_fields[fClienteNovo.slug] = maqData.clienteNovo.toUpperCase();
+  // USA UUID DO CAMPO como chave (formato da API v2) — slug causa 422 'Deal custom fields Não é válido'
+  if (fClienteNovo?.id && maqData.clienteNovo)
+    dealPayload.custom_fields[fClienteNovo.id] = maqData.clienteNovo.toUpperCase();
 
   const SDR_OPTIONS: Record<string, string> = {
     '1': 'Decisor com Pressa (Falou com quem manda e ele quer solução rápida)',
@@ -827,19 +828,25 @@ async function createMaquinasDeal(
     '5': 'Fora de Portfólio (Quer algo que a Tecfag não fabrica)',
     '6': 'Sumiu / Sem contato (Não atendeu ou não retornou)',
   };
-  if (fSdr?.slug && maqData.qualificacaoSDR)
-    dealPayload.custom_fields[fSdr.slug] = SDR_OPTIONS[maqData.qualificacaoSDR] ?? SDR_OPTIONS['2'];
+  if (fSdr?.id && maqData.qualificacaoSDR)
+    dealPayload.custom_fields[fSdr.id] = SDR_OPTIONS[maqData.qualificacaoSDR] ?? SDR_OPTIONS['2'];
 
-  if (fProduto?.slug && maqData.produtoFabricado)
-    dealPayload.custom_fields[fProduto.slug] = maqData.produtoFabricado;
+  if (fProduto?.id && maqData.produtoFabricado)
+    dealPayload.custom_fields[fProduto.id] = maqData.produtoFabricado;
 
-  if (fVolume?.slug && maqData.volumeProducao)
-    dealPayload.custom_fields[fVolume.slug] = maqData.volumeProducao;
+  if (fVolume?.id && maqData.volumeProducao)
+    dealPayload.custom_fields[fVolume.id] = maqData.volumeProducao;
 
-  if (fInfo?.slug)
-    dealPayload.custom_fields[fInfo.slug] = infoCompl;
+  if (fInfo?.id)
+    dealPayload.custom_fields[fInfo.id] = infoCompl;
 
-  console.log('[RD CRM] custom_fields a enviar:', JSON.stringify(dealPayload.custom_fields));
+  // Se nenhum campo personalizado foi encontrado, nao envia custom_fields (evita 422)
+  if (Object.keys(dealPayload.custom_fields).length === 0) {
+    delete dealPayload.custom_fields;
+    console.warn('[RD CRM] Nenhum campo personalizado de deal encontrado — custom_fields omitido');
+  } else {
+    console.log('[RD CRM] custom_fields (por UUID) a enviar:', JSON.stringify(dealPayload.custom_fields));
+  }
 
   const deal = await rdRequest<{ id: string }>('POST', '/deals', dealPayload);
   console.log(`[RD CRM] Negociação MÁQUINAS criada: ${deal.id} — "${titulo}"`);
@@ -1041,13 +1048,18 @@ async function createPecasDeal(
   const fInfo = findF('complementar');
 
   dealPayload.custom_fields = {};
-  if (fInfo?.slug) {
-    dealPayload.custom_fields[fInfo.slug] = infoCompl;
-  } else {
-    dealPayload.custom_fields.informacoes_complementares = infoCompl;
+  // USA UUID DO CAMPO como chave (formato da API v2) — slug causa 422
+  if (fInfo?.id) {
+    dealPayload.custom_fields[fInfo.id] = infoCompl;
   }
 
-  console.log('[RD CRM] PEÇAS custom_fields:', JSON.stringify(dealPayload.custom_fields));
+  // Se nenhum campo encontrado, omite custom_fields para evitar 422
+  if (Object.keys(dealPayload.custom_fields).length === 0) {
+    delete dealPayload.custom_fields;
+    console.warn('[RD CRM] PEÇAS: campo complementar não encontrado — custom_fields omitido');
+  } else {
+    console.log('[RD CRM] PEÇAS custom_fields (UUID):', JSON.stringify(dealPayload.custom_fields));
+  }
 
   const deal = await rdRequest<{ id: string }>('POST', '/deals', dealPayload);
   console.log(`[RD CRM] Negociação PEÇAS criada: ${deal.id} — "${titulo}"`);

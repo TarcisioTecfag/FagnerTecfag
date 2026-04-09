@@ -1565,17 +1565,36 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             const chatToTake = await lcStorage.getChatById(data.chatId);
             if (!chatToTake) break;
 
+            const operatorName: string = (data.operatorName as string) || (data.userId as string) || "Atendente";
+
             await lcStorage.updateChat(chatToTake.id, {
               status: "human_active",
               agentId: data.userId,
               needsHuman: "false",
             });
 
+            // Salva mensagem de sistema no histórico do chat
+            await lcStorage.createMessage({
+              chatId: chatToTake.id,
+              sender: "system" as any,
+              content: `${operatorName} iniciou o atendimento`,
+            }).catch(() => {});
+
+            // Notifica o widget do visitante com mensagem discreta
+            sendToVisitor(chatToTake.visitorId, {
+              type: "AGENT_JOINED",
+              operatorName,
+              message: `${operatorName} iniciou o atendimento`,
+            });
+
             broadcastToAgents({
               type: "CHAT_TAKEN_OVER",
               chatId: chatToTake.id,
               agentId: data.userId,
+              operatorName,
             });
+
+            console.log(`[LiveChat] Chat ${chatToTake.id} assumido por "${operatorName}"`);
             break;
           }
 

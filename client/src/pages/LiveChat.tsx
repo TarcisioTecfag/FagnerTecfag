@@ -381,6 +381,8 @@ function LiveChat() {
   // Fix 6: usuários reais do RD CRM para dropdown de operadores
   const [rdUsers, setRdUsers] = useState<{ id: string; name: string; email?: string }[]>([]);
   const [rdUsersLoading, setRdUsersLoading] = useState(false);
+  // Usuário logado (para exibir nome correto ao assumir atendimento)
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; username: string } | null>(null);
 
   // Manter refs sincronizados para uso dentro do WS handler (closure)
   useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
@@ -396,6 +398,14 @@ function LiveChat() {
       .catch(() => setRdUsers([]))
       .finally(() => setRdUsersLoading(false));
   }, [settingsOpen]);
+
+  // Buscar dados do usuário logado ao montar o componente
+  useEffect(() => {
+    fetch("/api/me", { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(u => { if (u) setCurrentUser(u); })
+      .catch(() => {});
+  }, []);
 
   // Dismiss popup por id
   const dismissPopup = (id: string) =>
@@ -811,18 +821,20 @@ function LiveChat() {
 
   // ——— Take over chat —————————————————————————————————————————————————
   const handleTakeOver = async (chatId: string) => {
+    const operatorName = currentUser?.name ?? currentUser?.username ?? "Atendente";
+    const userId = currentUser?.id ?? "admin";
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "TAKE_OVER", chatId, userId: "admin" }));
+      wsRef.current.send(JSON.stringify({ type: "TAKE_OVER", chatId, userId, operatorName }));
     }
     try {
       await fetch(`/api/livechat/chats/${chatId}/take-over`, {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: "admin" }),
+        body: JSON.stringify({ userId, operatorName }),
       });
     } catch {}
     setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, status: "human_active" } : c));
-    toast({ title: "Chat assumido", description: "Você agora está respondendo este chat." });
+    toast({ title: "Chat assumido", description: `Você (${operatorName}) agora está respondendo este chat.` });
   };
   // ——— Return chat to AI (Fagner) —————————————————————————————————————
   const handleReturnToAI = (chatId: string) => {
