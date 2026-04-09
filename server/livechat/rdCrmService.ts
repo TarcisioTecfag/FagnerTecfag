@@ -787,9 +787,9 @@ async function createMaquinasDeal(
     rating:      3,
   };
 
-  if (ownerId)    dealPayload.owner_id        = ownerId;
-  if (sourceId)   dealPayload.deal_source_id  = sourceId;
-  if (campaignId) dealPayload.campaign_id     = campaignId;
+  if (ownerId)    dealPayload.owner_id       = ownerId;
+  if (sourceId)   dealPayload.source_id      = sourceId;   // campo correto (não é deal_source_id)
+  if (campaignId) dealPayload.campaign_id    = campaignId;
   if (organizationId) {
     dealPayload.organization_id = organizationId;
     console.log(`[RD CRM] Vinculando empresa ${organizationId} à negociação de máquinas`);
@@ -1035,7 +1035,7 @@ async function createPecasDeal(
   };
 
   if (ownerId)        dealPayload.owner_id       = ownerId;
-  if (sourceId)       dealPayload.deal_source_id = sourceId;
+  if (sourceId)       dealPayload.source_id      = sourceId;   // campo correto (não é deal_source_id)
   if (campaignId)     dealPayload.campaign_id    = campaignId;
   if (organizationId) dealPayload.organization_id = organizationId;
 
