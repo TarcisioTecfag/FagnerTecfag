@@ -797,6 +797,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   .replace(/\[STAGE:[^\]]+\]/gi, "")
                   .replace(/\[POS_VENDA_DADOS:[\s\S]*?\]/gi, "")
                   .replace(/\[MAQUINAS_DADOS:[\s\S]*?\]/gi, "")
+                  .replace(/\[PECAS_DADOS:[\s\S]*?\]/gi, "")   // ← estava vazando para o cliente!
+                  .replace(/\[CNPJ_CHECK:[^\]]+\]/gi, "")        // ← prevenção extra
+                  .replace(/\[CNPJ_RESULT:[\s\S]*?\]/gi, "")     // ← prevenção extra
                   .replace(/\[CRASH:[^\]]*\]/gi, "")
                   .trim();
 

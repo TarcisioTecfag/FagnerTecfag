@@ -197,8 +197,12 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // ── Diagnóstico RD CRM — endpoint temporário para debug de fonte/empresa ────
-  router.get("/rd-debug", requireAuth, async (_req: Request, res: Response) => {
+  // ── Diagnóstico RD CRM — sem auth (acesso via token secreto na URL) ────
+  router.get("/rd-debug", async (req: Request, res: Response) => {
+    // Proteção mínima: token secreto na query string
+    if (req.query.token !== "tecfag2025debug") {
+      return res.status(403).json({ error: "Token inválido. Use ?token=tecfag2025debug" });
+    }
     const result: Record<string, any> = {};
     try {
       const at = await getRdValidToken();
@@ -206,21 +210,35 @@ export function registerLiveChatRoutes(app: any): void {
       result.token_preview = at?.slice(0, 20) + "...";
 
       // Testar GET /sources
-      const srcRes = await fetch("https://api.rd.services/crm/v2/sources?page[size]=50", {
+      const srcRes = await fetch("https://api.rd.services/crm/v2/sources?page[size]=100", {
         headers: { Authorization: `Bearer ${at}` }
       });
       const srcJson = await srcRes.json();
       result.sources_status = srcRes.status;
-      result.sources_count = srcJson?.data?.length ?? (Array.isArray(srcJson) ? srcJson.length : "não é array");
-      result.sources_names = (srcJson?.data ?? srcJson ?? []).slice(0, 10).map((s: any) => s.name);
+      result.sources_raw_keys = srcJson ? Object.keys(srcJson) : "null";
+      const srcList: any[] = srcJson?.data ?? (Array.isArray(srcJson) ? srcJson : []);
+      result.sources_count = srcList.length;
+      result.sources_names = srcList.map((s: any) => s.name);
 
-      // Testar GET /organizations (primeiros 5)
+      // Testar GET /organizations
       const orgRes = await fetch("https://api.rd.services/crm/v2/organizations?page[size]=5", {
         headers: { Authorization: `Bearer ${at}` }
       });
       result.organizations_status = orgRes.status;
       const orgJson = await orgRes.json();
-      result.organizations_sample = (orgJson?.data ?? orgJson ?? []).slice(0, 3).map((o: any) => ({ id: o.id, name: o.name }));
+      const orgList: any[] = orgJson?.data ?? (Array.isArray(orgJson) ? orgJson : []);
+      result.organizations_count = orgList.length;
+      result.organizations_sample = orgList.slice(0, 3).map((o: any) => ({ id: o.id, name: o.name }));
+
+      // Testar POST /sources (criar fonte teste)
+      const testSrcRes = await fetch("https://api.rd.services/crm/v2/sources", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Referência | tecfag.com.br" })
+      });
+      const testSrcJson = await testSrcRes.json();
+      result.create_source_status = testSrcRes.status;
+      result.create_source_body = testSrcJson;
 
       // Testar GET /custom_fields org
       const cfRes = await fetch("https://api.rd.services/crm/v2/custom_fields?filter=entity:organization&page[size]=50", {
@@ -228,7 +246,8 @@ export function registerLiveChatRoutes(app: any): void {
       });
       result.org_custom_fields_status = cfRes.status;
       const cfJson = await cfRes.json();
-      result.org_custom_fields = (cfJson?.data ?? cfJson ?? []).map((f: any) => ({ id: f.id, name: f.name, slug: f.slug }));
+      const cfList: any[] = cfJson?.data ?? (Array.isArray(cfJson) ? cfJson : []);
+      result.org_custom_fields = cfList.map((f: any) => ({ id: f.id, name: f.name, slug: f.slug }));
 
     } catch (err: any) {
       result.error = err?.message;
