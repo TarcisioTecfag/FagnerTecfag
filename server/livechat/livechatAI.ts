@@ -1050,6 +1050,7 @@ export async function processVisitorMessage(
 
   // Normaliza o histórico para o Gemini: garante que os roles (user/model) SEMPRE alternam
   // Agrupa mensagens consecutivas do mesmo role em um único bloco.
+  // IMPORTANTE: Deep copy das parts para não mutar os objetos originais em session.history
   const normalizedContents: { role: string; parts: any[] }[] = [];
   for (const msg of rawContents) {
     if (normalizedContents.length > 0 && normalizedContents[normalizedContents.length - 1].role === msg.role) {
@@ -1058,13 +1059,19 @@ export async function processVisitorMessage(
       const hasOnlyText = lastMsg.parts.every((p: any) => p.text !== undefined) && msg.parts.every((p: any) => p.text !== undefined);
       
       if (hasOnlyText) {
+        // Concat no texto já copiado (lastMsg é uma cópia, não muta session.history)
         const appendedText = msg.parts.map((p: any) => p.text).join("\n\n");
         lastMsg.parts[0].text += "\n\n" + appendedText;
       } else {
-        lastMsg.parts.push(...msg.parts);
+        // Deep copy de cada part para evitar mutação do original
+        lastMsg.parts.push(...msg.parts.map((p: any) => JSON.parse(JSON.stringify(p))));
       }
     } else {
-      normalizedContents.push({ role: msg.role, parts: [...msg.parts] });
+      // DEEP COPY: cria novos objetos para não mutar session.history.parts[0].text
+      normalizedContents.push({
+        role: msg.role,
+        parts: msg.parts.map((p: any) => JSON.parse(JSON.stringify(p)))
+      });
     }
   }
 
@@ -1173,22 +1180,16 @@ export async function processVisitorMessage(
       time: new Date().toISOString()
     };
 
-    // IMPORTANTE: Mesmo em caso de erro, adicionar a mensagem do usuário ao histórico
-    // e um placeholder de model para manter a alternância correta. Sem isso, na próxima
-    // chamada teríamos user→user causando novo erro 400 do Gemini.
-    session.history.push({ role: "user", parts: userParts });
-    session.history.push({ role: "model", parts: [{ text: "(aguardando)" }] });
-    if (session.history.length > 40) session.history = session.history.slice(-40);
+    // NÃO adicionamos placeholder ao histório em caso de erro
+    // O histórico permanece como estava antes desta chamada — a próxima
+    // mensagem do usuário será adicionada normalmente e o Gemini será tentado de novo
 
-    // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
-    // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou
-    // ATENÇÃO: Sem emoji na mensagem de fallback para evitar balão solo de emoji
     const fallbackReply = "Hm, acho que não entendi.";
     return {
       reply: fallbackReply,
       needsHuman: false,
       tokens: 0,
-      isError: false, // não é erro — envia a mensagem de fallback
+      isError: false,
     };
   }
 }
