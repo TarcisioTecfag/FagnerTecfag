@@ -180,85 +180,58 @@ async function geoLookup(ip: string): Promise<{ city?: string; country?: string 
 }
 
 // ─── Proactive approach timer ─────────────────────────────────────────────────
+// IMPORTANTE: O timer proativo APENAS envia uma notificacao visual ao widget.
+// NAO cria chat, NAO chama o Gemini, NAO envia mensagem.
+// Motivo: o visitante sempre precisa inserir o nome antes de qualquer fluxo,
+// e o Fagner ja faz abordagem ativa com 3 mensagens iniciais de boas-vindas.
+// Enviar mensagem proativa antes disso causava fragmentacao e vazamento de instrucoes.
 
 async function startProactiveTimer(visitorId: string): Promise<void> {
-  // Se já há um timer ativo para este visitante, não cria outro
   if (proactiveTimers.has(visitorId)) return;
-  // Visitante deve ter ao menos uma conexão ativa
   if (!visitorConnections.has(visitorId)) return;
 
-  // Get configured delay (default 60s)
   const delaySetting = await lcStorage.getSettingParsed<number>("proactive_delay_ms");
   const delay = delaySetting ?? 60_000;
 
-  // Check if proactive is enabled
   const enabled = await lcStorage.getSettingParsed<boolean>("proactive_enabled");
   if (enabled === false) return;
 
   const timer = setTimeout(async () => {
     proactiveTimers.delete(visitorId);
     try {
-      // Don't send if visitor already has an active chat
       const existingChat = await lcStorage.getActiveChatByVisitor(visitorId);
       if (existingChat) return;
 
-      // Don't send if visitor had ANY chat in the last 24 hours
       const lastChat = await lcStorage.getLastChatByVisitor(visitorId);
       if (lastChat) {
         const hoursAgo24 = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        if (new Date(lastChat.startedAt) > hoursAgo24) {
-          return;
-        }
+        if (new Date(lastChat.startedAt) > hoursAgo24) return;
       }
 
       const visitor = await lcStorage.getVisitorById(visitorId);
       if (!visitor || visitor.isOnline !== "true") return;
 
-      // Generate proactive message
-      const message = await generateProactiveMessage(
-        visitor.currentPage ?? "tecfag.com.br",
-        visitor.currentPageTitle ?? undefined,
-      );
-
-      // Create chat and message
-      const chat = await lcStorage.createChat({
-        visitorId,
-        source: "proactive",
-        proactiveApproach: true,
-      });
-
-      await lcStorage.createMessage({
-        chatId: chat.id,
-        sender: "ai",
-        content: message,
-      });
-
-      // Store chat reference (no conn object needed — use storage)
-      // sendToVisitor already handles all open tabs
-
-      // Send to visitor widget
+      // Apenas notificacao visual: badge/pulse no widget, sem criar chat nem chamar Gemini
       sendToVisitor(visitorId, {
-        type: "PROACTIVE_MESSAGE",
-        chatId: chat.id,
-        message,
+        type: "PROACTIVE_PULSE",
         timestamp: new Date().toISOString(),
       });
 
-      // Notify agents
       broadcastToAgents({
-        type: "NEW_CHAT",
-        chat,
-        visitor,
-        proactive: true,
+        type: "VISITOR_ACTIVE_NO_CHAT",
+        visitorId,
+        page: visitor.currentPage,
+        pageTitle: visitor.currentPageTitle,
       });
 
-      console.log(`[LiveChat] Abordagem proativa disparada para visitante ${visitorId}`);
+      console.log(`[LiveChat] Pulse proativo (visual) para visitante ${visitorId}`);
     } catch (err: any) {
-      console.error("[LiveChat] Erro na abordagem proativa:", err.message);
+      console.error("[LiveChat] Erro no pulse proativo:", err.message);
     }
   }, delay);
   proactiveTimers.set(visitorId, timer);
 }
+
 
 // ─── Init WebSocket server ────────────────────────────────────────────────────
 
