@@ -926,19 +926,16 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   await lcStorage.setChatCloseReason(chat.id, "venda_fechada").catch(() => {});
                   // ✅ NÃO fechar nem limpar sessão — visitante ainda pode confirmar CEP, pagamento, etc.
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_com_venda");
-                } else if (hasNoSale && !isMaquinasStage) {
-                  // NO_SALE só muda stage se NÃO for um atendimento de máquinas
+                } else if (hasNoSale && !isMaquinasStage && !isPecasStage) {
+                  // NO_SALE só muda stage se NÃO for atendimento de máquinas ou peças
                   const note = await generateConversationNote(chat.id);
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "sem_resposta");
                   if (note) await lcStorage.addVisitorNote(currentVisitorId, "Sem Venda", note);
-                  // Fagner define motivo automaticamente
                   await lcStorage.setChatCloseReason(chat.id, "venda_cancelada").catch(() => {});
-                  // ── NÃO FECHAR O CHAT — impede fragmentação ──
                   broadcastPipelineUpdate(currentVisitorId, "sem_resposta");
-                } else if (hasNoSale && isMaquinasStage) {
-                  console.log(`[LiveChat] NO_SALE ignorado — visitante ${currentVisitorId} está em estágio maquinas (protegido)`);
-                } else if (hasNoSale && isPecasStage) {
-                  console.log(`[LiveChat] NO_SALE ignorado — visitante ${currentVisitorId} está em estágio pecas (protegido)`);
+                } else if (hasNoSale && (isMaquinasStage || isPecasStage)) {
+                  const whichStage = isMaquinasStage ? 'maquinas' : 'pecas';
+                  console.log(`[LiveChat] NO_SALE ignorado — visitante ${currentVisitorId} está em estágio ${whichStage} (protegido)`);
                 }
 
                 // ── Detectar tags de estágio [STAGE:...] ──
