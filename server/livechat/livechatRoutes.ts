@@ -201,22 +201,33 @@ export function registerLiveChatRoutes(app: any): void {
   router.get("/rd-users", requireAuth, async (_req: Request, res: Response) => {
     try {
       const at = await getRdValidToken();
-      const r = await fetch("https://api.rd.services/crm/v2/users", {
-        headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" }
-      });
-      if (!r.ok) {
-        const errBody = await r.text();
-        console.warn(`[LiveChat] rd-users error: ${r.status} ${errBody.slice(0, 200)}`);
-        return res.status(r.status).json({ message: `RD CRM respondeu ${r.status}` });
+      const allUsers: any[] = [];
+      let page = 1;
+      const perPage = 100;
+
+      // Busca com paginação — RD CRM limita a 100 por página
+      while (page <= 5) { // max 500 usuários
+        const r = await fetch(`https://api.rd.services/crm/v2/users?page=${page}&per_page=${perPage}`, {
+          headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" }
+        });
+        if (!r.ok) {
+          const errBody = await r.text();
+          console.warn(`[LiveChat] rd-users page ${page} error: ${r.status} ${errBody.slice(0, 200)}`);
+          break;
+        }
+        const data = await r.json();
+        const pageUsers = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        allUsers.push(...pageUsers);
+        // Para se vieram menos que perPage (última página)
+        if (pageUsers.length < perPage) break;
+        page++;
       }
-      const data = await r.json();
-      // A API retorna { data: [...] } — normalizar para array de { id, name, email }
-      const users = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-      const normalized = users.map((u: any) => ({ id: u.id, name: u.name, email: u.email }));
+
+      const normalized = allUsers.map((u: any) => ({ id: u.id, name: u.name, email: u.email }));
+      console.log(`[LiveChat] rd-users: retornando ${normalized.length} usuários`);
       return res.json(normalized);
     } catch (err: any) {
       console.error("[LiveChat] GET /rd-users error:", err?.message);
-      // Retorna array vazio em vez de 500 — o frontend trata graciosamente
       return res.json([]);
     }
   });

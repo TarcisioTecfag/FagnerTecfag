@@ -628,6 +628,70 @@ function LiveChat() {
             }
             break;
           }
+          case "VISITOR_PECAS_UPDATED": {
+            // Atualiza dados de peças no estado local
+            const pecasMapping: any = {
+              posVendaNome:     data.pecasData?.nome,
+              posVendaTelefone: data.pecasData?.telefone,
+              posVendaEmail:    data.pecasData?.email,
+              posVendaCnpjCpf:  data.pecasData?.cnpjCpf,
+              pecaDesejada:     data.pecasData?.pecaDesejada,
+              pecasECliente:    data.pecasData?.eCliente,
+              name:             data.pecasData?.nome,
+            };
+            if (selectedVisitor?.id === data.visitorId) {
+              setSelectedVisitor(prev => prev ? { ...prev, ...pecasMapping } : prev);
+            }
+            setPipelineData(prev => {
+              const next = { ...prev };
+              for (const stage of Object.keys(next)) {
+                next[stage] = (next[stage] || []).map((v: Visitor) =>
+                  v.id === data.visitorId ? { ...v, ...pecasMapping } : v
+                );
+              }
+              return next;
+            });
+            setAllVisitors(prev => prev.map(v =>
+              v.id === data.visitorId ? { ...v, ...pecasMapping } : v
+            ));
+            if (data.pecasData?.nome) {
+              setChats(prev => prev.map(c =>
+                c.visitorId === data.visitorId ? { ...c, visitorName: data.pecasData.nome } : c
+              ));
+            }
+            break;
+          }
+          case "VISITOR_MAQUINAS_UPDATED": {
+            // Atualiza dados de máquinas no estado local
+            const maqMapping: any = {
+              posVendaNome:     data.maquinasData?.nome,
+              posVendaTelefone: data.maquinasData?.telefone,
+              posVendaEmail:    data.maquinasData?.email,
+              posVendaCnpjCpf:  data.maquinasData?.cnpjCpf,
+              name:             data.maquinasData?.nome,
+            };
+            if (selectedVisitor?.id === data.visitorId) {
+              setSelectedVisitor(prev => prev ? { ...prev, ...maqMapping } : prev);
+            }
+            setPipelineData(prev => {
+              const next = { ...prev };
+              for (const stage of Object.keys(next)) {
+                next[stage] = (next[stage] || []).map((v: Visitor) =>
+                  v.id === data.visitorId ? { ...v, ...maqMapping } : v
+                );
+              }
+              return next;
+            });
+            setAllVisitors(prev => prev.map(v =>
+              v.id === data.visitorId ? { ...v, ...maqMapping } : v
+            ));
+            if (data.maquinasData?.nome) {
+              setChats(prev => prev.map(c =>
+                c.visitorId === data.visitorId ? { ...c, visitorName: data.maquinasData.nome } : c
+              ));
+            }
+            break;
+          }
           case "VISITOR_NOTE_ADDED":
           case "RD_CRM_OS_CREATED": {
             // Recarrega dados do visitante afetado para atualizar as Notas da IA em tempo real
@@ -1800,14 +1864,60 @@ function LiveChat() {
                 </div>
               </div>
 
-              {/* Info row */}
-              <div className="px-6 py-3 bg-zinc-50 border-b border-zinc-100 flex gap-4 text-[11px]">
+              {/* Info row + Dados do Cliente (se existirem) */}
+              <div className="px-6 py-3 bg-zinc-50 border-b border-zinc-100 flex flex-wrap gap-4 text-[11px]">
                 <span className="text-zinc-500">Source: <strong className="text-zinc-700">{sourceLabel(historyModal.visitor.source).label}</strong></span>
                 <span className="text-zinc-500">Páginas: <strong className="text-zinc-700">{historyModal.visitor.totalPages}</strong></span>
                 <span className="text-zinc-500">Chats: <strong className="text-zinc-700">{historyModal.visitor.totalChats}</strong></span>
                 <span className="text-zinc-500">Score: <strong className="text-zinc-700">{historyModal.visitor.engagementScore}</strong></span>
                 <span className="text-zinc-500">Primeiro acesso: <strong className="text-zinc-700">{timeAgo(historyModal.visitor.firstSeenAt)}</strong></span>
+                {historyModal.visitor.pipelineStage && historyModal.visitor.pipelineStage !== 'novo_atendimento' && (
+                  <span className="text-zinc-500">
+                    Funil: <strong className="text-purple-600">{historyModal.visitor.pipelineStage.replace(/_/g, ' ')}</strong>
+                  </span>
+                )}
               </div>
+
+              {/* Dados do cliente — exibe se existirem */}
+              {(historyModal.visitor.posVendaNome || historyModal.visitor.posVendaTelefone || historyModal.visitor.pecaDesejada) && (
+                <div className="px-6 py-3 border-b border-zinc-100 bg-purple-50/40">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-purple-500 mb-2">
+                    👤 Sobre o Cliente
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {historyModal.visitor.posVendaNome && (
+                      <span className="text-[11px] bg-white border border-purple-100 rounded-lg px-2 py-1">
+                        <span className="text-purple-400 font-semibold">Nome:</span> {historyModal.visitor.posVendaNome}
+                      </span>
+                    )}
+                    {historyModal.visitor.posVendaTelefone && (
+                      <span className="text-[11px] bg-white border border-purple-100 rounded-lg px-2 py-1">
+                        <span className="text-purple-400 font-semibold">📱</span> {historyModal.visitor.posVendaTelefone}
+                      </span>
+                    )}
+                    {historyModal.visitor.posVendaEmail && (
+                      <span className="text-[11px] bg-white border border-purple-100 rounded-lg px-2 py-1">
+                        <span className="text-purple-400 font-semibold">✉️</span> {historyModal.visitor.posVendaEmail}
+                      </span>
+                    )}
+                    {historyModal.visitor.posVendaCnpjCpf && (
+                      <span className="text-[11px] bg-white border border-purple-100 rounded-lg px-2 py-1">
+                        <span className="text-purple-400 font-semibold">🪪</span> {historyModal.visitor.posVendaCnpjCpf}
+                      </span>
+                    )}
+                    {historyModal.visitor.posVendaProblema && (
+                      <span className="text-[11px] bg-white border border-purple-100 rounded-lg px-2 py-1">
+                        <span className="text-purple-400 font-semibold">⚙️ Problema:</span> {historyModal.visitor.posVendaProblema.slice(0, 80)}
+                      </span>
+                    )}
+                    {historyModal.visitor.pecaDesejada && (
+                      <span className="text-[11px] bg-white border border-purple-100 rounded-lg px-2 py-1">
+                        <span className="text-purple-400 font-semibold">🔩 Peça:</span> {historyModal.visitor.pecaDesejada}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Pageview list */}
               <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -1966,13 +2076,20 @@ function LiveChat() {
                                   return null;
                                 })()}
                               </div>
-                               {/* Pós Venda badge */}
-                               {(v as any).posVendaNome && (
-                                 <div className="flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-purple-50 border border-purple-100">
-                                   <span className="text-[8px]">🎫</span>
-                                   <span className="text-[8px] text-purple-700 font-semibold truncate">{(v as any).posVendaNome}</span>
-                                 </div>
-                               )}
+                               {/* Pós Venda badge */}
+
+                               {(v as any).posVendaNome && (
+
+                                 <div className="flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-purple-50 border border-purple-100">
+
+                                   <span className="text-[8px]">🎫</span>
+
+                                   <span className="text-[8px] text-purple-700 font-semibold truncate">{(v as any).posVendaNome}</span>
+
+                                 </div>
+
+                               )}
+
                             </div>
                           );
                         })
@@ -2142,70 +2259,72 @@ function LiveChat() {
                     </div>
                   </div>
 
-                  {/* Col: Sobre o Cliente + seção por fluxo */}
+                  {/* Col: Sobre o Cliente + dados por fluxo (scroll único) */}
                   <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden" style={{ background: "rgba(139,92,246,0.03)" }}>
-                    {/* Bloco 1: Sobre o cliente (campos base universais) */}
                     <p className="text-[10px] font-bold uppercase tracking-wider mb-3 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
                       👤 Sobre o cliente
                     </p>
-                    <div className="flex-shrink-0 space-y-2 mb-4">
+                    {/* scroll único para todos os campos */}
+                    <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                      {/* Campos base universais */}
                       {[
                         { label: "Nome do comprador", value: selectedVisitor.posVendaNome, icon: "👤" },
                         { label: "Telefone (WhatsApp)", value: selectedVisitor.posVendaTelefone, icon: "📱" },
                         { label: "E-mail de suporte", value: selectedVisitor.posVendaEmail, icon: "✉️" },
                         { label: "CPF / CNPJ", value: selectedVisitor.posVendaCnpjCpf, icon: "🪪" },
                       ].map(f => (
-                        <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-80'}`}>
+                        <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
                           <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
                           <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
-                            {f.value || "Aguardando preenchimento"}
+                            {f.value || "Aguardando"}
                           </p>
                         </div>
                       ))}
+
+                      {/* Pós Venda — campos específicos */}
+                      {(selectedVisitor.pipelineStage === 'pos_venda' || selectedVisitor.posVendaProblema || selectedVisitor.posVendaNotaPedido) && (
+                        <>
+                          <div className="pt-1 pb-0.5">
+                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#8b5cf6' }}>
+                              Pos Venda
+                            </p>
+                          </div>
+                          {[
+                            { label: 'Problema relatado', value: selectedVisitor.posVendaProblema, icon: '⚙️' },
+                            { label: 'Nota do pedido', value: selectedVisitor.posVendaNotaPedido, icon: '📄' },
+                          ].map(f => (
+                            <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
+                              <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
+                              <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
+                                {f.value || 'Aguardando'}
+                              </p>
+                            </div>
+                          ))}
+                        </>
+                      )}
+
+                      {/* Pecas - campos especificos */}
+                      {(selectedVisitor.pipelineStage === 'pecas' || selectedVisitor.pecaDesejada) && (
+                        <>
+                          <div className="pt-1 pb-0.5">
+                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#8b5cf6' }}>
+                              🔧 Pecas
+                            </p>
+                          </div>
+                          {[
+                            { label: 'Peca desejada', value: selectedVisitor.pecaDesejada, icon: '🔧' },
+                            { label: 'E cliente Tecfag?', value: selectedVisitor.pecasECliente, icon: '✅' },
+                          ].map(f => (
+                            <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
+                              <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
+                              <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
+                                {f.value || 'Aguardando'}
+                              </p>
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </div>
-
-                    {/* Bloco 2: Campos específicos por fluxo */}
-                    {(selectedVisitor.pipelineStage === 'pos_venda' || selectedVisitor.posVendaProblema || selectedVisitor.posVendaNotaPedido) && (
-                      <>
-                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
-                          🎫 Pós Venda
-                        </p>
-                        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                          {[
-                            { label: "Problema relatado", value: selectedVisitor.posVendaProblema, icon: "⚙️" },
-                            { label: "Nota do pedido", value: selectedVisitor.posVendaNotaPedido, icon: "📄" },
-                          ].map(f => (
-                            <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-80'}`}>
-                              <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
-                              <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
-                                {f.value || "Aguardando preenchimento"}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-
-                    {(selectedVisitor.pipelineStage === 'pecas' || selectedVisitor.pecaDesejada) && (
-                      <>
-                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2 mt-2 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
-                          🔩 Peças
-                        </p>
-                        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                          {[
-                            { label: "Peça desejada", value: selectedVisitor.pecaDesejada, icon: "🔩" },
-                            { label: "É cliente Tecfag?", value: selectedVisitor.pecasECliente, icon: "✅" },
-                          ].map(f => (
-                            <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-80'}`}>
-                              <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
-                              <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
-                                {f.value || "Aguardando preenchimento"}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
                   </div>
 
                   {/* Col: Notas da IA */}
