@@ -147,7 +147,7 @@ export function registerLiveChatRoutes(app: any): void {
   router.get("/pipeline", requireAuth, async (_req: Request, res: Response) => {
     try {
       try { await lcStorage.migrateNullPipelineStages(); } catch {}
-      const stages = ['novo_atendimento', 'em_atendimento', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'];
+      const stages = ['novo_atendimento', 'em_atendimento', 'maquinas', 'pecas', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'];
       const result: Record<string, any[]> = {};
       for (const stage of stages) {
         result[stage] = await lcStorage.listVisitorsByPipeline(stage);
