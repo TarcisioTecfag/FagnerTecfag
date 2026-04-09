@@ -397,23 +397,32 @@ async function findOrCreateOrganization(
         }
       } catch {}
 
-      // 3. Cria empresa nova (CNPJ) — custom fields dinâmicos conforme screenshot
+      // 3. Cria empresa nova (CNPJ) — API v2 usa custom_fields como objeto simples
       const orgCustomFields = await buildOrgCustomFields(cnpjNum, cnpjData);
+
+      // custom_fields: { [campo_id_ou_slug]: valor } — único formato aceito pela API
+      const customFieldsObj: Record<string, any> = {};
+      for (const cf of orgCustomFields) {
+        customFieldsObj[cf.custom_field_id] = cf.value;
+      }
+      // Se não encontrou campos dinâmicos, usa slug genérico como fallback
+      if (Object.keys(customFieldsObj).length === 0) {
+        customFieldsObj['cnpj_cpf'] = cnpjNum;
+      }
+
       const orgPayload: Record<string, any> = {
         name: cnpjData.nome,
-        // Campos opcionais nativos (funciona quando aceito pela API)
-        ...(cnpjData.municipio ? { city:     cnpjData.municipio } : {}),
-        ...(cnpjData.uf        ? { state:    cnpjData.uf }        : {}),
-        ...(cnpjData.bairro    ? { district: cnpjData.bairro }    : {}),
+        custom_fields: customFieldsObj,
       };
 
-      // Custom fields dinâmicos (array conforme API v2)
-      if (orgCustomFields.length > 0) {
-        orgPayload.organization_custom_fields = orgCustomFields;
-      } else {
-        // Fallback legado por nome de slug
-        orgPayload.custom_fields = { cnpj: cnpjNum };
-      }
+      // address — objeto com sub-campos da Receita Federal
+      const addressObj: Record<string, any> = {};
+      if (cnpjData.municipio) addressObj.city      = cnpjData.municipio;
+      if (cnpjData.uf)        addressObj.state     = cnpjData.uf;
+      if (cnpjData.bairro)    addressObj.district  = cnpjData.bairro;
+      if (cnpjData.logradouro) addressObj.street   = cnpjData.logradouro;
+      if (cnpjData.cep)       addressObj.zip_code  = cnpjData.cep;
+      if (Object.keys(addressObj).length > 0) orgPayload.address = addressObj;
 
       const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
       console.log(`[RD CRM] Empresa criada (CNPJ): ${org.id} — ${cnpjData.nome}`);
@@ -437,12 +446,17 @@ async function findOrCreateOrganization(
 
       // Cria empresa com CPF no campo personalizado dinâmico
       const orgCustomFields = await buildOrgCustomFields(doc);
-      const orgPayload: Record<string, any> = { name: nomeEmpresa };
-      if (orgCustomFields.length > 0) {
-        orgPayload.organization_custom_fields = orgCustomFields;
-      } else {
-        orgPayload.custom_fields = { cpf: doc };
+      const customFieldsObj: Record<string, any> = {};
+      for (const cf of orgCustomFields) {
+        customFieldsObj[cf.custom_field_id] = cf.value;
       }
+      if (Object.keys(customFieldsObj).length === 0) {
+        customFieldsObj['cnpj_cpf'] = doc;
+      }
+      const orgPayload: Record<string, any> = {
+        name: nomeEmpresa,
+        custom_fields: customFieldsObj,
+      };
 
       const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
       console.log(`[RD CRM] Empresa criada (CPF): ${org.id} — ${nomeEmpresa}`);
@@ -584,6 +598,9 @@ async function createDeal(
 
   console.log(`[RD CRM] Criando deal "${titulo}": pipeline=${pipelineId} stage=${stageId}`);
 
+  // Monta payload APENAS com campos documentados na API v2
+  // Ref: POST /crm/v2/deals — campos aceitos: name, pipeline_id, stage_id, owner_id,
+  //      contact_ids, status, rating, source_id, campaign_id, organization_id, custom_fields
   const dealPayload: Record<string, any> = {
     name:        titulo,
     pipeline_id: pipelineId,
@@ -591,41 +608,32 @@ async function createDeal(
     owner_id:    ownerId,
     contact_ids: [contactId],
     status:      "ongoing",
-    rating:      1,  // Muito baixa intenção - FRIO (pós-venda)
-    deal_custom_fields: []
+    rating:      1,
   };
 
-  if (sourceId) {
-    // A API v2 usa 'deal_source_id' no corpo; tentamos tambem 'source_id' por compatibilidade
-    dealPayload.deal_source_id = sourceId;
-    dealPayload.source_id = sourceId;
-    console.log(`[RD CRM] Fonte vinculada: ${sourceId}`);
-  }
-  if (campaignId)     dealPayload.campaign_id     = campaignId;
-  
-  // Vincular empresa usando apenas organization_id (campo oficial API v2)
-  // NÃO usar company_id ou organization{} — são campos não suportados pela API v2
+  // source_id — campo correto conforme documentação (não é deal_source_id)
+  if (sourceId)      dealPayload.source_id      = sourceId;
+  if (campaignId)    dealPayload.campaign_id    = campaignId;
   if (organizationId) {
     dealPayload.organization_id = organizationId;
     console.log(`[RD CRM] Vinculando empresa ${organizationId} à negociação`);
   }
 
-  // Busca campos personalizados dinamicamente 
+  // custom_fields — objeto simples conforme API v2 (slug: valor)
   const cfs = await loadDealCustomFields();
-  const infoField = cfs.find((f: any) => f.name.includes("complementar"));
-  
-  dealPayload.custom_fields = {};
-  
-  if (infoField) {
-    dealPayload.deal_custom_fields.push({
-      custom_field_id: infoField.id,
-      value: infoCompl
-    });
-    // Injeção de redundância (API v2 mix)
-    dealPayload.custom_fields[infoField.id] = infoCompl;
+  const infoField = cfs.find((f: any) => f.name.includes("complementar") || f.slug.includes("complementar"));
+
+  const customFieldsObj: Record<string, any> = {};
+  if (infoField && infoField.id) {
+    // Usa o UUID do campo como chave (formato aceito pela API v2)
+    customFieldsObj[infoField.id] = infoCompl;
+    console.log(`[RD CRM] Info. complementares no campo ${infoField.id} (${infoField.name})`);
   } else {
-    dealPayload.custom_fields.informacoes_complementares = infoCompl;
+    // Fallback: slug genérico
+    customFieldsObj["informacoes_complementares"] = infoCompl;
+    console.warn(`[RD CRM] Campo 'complementar' não encontrado nos custom fields. Usando slug genérico.`);
   }
+  dealPayload.custom_fields = customFieldsObj;
 
   const deal = await rdRequest<{ id: string }>("POST", "/deals", dealPayload);
   console.log(`[RD CRM] Negociação criada: ${deal.id} — "${titulo}"`);
