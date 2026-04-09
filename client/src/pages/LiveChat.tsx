@@ -85,6 +85,11 @@ interface Visitor {
   // Peças específico
   pecaDesejada?: string;
   pecasECliente?: string;
+  // Máquinas específico
+  maqProdutoFabricado?: string;
+  maqVolumeProducao?: string;
+  maqQualificacaoSDR?: string;
+  maqClienteNovo?: string;
 }
 
 interface Chat {
@@ -672,13 +677,17 @@ function LiveChat() {
             break;
           }
           case "VISITOR_MAQUINAS_UPDATED": {
-            // Atualiza dados de máquinas no estado local
             const maqMapping: any = {
-              posVendaNome:     data.maquinasData?.nome,
-              posVendaTelefone: data.maquinasData?.telefone,
-              posVendaEmail:    data.maquinasData?.email,
-              posVendaCnpjCpf:  data.maquinasData?.cnpjCpf,
-              name:             data.maquinasData?.nome,
+              posVendaNome:       data.maquinasData?.nome,
+              posVendaTelefone:   data.maquinasData?.telefone,
+              posVendaEmail:      data.maquinasData?.email,
+              posVendaCnpjCpf:    data.maquinasData?.cnpjCpf,
+              name:               data.maquinasData?.nome,
+              // Campos específicos Máquinas
+              maqProdutoFabricado: data.maquinasData?.produtoFabricado,
+              maqVolumeProducao:   data.maquinasData?.volumeProducao,
+              maqQualificacaoSDR:  data.maquinasData?.qualificacaoSDR,
+              maqClienteNovo:      data.maquinasData?.clienteNovo,
             };
             if (selectedVisitor?.id === data.visitorId) {
               setSelectedVisitor(prev => prev ? { ...prev, ...maqMapping } : prev);
@@ -2332,6 +2341,26 @@ function LiveChat() {
                               <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
                                 {f.value || 'Aguardando'}
                               </p>
+                            </div>
+                          ))}
+                        </>
+                      )}
+
+                      {/* Maquinas - campos especificos */}
+                      {(selectedVisitor.pipelineStage === 'maquinas' || selectedVisitor.maqProdutoFabricado) && (
+                        <>
+                          <div className="pt-1 pb-0.5">
+                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#ea580c' }}>⚩️ Máquinas</p>
+                          </div>
+                          {[
+                            { label: 'Produto fabricado', value: selectedVisitor.maqProdutoFabricado, icon: '🏭' },
+                            { label: 'Volume de produção', value: selectedVisitor.maqVolumeProducao, icon: '📊' },
+                            { label: 'Qualificação SDR', value: selectedVisitor.maqQualificacaoSDR, icon: '⭐' },
+                            { label: 'Cliente novo?', value: selectedVisitor.maqClienteNovo, icon: '🆕' },
+                          ].map(f => (
+                            <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-orange-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
+                              <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: '#ea580c' }}>{f.icon} {f.label}</p>
+                              <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>{f.value || 'Aguardando'}</p>
                             </div>
                           ))}
                         </>

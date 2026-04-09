@@ -283,24 +283,43 @@ async function getOrCreateCampaignId(): Promise<string> {
 // Retorna lista com id, name e SLUG dos campos personalizados de Negociação
 async function loadDealCustomFields(): Promise<{ id: string; name: string; slug: string }[]> {
   if (_customFieldsCache && (_customFieldsCache as any[]).length > 0) return _customFieldsCache as any[];
-  try {
-    const data = await rdRequest<any>("GET", "/custom_fields?filter=entity:deal&page[size]=100");
-    // rdRequest faz unwrap automatico de { data: [...] } porem pode retornar diretamente
-    const list: any[] = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
-    if (list.length > 0) {
-      _customFieldsCache = list.map((f: any) => ({
-        id:   f.id   ?? '',
-        name: (f.name  || '').toLowerCase(),
-        slug: (f.slug  || '').toLowerCase(),
-      })) as any;
-      console.log(`[RD CRM] ${list.length} campos deal carregados:`,
-        (_customFieldsCache as any[]).map((f: any) => `${f.name}(slug:${f.slug})`).join(', '));
-      return _customFieldsCache as any[];
+
+  const tryLoad = async (url: string): Promise<any[]> => {
+    try {
+      const data = await rdRequest<any>("GET", url);
+      const list: any[] = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      return list;
+    } catch (e: any) {
+      console.warn(`[RD CRM] Falha ao chamar ${url}:`, e.message);
+      return [];
     }
-    console.warn('[RD CRM] /custom_fields?filter=entity:deal retornou vazio:', JSON.stringify(data).slice(0, 400));
-  } catch (e: any) {
-    console.warn('[RD CRM] Falha ao carregar custom fields:', e.message);
+  };
+
+  // Tenta primeiro com filtro entity:deal
+  let list = await tryLoad("/custom_fields?filter=entity:deal&page[size]=100");
+
+  // Fallback: sem filtro (retorna todos os campos e filtra client-side)
+  if (list.length === 0) {
+    console.warn('[RD CRM] entity:deal retornou vazio — tentando /custom_fields sem filtro');
+    const all = await tryLoad('/custom_fields?page[size]=200');
+    list = all.filter((f: any) =>
+      !f.entity || f.entity === 'deal' || f.entity?.includes?.('deal')
+    );
+    if (list.length === 0) list = all; // último recurso: usa todos
   }
+
+  if (list.length > 0) {
+    _customFieldsCache = list.map((f: any) => ({
+      id:   f.id   ?? '',
+      name: (f.name  || '').toLowerCase(),
+      slug: (f.slug  || '').toLowerCase(),
+    })) as any;
+    console.log(`[RD CRM] ${list.length} campos deal carregados:`,
+      (_customFieldsCache as any[]).map((f: any) => `${f.name}(id:${f.id})`).join(', '));
+    return _customFieldsCache as any[];
+  }
+
+  console.warn('[RD CRM] Nenhum custom field de deal encontrado — custom_fields será omitido dos deals');
   return [];
 }
 
@@ -876,16 +895,19 @@ export async function createMaquinasOS(
 
   console.log(`[RD CRM] Criando deal MÁQUINAS para visitante ${visitorId}...`);
 
-  // 1. Empresa
+  // 1. Empresa — cria para CNPJ ou CPF (sem depender de cnpjData)
   let organizationId: string | null = null;
   const docDigits = (maqData.cnpjCpf ?? "").replace(/\D/g, "");
   const isCnpj = docDigits.length === 14;
   const isCpf  = docDigits.length === 11;
 
-  if (isCnpj && maqData.cnpjData) {
-    organizationId = await findOrCreateOrganization(maqData as any);
-  } else if (isCpf) {
-    organizationId = await findOrCreateOrganization(maqData as any);
+  if (isCnpj || isCpf) {
+    try {
+      organizationId = await findOrCreateOrganization(maqData as any);
+      console.log(`[RD CRM] MÁQUINAS: empresa ${organizationId ? 'criada/encontrada: ' + organizationId : 'não criada'}`);
+    } catch (e: any) {
+      console.warn('[RD CRM] MÁQUINAS: falha ao criar empresa —', e.message);
+    }
   }
 
   // 2. Contato
