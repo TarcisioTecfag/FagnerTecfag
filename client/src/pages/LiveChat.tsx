@@ -1551,6 +1551,28 @@ function LiveChat() {
                     {chatMessages.map((msg) => {
                       const isVisitor = msg.sender === "visitor";
                       const isAI = msg.sender === "ai";
+                      const isSystem = msg.sender === "system";
+
+                      // Mensagem de sistema: label discreta centralizada
+                      if (isSystem) {
+                        return (
+                          <div key={msg.id} className="flex justify-center my-2">
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              background: 'rgba(0,0,0,0.05)',
+                              borderRadius: '20px',
+                              padding: '3px 14px',
+                              fontSize: '11px',
+                              color: '#888',
+                              fontWeight: 500,
+                            }}>
+                              {msg.content}
+                            </span>
+                          </div>
+                        );
+                      }
 
                       return (
                         <div

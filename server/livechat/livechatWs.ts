@@ -1577,11 +1577,26 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               content: `${operatorName} iniciou o atendimento`,
             }).catch(() => {});
 
-            // Notifica o widget do visitante com mensagem discreta
+            const systemMsg = `${operatorName} iniciou o atendimento`;
+
+            // Debug: verifica se o visitante está conectado
+            const visConns = visitorConnections.get(chatToTake.visitorId);
+            console.log(`[LiveChat] TAKE_OVER — visitorId=${chatToTake.visitorId} | conexões WS ativas: ${visConns?.size ?? 0}`);
+
+            // Notifica o widget do visitante (via conexão WS do visitante)
             sendToVisitor(chatToTake.visitorId, {
               type: "AGENT_JOINED",
               operatorName,
-              message: `${operatorName} iniciou o atendimento`,
+              message: systemMsg,
+              chatId: chatToTake.id,
+            });
+
+            // Fallback: também envia como CHAT_REPLY para garantir que apareça no widget
+            // (CHAT_REPLY é o mesmo canal que o Fagner usa para enviar respostas)
+            sendToVisitor(chatToTake.visitorId, {
+              type: "SYSTEM_MESSAGE",
+              chatId: chatToTake.id,
+              content: systemMsg,
             });
 
             broadcastToAgents({
@@ -1591,7 +1606,17 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               operatorName,
             });
 
-            console.log(`[LiveChat] Chat ${chatToTake.id} assumido por "${operatorName}"`);
+            // Notifica o painel do agente com a mensagem de sistema (para aparecer no histórico em tempo real)
+            broadcastToAgents({
+              type: "CHAT_MESSAGE",
+              chatId: chatToTake.id,
+              visitorId: chatToTake.visitorId,
+              sender: "system",
+              content: systemMsg,
+              timestamp: new Date().toISOString(),
+            });
+
+            console.log(`[LiveChat] Chat ${chatToTake.id} assumido por "${operatorName}" — AGENT_JOINED enviado ao visitante`);
             break;
           }
 
