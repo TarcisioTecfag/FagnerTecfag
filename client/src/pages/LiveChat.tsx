@@ -74,13 +74,17 @@ interface Visitor {
   lastSeenAt: string;
   name?: string;
   notes?: { date: string; stage: string; content: string }[];
-  // Dados Pós Venda (coletados pelo Fagner)
+  // Dados do cliente (base — usados em todos os fluxos)
   posVendaNome?: string;
   posVendaTelefone?: string;
   posVendaEmail?: string;
   posVendaCnpjCpf?: string;
+  // Pós Venda específico
   posVendaNotaPedido?: string;
   posVendaProblema?: string;
+  // Peças específico
+  pecaDesejada?: string;
+  pecasECliente?: string;
 }
 
 interface Chat {
@@ -1848,10 +1852,11 @@ function LiveChat() {
               {[
                 { stage: "novo_atendimento", label: "Novo Atendimento", color: "#22c55e", bgLight: "rgba(34,197,94,0.06)", borderColor: "rgba(34,197,94,0.3)" },
                 { stage: "em_atendimento", label: "Em Atendimento", color: "#3b82f6", bgLight: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.3)" },
-                { stage: "maquinas", label: "Maquinas", color: "#ea580c", bgLight: "rgba(234,88,12,0.06)", borderColor: "rgba(234,88,12,0.3)" },
-                { stage: "pos_venda", label: "Pos Venda", color: "#8b5cf6", bgLight: "rgba(139,92,246,0.06)", borderColor: "rgba(139,92,246,0.3)" },
+                { stage: "maquinas", label: "Máquinas", color: "#ea580c", bgLight: "rgba(234,88,12,0.06)", borderColor: "rgba(234,88,12,0.3)" },
+                { stage: "pecas", label: "Peças", color: "#d97706", bgLight: "rgba(217,119,6,0.06)", borderColor: "rgba(217,119,6,0.3)" },
+                { stage: "pos_venda", label: "Pós Venda", color: "#8b5cf6", bgLight: "rgba(139,92,246,0.06)", borderColor: "rgba(139,92,246,0.3)" },
                 { stage: "finalizado_com_venda", label: "Vendido", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
-                { stage: "sem_resposta", label: "Nao Respondeu", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
+                { stage: "sem_resposta", label: "Sem Resposta", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
                 { stage: "outros", label: "Outros", color: "#64748b", bgLight: "rgba(100,116,139,0.06)", borderColor: "rgba(100,116,139,0.3)" },
               ].map((col) => {
                 // Aplica o filtro de search no kanban: filtra por nome do visitante
@@ -2137,19 +2142,18 @@ function LiveChat() {
                     </div>
                   </div>
 
-                  {/* Col: Dados Pós Venda (Sempre visível) */}
+                  {/* Col: Sobre o Cliente + seção por fluxo */}
                   <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden" style={{ background: "rgba(139,92,246,0.03)" }}>
+                    {/* Bloco 1: Sobre o cliente (campos base universais) */}
                     <p className="text-[10px] font-bold uppercase tracking-wider mb-3 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
-                      🎫 Dados Pós Venda
+                      👤 Sobre o cliente
                     </p>
-                    <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                    <div className="flex-shrink-0 space-y-2 mb-4">
                       {[
                         { label: "Nome do comprador", value: selectedVisitor.posVendaNome, icon: "👤" },
                         { label: "Telefone (WhatsApp)", value: selectedVisitor.posVendaTelefone, icon: "📱" },
                         { label: "E-mail de suporte", value: selectedVisitor.posVendaEmail, icon: "✉️" },
                         { label: "CPF / CNPJ", value: selectedVisitor.posVendaCnpjCpf, icon: "🪪" },
-                        { label: "Nota do pedido", value: selectedVisitor.posVendaNotaPedido, icon: "📄" },
-                        { label: "Problema relatado", value: selectedVisitor.posVendaProblema, icon: "⚙️" },
                       ].map(f => (
                         <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-80'}`}>
                           <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
@@ -2159,6 +2163,49 @@ function LiveChat() {
                         </div>
                       ))}
                     </div>
+
+                    {/* Bloco 2: Campos específicos por fluxo */}
+                    {(selectedVisitor.pipelineStage === 'pos_venda' || selectedVisitor.posVendaProblema || selectedVisitor.posVendaNotaPedido) && (
+                      <>
+                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
+                          🎫 Pós Venda
+                        </p>
+                        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                          {[
+                            { label: "Problema relatado", value: selectedVisitor.posVendaProblema, icon: "⚙️" },
+                            { label: "Nota do pedido", value: selectedVisitor.posVendaNotaPedido, icon: "📄" },
+                          ].map(f => (
+                            <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-80'}`}>
+                              <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
+                              <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
+                                {f.value || "Aguardando preenchimento"}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {(selectedVisitor.pipelineStage === 'pecas' || selectedVisitor.pecaDesejada) && (
+                      <>
+                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2 mt-2 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
+                          🔩 Peças
+                        </p>
+                        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                          {[
+                            { label: "Peça desejada", value: selectedVisitor.pecaDesejada, icon: "🔩" },
+                            { label: "É cliente Tecfag?", value: selectedVisitor.pecasECliente, icon: "✅" },
+                          ].map(f => (
+                            <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-80'}`}>
+                              <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
+                              <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
+                                {f.value || "Aguardando preenchimento"}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Col: Notas da IA */}

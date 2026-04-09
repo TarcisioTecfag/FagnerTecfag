@@ -806,3 +806,195 @@ export function isRdCrmConfigured(): boolean {
     (process.env.RD_CRM_ACCESS_TOKEN || process.env.RD_CRM_REFRESH_TOKEN)
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PEÇAS — Criação de Deal no funil FUNIL PEÇAS 2.0
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface PecasData {
+  nome: string;
+  telefone: string;
+  email?: string | null;
+  cnpjCpf?: string | null;
+  cnpjData?: CnpjData | null;
+  pecaDesejada: string;                 // descrição da peça que o cliente quer
+  eCliente?: string | null;             // SIM / NAO / NÃO INFORMADO
+  conversationSummary?: string | null;
+  ownerId?: string | null;              // vem do painel Settings (rodízio)
+}
+
+// Cache de IDs do funil PEÇAS (buscados dinamicamente pelo nome)
+let _pecasPipelineId: string | null = null;
+let _pecasFirstStageId: string | null = null;
+
+/**
+ * Busca dinamicamente os IDs do funil "FUNIL PEÇAS 2.0" no RD CRM.
+ * Usa env vars como override, e recorre à busca por nome como fallback.
+ */
+async function getPecasPipelineIds(): Promise<{ pipelineId: string; stageId: string }> {
+  // Override via env vars (preferido)
+  const envPipeline = process.env.RD_CRM_PIPELINE_PECAS_ID;
+  const envStage    = process.env.RD_CRM_PIPELINE_PECAS_STAGE_ID;
+  if (envPipeline && envStage) {
+    console.log(`[RD CRM] PEÇAS: usando IDs de env vars (pipeline=${envPipeline}, stage=${envStage})`);
+    return { pipelineId: envPipeline, stageId: envStage };
+  }
+
+  // Cache em memória
+  if (_pecasPipelineId && _pecasFirstStageId) {
+    return { pipelineId: _pecasPipelineId, stageId: _pecasFirstStageId };
+  }
+
+  // Busca dinâmica pelo nome do funil
+  try {
+    const FUNIL_NAME = 'FUNIL PEÇAS 2.0';
+    const pipelines = await rdRequest<any>('GET', '/pipelines?page[size]=50');
+    const list: any[] = Array.isArray(pipelines) ? pipelines : (Array.isArray(pipelines?.data) ? pipelines.data : []);
+    console.log(`[RD CRM] Pipelines disponíveis:`, list.map((p: any) => `${p.name}(${p.id})`).join(' | '));
+
+    const found = list.find((p: any) =>
+      p.name?.toLowerCase().includes('peça') ||
+      p.name?.toLowerCase().includes('peca') ||
+      p.name === FUNIL_NAME
+    );
+
+    if (found) {
+      _pecasPipelineId = found.id;
+      // Pega o primeiro stage do pipeline
+      try {
+        const stages = await rdRequest<any>(`GET`, `/pipelines/${found.id}/stages?page[size]=50`);
+        const stageList: any[] = Array.isArray(stages) ? stages : (Array.isArray(stages?.data) ? stages.data : []);
+        if (stageList.length > 0) {
+          _pecasFirstStageId = stageList[0].id;
+          console.log(`[RD CRM] PEÇAS: pipeline="${found.name}" id=${found.id}, primeira stage="${stageList[0].name}" id=${stageList[0].id}`);
+        }
+      } catch (stageErr: any) {
+        console.warn('[RD CRM] PEÇAS: falha ao buscar stages do pipeline:', stageErr.message);
+      }
+    } else {
+      console.warn(`[RD CRM] PEÇAS: funil "${FUNIL_NAME}" não encontrado. Configure RD_CRM_PIPELINE_PECAS_ID.`);
+    }
+  } catch (e: any) {
+    console.warn('[RD CRM] PEÇAS: falha ao buscar pipelines:', e.message);
+  }
+
+  if (!_pecasPipelineId || !_pecasFirstStageId) {
+    throw new Error(
+      '[RD CRM] PEÇAS: não foi possível encontrar o funil "FUNIL PEÇAS 2.0". ' +
+      'Configure RD_CRM_PIPELINE_PECAS_ID e RD_CRM_PIPELINE_PECAS_STAGE_ID no Railway.'
+    );
+  }
+
+  return { pipelineId: _pecasPipelineId, stageId: _pecasFirstStageId };
+}
+
+/**
+ * Cria um deal no funil PEÇAS 2.0.
+ * Sem campos personalizados específicos além de "Informações Complementares".
+ * Título: "FAGNER | NOME DO CLIENTE"
+ */
+async function createPecasDeal(
+  pecasData: PecasData,
+  contactId: string,
+  organizationId?: string | null
+): Promise<string> {
+  const titulo = `FAGNER | ${pecasData.nome}`;
+
+  const infoCompl = pecasData.conversationSummary
+    ?? `Peça: ${pecasData.pecaDesejada}${pecasData.eCliente ? ` | É cliente: ${pecasData.eCliente}` : ''}`.trim();
+
+  const { pipelineId, stageId } = await getPecasPipelineIds();
+  const ownerId = (pecasData.ownerId || (process.env.RD_CRM_OWNER_PECAS_ID ?? '')).trim();
+
+  if (!ownerId) {
+    console.warn('[RD CRM] Owner ID para peças não configurado — deal sem responsável definido');
+  }
+
+  const [sourceId, campaignId] = await Promise.all([getOrCreateSourceId(), getOrCreateCampaignId()]);
+
+  console.log(`[RD CRM] Criando deal PEÇAS "${titulo}": pipeline=${pipelineId} stage=${stageId} owner=${ownerId}`);
+
+  const dealPayload: Record<string, any> = {
+    name:        titulo,
+    pipeline_id: pipelineId,
+    stage_id:    stageId,
+    contact_ids: [contactId],
+    status:      'ongoing',
+    rating:      2,   // interesse médio
+  };
+
+  if (ownerId)        dealPayload.owner_id       = ownerId;
+  if (sourceId)       dealPayload.deal_source_id = sourceId;
+  if (campaignId)     dealPayload.campaign_id    = campaignId;
+  if (organizationId) dealPayload.organization_id = organizationId;
+
+  // Campo "Informações Complementares" via slug (mesmo padrão do pos_venda/maquinas)
+  const cfs = await loadDealCustomFields() as any[];
+  const findF = (partial: string): any =>
+    cfs.find((f: any) =>
+      f.name.includes(partial.toLowerCase()) ||
+      f.slug.includes(partial.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''))
+    );
+  const fInfo = findF('complementar');
+
+  dealPayload.custom_fields = {};
+  if (fInfo?.slug) {
+    dealPayload.custom_fields[fInfo.slug] = infoCompl;
+  } else {
+    dealPayload.custom_fields.informacoes_complementares = infoCompl;
+  }
+
+  console.log('[RD CRM] PEÇAS custom_fields:', JSON.stringify(dealPayload.custom_fields));
+
+  const deal = await rdRequest<{ id: string }>('POST', '/deals', dealPayload);
+  console.log(`[RD CRM] Negociação PEÇAS criada: ${deal.id} — "${titulo}"`);
+  return deal.id;
+}
+
+/**
+ * Função principal: cria OS completa (Empresa → Contato → Deal → Anotação) no funil PEÇAS 2.0.
+ */
+export async function createPecasOS(
+  visitorId: string,
+  pecasData: PecasData,
+  relatorio: string
+): Promise<string> {
+  if (!process.env.RD_CRM_CLIENT_ID) {
+    throw new Error('[RD CRM] Variáveis de ambiente RD CRM não configuradas.');
+  }
+
+  const [visitor] = await db.select({ rdCrmDealId: lcVisitors.rdCrmDealId })
+    .from(lcVisitors)
+    .where(eq(lcVisitors.id, visitorId));
+
+  if (visitor?.rdCrmDealId) {
+    console.log(`[RD CRM] PEÇAS: visitante ${visitorId} já tem deal: ${visitor.rdCrmDealId}. Criando novo deal de peças.`);
+  }
+
+  console.log(`[RD CRM] Criando deal PEÇAS para visitante ${visitorId}...`);
+
+  // 1. Empresa (CNPJ ou CPF)
+  let organizationId: string | null = null;
+  const docDigits = (pecasData.cnpjCpf ?? '').replace(/\D/g, '');
+  if ((docDigits.length === 14 && pecasData.cnpjData) || docDigits.length === 11) {
+    organizationId = await findOrCreateOrganization(pecasData as any);
+  }
+
+  // 2. Contato
+  const contactId = await upsertContact(pecasData as any, organizationId);
+
+  // 3. Deal no funil PEÇAS 2.0
+  const dealId = await createPecasDeal(pecasData, contactId, organizationId);
+
+  // 4. Anotação com relatório completo
+  await createNote(dealId, relatorio);
+
+  // 5. Persistir dealId no visitante
+  await db.update(lcVisitors)
+    .set({ rdCrmDealId: dealId })
+    .where(eq(lcVisitors.id, visitorId));
+
+  console.log(`[RD CRM] ✅ Deal PEÇAS criado com sucesso! ID: ${dealId}`);
+  return dealId;
+}
+

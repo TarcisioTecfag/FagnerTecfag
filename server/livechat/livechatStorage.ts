@@ -250,7 +250,7 @@ export const lcStorage = {
   },
 
   async getPipelineStats(): Promise<Record<string, number>> {
-    const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'pos_venda', 'maquinas', 'sem_resposta', 'outros'];
+    const stages = ['novo_atendimento', 'em_atendimento', 'finalizado_com_venda', 'pos_venda', 'maquinas', 'pecas', 'sem_resposta', 'outros'];
     const result: Record<string, number> = {};
     for (const stage of stages) {
       const [row] = await db.select({ c: sql<number>`count(*)` })
@@ -268,6 +268,7 @@ export const lcStorage = {
     // ── FIX CRÍTICO: usar casting para timestamptz em vez de comparação TEXT ──
     // O campo lastSeenAt é TEXT e pode ter formato PG ('2026-04-08 12:00+00') ou JS ('2026-04-08T12:00Z').
     // Comparação TEXT pura quebra porque espaço (0x20) < T (0x54), causando match indevido.
+    // 'maquinas' e 'pecas' são estágios de qualificação — nunca devem ser resetados para sem_resposta.
     const result = await db.execute(sql`
       UPDATE lc_visitors
       SET "pipelineStage" = 'sem_resposta',
@@ -310,6 +311,32 @@ export const lcStorage = {
     if (data.nome) {
       await db.execute(sql.raw(
         `UPDATE lc_chats SET "visitorName" = '${data.nome.replace(/'/g, "\'\'")}' WHERE "visitorId" = '${id}' AND ("visitorName" IS NULL OR "visitorName" = '')`
+      ));
+    }
+  },
+
+  async updateVisitorPecasData(id: string, data: {
+    nome?: string | null;
+    telefone?: string | null;
+    email?: string | null;
+    cnpjCpf?: string | null;
+    pecaDesejada?: string | null;
+    pecasECliente?: string | null;
+  }): Promise<void> {
+    const setClauses: string[] = [];
+    if (data.nome         != null) setClauses.push(`"posVendaNome" = '${data.nome.replace(/'/g, "''")}', "name" = '${data.nome.replace(/'/g, "''")}'`);
+    if (data.telefone     != null) setClauses.push(`"posVendaTelefone" = '${data.telefone.replace(/'/g, "''")}'`);
+    if (data.email        != null) setClauses.push(`"posVendaEmail" = '${data.email.replace(/'/g, "''")}'`);
+    if (data.cnpjCpf      != null) setClauses.push(`"posVendaCnpjCpf" = '${data.cnpjCpf.replace(/'/g, "''")}'`);
+    if (data.pecaDesejada != null) setClauses.push(`"pecaDesejada" = '${data.pecaDesejada.replace(/'/g, "''")}'`);
+    if (data.pecasECliente!= null) setClauses.push(`"pecasECliente" = '${data.pecasECliente.replace(/'/g, "''")}'`);
+    if (setClauses.length === 0) return;
+    await db.execute(sql.raw(
+      `UPDATE lc_visitors SET ${setClauses.join(', ')}, "lastSeenAt" = '${new Date().toISOString()}' WHERE "id" = '${id}'`
+    ));
+    if (data.nome) {
+      await db.execute(sql.raw(
+        `UPDATE lc_chats SET "visitorName" = '${data.nome.replace(/'/g, "''") }' WHERE "visitorId" = '${id}' AND ("visitorName" IS NULL OR "visitorName" = '')`
       ));
     }
   },
@@ -526,7 +553,7 @@ export const lcStorage = {
       // IMPORTANTE: 'outros' é estágio PERMANENTE (ex: candidatos de emprego, perguntas diversas)
       // NÃO mover esses visitantes para sem_resposta
       const visitor = await this.getVisitorById(chat.visitorId);
-      const finalStages = ['pos_venda', 'finalizado_com_venda', 'sem_resposta', 'outros', 'maquinas'];
+      const finalStages = ['pos_venda', 'finalizado_com_venda', 'sem_resposta', 'outros', 'maquinas', 'pecas'];
       if (visitor && !finalStages.includes(visitor.pipelineStage ?? '')) {
         await this.updateVisitorPipeline(chat.visitorId, "sem_resposta");
       }
@@ -836,6 +863,8 @@ export async function ensureLiveChatSchema(): Promise<void> {
     ['lc_visitors', '"posVendaNotaPedido" TEXT'],
 
     ['lc_visitors', '"posVendaProblema" TEXT'],
+    ['lc_visitors', '"pecaDesejada" TEXT'],
+    ['lc_visitors', '"pecasECliente" TEXT'],
     ['lc_visitors', '"rdCrmDealId" TEXT'],
 
     // lc_chats

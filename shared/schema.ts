@@ -177,6 +177,9 @@ export const lcVisitors = pgTable("lc_visitors", {
   posVendaNotaPedido: text("posVendaNotaPedido"),
   posVendaProblema: text("posVendaProblema"),
   posVendaCnpjData: jsonb("posVendaCnpjData").$type<any>(),
+  // ── Dados de Peças (coletados pelo Fagner) ─────────────────────────────────
+  pecaDesejada: text("pecaDesejada"),         // Peça que o cliente quer comprar
+  pecasECliente: text("pecasECliente"),       // SIM / NAO / NÃO INFORMADO
   // ── Integração RD Station CRM ──────────────────────────────────────────────
   rdCrmDealId: text("rdCrmDealId"),   // ID da negociação criada no RD CRM (evita duplicatas)
 });

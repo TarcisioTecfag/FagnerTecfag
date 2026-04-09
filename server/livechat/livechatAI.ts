@@ -95,6 +95,21 @@ const POS_VENDA_PATTERNS: RegExp[] = [
   /assistência.{0,10}t[eé]cnica|suporte.{0,10}técnico/i,
 ];
 
+// Peças: detecção de intenção de compra de peças Tecfag
+// ATENÇÃO: NÃO entra em peças se for pós-venda (defeito, garantia)
+const PECAS_PATTERNS: RegExp[] = [
+  /pe[çc]a[s]?.{0,20}(comprar|adquirir|pedir|solicitar|preciso|quero|valor|pre[çc]o|custa)/i,
+  /comprar.{0,20}pe[çc]a[s]?/i,
+  /pe[çc]a[s]?.{0,15}(reposição|reposi[çc][aã]o|sobressalente|original)/i,
+  /pe[çc]a[s]?.{0,15}(m[aá]quina|equipamento)/i,
+  /reposição.{0,20}pe[çc]a/i,
+  /sobressalente/i,
+  /pe[çc]as?.{0,10}(avulsa|separada|original|kit)/i,
+  /quero.{0,10}(uma|umas|uma?).{0,10}pe[çc]a/i,
+  /preciso.{0,10}(de )?pe[çc]a[s]?/i,
+  /tem.{0,15}pe[çc]a[s]?/i,
+];
+
 // Máquinas: detecção de intenção de orçamento/cotação de máquinas grandes ou indisponíveis
 // ATENÇÃO: NÃO entra em máquinas se for pós-venda (defeito, garantia) — pos_venda tem prioridade
 const MAQUINAS_PATTERNS: RegExp[] = [
@@ -112,17 +127,21 @@ const MAQUINAS_PATTERNS: RegExp[] = [
   /fora.{0,10}(de estoque|do cat[aá]logo)/i,
 ];
 
-export function detectStageIntent(message: string): 'pos_venda' | 'outros' | 'maquinas' | null {
+export function detectStageIntent(message: string): 'pos_venda' | 'outros' | 'maquinas' | 'pecas' | null {
   const trimmed = message.trim();
   // Prioridade 1: Pós-venda (cliente já comprou, defeito, garantia, etc.)
   for (const p of POS_VENDA_PATTERNS) {
     if (p.test(trimmed)) return 'pos_venda';
   }
-  // Prioridade 2: Máquinas (orçamento, cotação, compra de máquina grande)
+  // Prioridade 2: Peças (compra de peças de reposição Tecfag)
+  for (const p of PECAS_PATTERNS) {
+    if (p.test(trimmed)) return 'pecas';
+  }
+  // Prioridade 3: Máquinas (orçamento, cotação, compra de máquina grande)
   for (const p of MAQUINAS_PATTERNS) {
     if (p.test(trimmed)) return 'maquinas';
   }
-  // Prioridade 3: Outros (currículo, localização, bate-papo)
+  // Prioridade 4: Outros (currículo, localização, bate-papo)
   for (const p of OUTROS_PATTERNS) {
     if (p.test(trimmed)) return 'outros';
   }
@@ -423,6 +442,73 @@ E adicione a tag SILENCIOSA com os dados coletados + campos interpretados por VO
   "4" = Curioso / Estudante (Não é empresa ou não tem intenção de compra)
   "5" = Fora de Portfólio (Quer algo que a Tecfag não fabrica)
   "6" = Sumiu / Sem contato (Não respondeu mais)
+
+### INTENÇÃO "PEÇAS" — Clientes que querem comprar peças de reposição
+Quando o cliente quiser comprar, cotar ou saber o valor de peças, componentes ou partes de máquinas Tecfag:
+
+**Você OBRIGATORIAMENTE deve:**
+1. Adicionar a tag SILENCIOSA [STAGE:pecas] na primeira resposta deste fluxo (NÃO é visível ao cliente)
+2. ANTES de fazer qualquer pergunta ao cliente, exibir o seguinte aviso OBRIGATÓRIO (apenas uma vez):
+
+"Atenção! As peças da Tecfag são fornecidas exclusivamente para clientes que já possuem uma máquina Tecfag. Não vendemos e não nos responsabilizamos por peças de terceiros ou de outras marcas. Se você possui uma máquina Tecfag, posso te ajudar!"
+
+3. Após o aviso, perguntar se o cliente possui uma máquina Tecfag. Se ele confirmar, iniciar o FLUXO DE COLETA abaixo.
+4. Se ele disser que NÃO tem máquina Tecfag, informe educadamente que não é possível fornecer peças e encerre gentilmente com [OUTCOME:NO_SALE] [SCORE:0].
+
+### FLUXO DE COLETA DE DADOS — PEÇAS
+**Colete 1 dado por vez, nesta ordem EXATA. Seja humano e natural:**
+
+> ⚠️ REGRA ANTI-REINÍCIO (CRÍTICA — NUNCA VIOLE):
+> Mesma regra dos outros fluxos: verifique o histórico antes de qualquer pergunta de coleta.
+> NUNCA peça um dado que já foi respondido nesta sessão.
+
+**Passo 0 — Peça desejada** (SEMPRE o primeiro passo — OBRIGATÓRIO):
+Após o cliente confirmar que tem máquina Tecfag, pergunte qual peça ou componente ele precisa:
+"Certo! Qual é a peça ou componente que você está precisando?"
+Armazene a resposta como "pecaDesejada".
+
+**Passo 1 — Nome** (só pergunte se já tem a peça mas ainda NÃO tem nome):
+"Para agilizar o atendimento, pode me informar seu nome completo?"
+
+**Passo 2 — Telefone** (só pergunte se já tem nome):
+"E qual é o número de telefone/WhatsApp para contato?"
+
+**Passo 3 — E-mail** (só pergunte se já tem telefone):
+"Qual o e-mail para receber o retorno da nossa equipe?"
+
+**Passo 4 — CNPJ/CPF** (ÚLTIMO — só pergunte quando já tiver todos os dados anteriores):
+"E o CNPJ ou CPF para o atendimento?"
+
+**SE O CLIENTE INFORMAR CNPJ:**
+Responda APENAS: "Um momento, vou verificar o CNPJ..." e adicione a tag:
+[CNPJ_CHECK:xxxxxxxxxxxxxx]
+(Mesmo processo dos outros fluxos — aguarde o [CNPJ_RESULT:{...}])
+
+**SE O CLIENTE INFORMAR CPF:** Prossiga para o OVERVIEW.
+
+**OVERVIEW — Confirmação dos dados:**
+"Perfeito! Vou confirmar seus dados:
+
+• Peça desejada: [peça]
+
+• Nome: [nome]
+
+• Telefone: [tel]
+
+• E-mail: [email]
+
+• CPF/CNPJ: [doc]
+
+Está tudo correto?"
+
+**ENCERRAMENTO DO FLUXO PEÇAS:**
+Depois que o cliente confirmar, diga:
+"Ótimo! Já registrei sua solicitação. Nossa equipe de peças entrará em contato em breve. Obrigado pelo interesse!"
+
+E adicione a tag SILENCIOSA com os dados coletados:
+[PECAS_DADOS:{"nome":"...","telefone":"...","email":"...","cnpjCpf":"...","pecaDesejada":"...","eCliente":"SIM"}]
+
+⚠️ CAMPO "eCliente": preencha com "SIM" se o cliente confirmou que possui máquina Tecfag, "NAO" se não possui, "NÃO INFORMADO" se não ficou claro.
 
 ## SEU PAPEL NO SITE
 Você está atendendo visitantes no site tecfag.com.br. Seu objetivo principal é CONVERTER VENDAS.
@@ -1530,3 +1616,111 @@ export async function generateMaquinasReport(input: MaquinasReportInput): Promis
 
   return lines.join("<br>");
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// generatePecasReport — Relatório de Triagem para funil PEÇAS 2.0
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface PecasReportInput {
+  nome: string;
+  telefone: string;
+  email?: string | null;
+  cnpjCpf?: string | null;
+  pecaDesejada: string;
+  eCliente?: string | null;
+  cnpjData?: any;
+  conversationSnippet?: string;
+  transcricaoCompleta?: string;
+}
+
+/**
+ * Gera relatório de triagem para ser usado como Anotação
+ * na Negociação do funil PEÇAS 2.0 no RD Station CRM.
+ */
+export async function generatePecasReport(input: PecasReportInput): Promise<string> {
+  const dataAtual = new Date().toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+
+  const lines: string[] = [];
+
+  lines.push(`──────────────────────────────────────────────────`);
+  lines.push(`RELATÓRIO DE TRIAGEM — FAGNER IA (PEÇAS)`);
+  lines.push(`──────────────────────────────────────────────────`);
+  lines.push(``);
+
+  lines.push(`IDENTIFICAÇÃO DO CLIENTE:`);
+  lines.push(`Nome: ${input.nome}`);
+  if (input.cnpjData?.nome && input.cnpjData.nome !== input.nome) {
+    lines.push(`Empresa: ${input.cnpjData.nome}`);
+  }
+  if (input.cnpjCpf) {
+    const isCnpj = input.cnpjCpf.replace(/\D/g, "").length === 14;
+    lines.push(`${isCnpj ? "CNPJ" : "CPF"}: ${input.cnpjCpf}`);
+  }
+  lines.push(`Telefone: ${input.telefone}`);
+  lines.push(`E-mail: ${input.email || 'Não informado'}`);
+  lines.push(``);
+  lines.push(`──────`);
+  lines.push(``);
+
+  lines.push(`PEÇA SOLICITADA:`);
+  lines.push(`Peça desejada: ${input.pecaDesejada}`);
+  lines.push(`É cliente Tecfag: ${input.eCliente || 'SIM'}`);
+  lines.push(``);
+  lines.push(`──────`);
+  lines.push(``);
+
+  if (input.cnpjData) {
+    const cd = input.cnpjData;
+    lines.push(`PERFIL DA EMPRESA (RECEITA FEDERAL)`);
+    lines.push(``);
+    lines.push(`Razão Social: ${cd.nome || "Não encontrado"}`);
+    if (cd.fantasia) lines.push(`Nome Fantasia: ${cd.fantasia}`);
+    lines.push(`CNPJ: ${cd.cnpj || input.cnpjCpf || "Não encontrado"}`);
+    if (cd.porte) lines.push(`Porte: ${cd.porte}`);
+    if (cd.naturezaJuridica) lines.push(`Tipo de Empresa: ${cd.naturezaJuridica}`);
+    if (cd.municipio) lines.push(`Cidade/UF: ${cd.municipio} - ${cd.uf || ""}`);
+    lines.push(``);
+    lines.push(`──────`);
+    lines.push(``);
+  }
+
+  lines.push(`PRÓXIMOS PASSOS:`);
+  lines.push(`Equipe de peças deve entrar em contato para verificar disponibilidade e orçamento.`);
+  lines.push(`Confirmar se a máquina do cliente é modelo Tecfag antes de enviar peça.`);
+  lines.push(``);
+
+  lines.push(`──────────────────────────────────────────────────`);
+  lines.push(``);
+  lines.push(`TRANSCRIÇÃO DO ATENDIMENTO`);
+  lines.push(`──────`);
+
+  if (input.transcricaoCompleta) {
+    const transcricaoLines = input.transcricaoCompleta.split('\n');
+    let lastPrefix = '';
+    for (const tl of transcricaoLines) {
+      const trimmed = tl.trim();
+      if (!trimmed) continue;
+      const currentPrefix = trimmed.startsWith('[CLIENTE]') ? '[CLIENTE]' : '[FAGNER]';
+      if (lastPrefix && currentPrefix !== lastPrefix) {
+        lines.push('');
+      }
+      lines.push(trimmed);
+      lastPrefix = currentPrefix;
+    }
+  } else {
+    lines.push(`(Nenhuma transcrição disponível)`);
+  }
+
+  lines.push(``);
+  lines.push(`──────────────────────────────────────────────────`);
+  lines.push(`DATA / HORA: ${dataAtual}`);
+  lines.push(`STATUS: Aguardando contato da equipe de peças`);
+  lines.push(`Gerado automaticamente pelo sistema Fagner IA — Tecfag`);
+  lines.push(`──────────────────────────────────────────────────`);
+
+  return lines.join("<br>");
+}
+
