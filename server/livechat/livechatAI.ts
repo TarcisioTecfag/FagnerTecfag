@@ -791,9 +791,8 @@ export async function processVisitorMessage(
       }
 
       if (messagesToLoad && messagesToLoad.length > 0) {
-        // Usa as últimas 30 mensagens (15 turnos) para não perder o histórico do fluxo de coleta do CRM.
-        // pastMessages vem ordenado por ASC (a mais recente no final). slice(-30) pega as últimas 30 na ordem correta!
-        const recent = messagesToLoad.slice(-30);
+        // Usa as últimas 20 mensagens (10 turnos) — reduzido de 30 para evitar overflow de tokens
+        const recent = messagesToLoad.slice(-20);
         for (const msg of recent) {
           if (msg.sender === "visitor") {
             // Filtrar mensagens do visitante que são apenas tags internas
@@ -1135,7 +1134,7 @@ export async function processVisitorMessage(
     // Update history (use clean reply in history too)
     session.history.push({ role: "user", parts: userParts });
     session.history.push({ role: "model", parts: [{ text: cleanReply }] });
-    if (session.history.length > 60) session.history = session.history.slice(-60);
+    if (session.history.length > 40) session.history = session.history.slice(-40);
 
     // Check if AI doesn't know — triggers human takeover
     // More strict patterns to avoid false positives
@@ -1164,6 +1163,7 @@ export async function processVisitorMessage(
     console.error(`[LiveChat AI][DIAG]   Erro: ${err.message}`);
     console.error(`[LiveChat AI][DIAG]   Stack: ${err.stack?.slice(0, 500)}`);
     console.error(`[LiveChat AI][DIAG]   Roles enviados: ${normalizedContents.map(c => c.role).join(' -> ')}`);
+    console.error(`[LiveChat AI][DIAG]   Número de turnos: ${normalizedContents.length}`);
     diagLog.push({ ts: new Date().toISOString(), chatId, roles: normalizedContents.map(c => c.role), firstRole: normalizedContents[0]?.role ?? 'EMPTY', userMsg: userMessage.slice(0, 100), ok: false, error: err.message?.slice(0, 500) });
     if (diagLog.length > 20) diagLog.shift();
     
@@ -1173,10 +1173,17 @@ export async function processVisitorMessage(
       time: new Date().toISOString()
     };
 
+    // IMPORTANTE: Mesmo em caso de erro, adicionar a mensagem do usuário ao histórico
+    // e um placeholder de model para manter a alternância correta. Sem isso, na próxima
+    // chamada teríamos user→user causando novo erro 400 do Gemini.
+    session.history.push({ role: "user", parts: userParts });
+    session.history.push({ role: "model", parts: [{ text: "(aguardando)" }] });
+    if (session.history.length > 40) session.history = session.history.slice(-40);
+
     // Retorna mensagem de fallback VISÍVEL ao cliente em vez de silêncio
     // Isso mantém a conversa viva e evita que o cliente ache que o Fagner travou
     // ATENÇÃO: Sem emoji na mensagem de fallback para evitar balão solo de emoji
-    const fallbackReply = "Hm, acho que não entendi. O que você precisa exatamente?";
+    const fallbackReply = "Me dá um segundo, preciso organizar meu raciocínio. Pode repetir sua última mensagem?";
     return {
       reply: fallbackReply,
       needsHuman: false,
