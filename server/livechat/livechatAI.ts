@@ -675,7 +675,7 @@ async function getRagDocuments(): Promise<{ id: string; name: string; content: s
 // Tentativas: 1ª imediata (25s timeout), 2ª após 5s (25s timeout)
 // TIMEOUT REDUZIDO: 120s era muito alto — causava "digitando para sempre" no chat
 
-const LIVECHAT_RETRY_DELAYS = [5_000];
+const LIVECHAT_RETRY_DELAYS = [3_000, 6_000, 10_000]; // 3 tentativas: 3s, 6s, 10s
 
 async function geminiRequest(url: string, payload: object): Promise<any> {
   let lastErr: any;
@@ -697,7 +697,17 @@ async function geminiRequest(url: string, payload: object): Promise<any> {
         console.error(`[LiveChat AI][GEMINI ERROR] URL usada: ${url.replace(/key=([^&]+)/, 'key=HIDDEN')}`);
         console.error(`[LiveChat AI][GEMINI ERROR] Payload preview: ${JSON.stringify(payload).slice(0, 800)}`);
         const err = new Error(`Gemini HTTP ${res.status}: ${body.slice(0, 500)}`);
-        // Erros 4xx não devem ser tentados novamente
+        // 429 (rate limit) é retryable — espera e tenta de novo
+        if (res.status === 429) {
+          if (attempt < LIVECHAT_RETRY_DELAYS.length) {
+            console.warn(`[LiveChat AI] Rate limit 429 — retry ${attempt + 1} em ${LIVECHAT_RETRY_DELAYS[attempt] / 1000}s...`);
+            await new Promise((r) => setTimeout(r, LIVECHAT_RETRY_DELAYS[attempt]));
+            lastErr = err;
+            continue;
+          }
+          throw err;
+        }
+        // Outros 4xx (400, 401, 403...) não devem ser tentados novamente
         if (/Gemini HTTP 4\d\d/.test(err.message)) throw err;
         if (attempt < LIVECHAT_RETRY_DELAYS.length) {
           console.warn(`[LiveChat AI] Tentativa ${attempt + 1} falhou (${res.status}), retry em ${LIVECHAT_RETRY_DELAYS[attempt] / 1000}s...`);
