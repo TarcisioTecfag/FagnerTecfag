@@ -203,31 +203,44 @@ export function registerLiveChatRoutes(app: any): void {
       const at = await getRdValidToken();
       const allUsers: any[] = [];
       let page = 1;
-      const perPage = 100;
 
-      // Busca com paginação — RD CRM limita a 100 por página
-      while (page <= 5) { // max 500 usuários
-        const r = await fetch(`https://api.rd.services/crm/v2/users?page=${page}&per_page=${perPage}`, {
+      // Busca com paginação — formato correto: page[number] e page[size]
+      while (page <= 10) {
+        const url = `https://api.rd.services/crm/v2/users?page[number]=${page}&page[size]=100&filter=is:active`;
+        const r = await fetch(url, {
           headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" }
         });
+
         if (!r.ok) {
           const errBody = await r.text();
-          console.warn(`[LiveChat] rd-users page ${page} error: ${r.status} ${errBody.slice(0, 200)}`);
+          console.error(`[LiveChat] rd-users page ${page} HTTP ${r.status}: ${errBody.slice(0, 500)}`);
           break;
         }
-        const data = await r.json();
-        const pageUsers = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+
+        const json = await r.json();
+        // API retorna { data: [...], links: {...} }
+        const pageUsers: any[] = Array.isArray(json?.data) ? json.data
+                                : Array.isArray(json)       ? json
+                                : [];
+
+        console.log(`[LiveChat] rd-users page ${page}: ${pageUsers.length} usuários`);
         allUsers.push(...pageUsers);
-        // Para se vieram menos que perPage (última página)
-        if (pageUsers.length < perPage) break;
+
+        // Para quando vier menos de 100 (última página) ou não vier 'next' nos links
+        if (pageUsers.length < 100 || !json?.links?.next) break;
         page++;
       }
 
-      const normalized = allUsers.map((u: any) => ({ id: u.id, name: u.name, email: u.email }));
-      console.log(`[LiveChat] rd-users: retornando ${normalized.length} usuários`);
+      const normalized = allUsers.map((u: any) => ({
+        id:    u.id    ?? "",
+        name:  u.name  ?? "",
+        email: u.email ?? ""
+      })).filter(u => u.name); // remove registros sem nome
+
+      console.log(`[LiveChat] rd-users: retornando ${normalized.length} usuários no total`);
       return res.json(normalized);
     } catch (err: any) {
-      console.error("[LiveChat] GET /rd-users error:", err?.message);
+      console.error("[LiveChat] GET /rd-users ERRO:", err?.message, err?.stack?.slice(0, 300));
       return res.json([]);
     }
   });
