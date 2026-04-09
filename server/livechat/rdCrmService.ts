@@ -225,45 +225,37 @@ async function rdRequest<T = any>(
 
 // ─── Source / Campaign: busca por nome, cria se não existir ──────────────────
 async function getOrCreateSourceId(): Promise<string> {
-  // Não cacheia string vazia — força nova tentativa se falhou antes
   if (_sourceId) return _sourceId;
   const name = "Referência | tecfag.com.br";
+
+  // PASSO 1: Busca listagem completa (sem filtro RDQL que pode falhar com 400/422)
   try {
-    // Busca por nome direto via filter RDQL
-    const data = await rdRequest<any>(
-      "GET", `/sources?filter=name:${encodeURIComponent(name)}&page[size]=50`
-    );
-    const list: any[] = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
-    console.log(`[RD CRM] GET /sources retornou ${list.length} resultado(s)`);
+    const allData = await rdRequest<any>("GET", "/sources?page[size]=100");
+    // rdRequest já faz json.data, então allData é o array diretamente
+    const list: any[] = Array.isArray(allData) ? allData : [];
+    console.log(`[RD CRM] GET /sources: ${list.length} fontes carregadas`);
 
     const found = list.find((s: any) => s.name === name);
     if (found) {
       _sourceId = found.id;
-      console.log(`[RD CRM] Fonte encontrada: ${_sourceId} ("${name}")`);
+      console.log(`[RD CRM] ✅ Fonte encontrada: ${_sourceId} ("${name}")`);
       return _sourceId!;
     }
+    console.log(`[RD CRM] Fonte "${name}" não encontrada nas ${list.length} fontes. Criando...`);
+  } catch (listErr: any) {
+    console.error("[RD CRM] ❌ Falha ao listar fontes:", listErr.message);
+  }
 
-    // Não encontrou — busca todas as fontes (fallback)
-    const allData = await rdRequest<any>("GET", `/sources?page[size]=100`);
-    const allList: any[] = Array.isArray(allData) ? allData : (Array.isArray(allData?.data) ? allData.data : []);
-    console.log(`[RD CRM] Todas as fontes (${allList.length}):`, allList.map((s: any) => s.name).join(', '));
-
-    const foundInAll = allList.find((s: any) => s.name === name);
-    if (foundInAll) {
-      _sourceId = foundInAll.id;
-      console.log(`[RD CRM] Fonte encontrada na listagem completa: ${_sourceId}`);
-      return _sourceId!;
-    }
-
-    // Criar fonte nova
-    console.log(`[RD CRM] Fonte "${name}" não encontrada. Criando...`);
+  // PASSO 2: Cria a fonte
+  try {
     const created = await rdRequest<{ id: string }>("POST", "/sources", { name });
     _sourceId = created.id;
     console.log(`[RD CRM] ✅ Fonte criada: ${_sourceId} ("${name}")`);
-  } catch (e: any) {
-    console.error("[RD CRM] ❌ FALHA ao obter/criar source_id:", e.message);
-    // Não cacheia o erro para permitir nova tentativa
+  } catch (createErr: any) {
+    console.error("[RD CRM] ❌ Falha ao criar fonte:", createErr.message);
+    // Sem cachear erro — próxima chamada tenta de novo
   }
+
   return _sourceId ?? "";
 }
 
@@ -1084,10 +1076,14 @@ export async function createPecasOS(
 
   console.log(`[RD CRM] Criando deal PEÇAS para visitante ${visitorId}...`);
 
-  // 1. Empresa (CNPJ ou CPF)
+  // 1. Empresa (CNPJ ou CPF) — mesma lógica do createMaquinasOS
   let organizationId: string | null = null;
   const docDigits = (pecasData.cnpjCpf ?? '').replace(/\D/g, '');
-  if ((docDigits.length === 14 && pecasData.cnpjData) || docDigits.length === 11) {
+  if (docDigits.length === 14) {
+    // CNPJ: cria empresa mesmo sem cnpjData (fallback de nome mínimo)
+    organizationId = await findOrCreateOrganization(pecasData as any);
+  } else if (docDigits.length === 11) {
+    // CPF: empresa com nome do cliente
     organizationId = await findOrCreateOrganization(pecasData as any);
   }
 
