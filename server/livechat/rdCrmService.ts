@@ -225,24 +225,46 @@ async function rdRequest<T = any>(
 
 // ─── Source / Campaign: busca por nome, cria se não existir ──────────────────
 async function getOrCreateSourceId(): Promise<string> {
+  // Não cacheia string vazia — força nova tentativa se falhou antes
   if (_sourceId) return _sourceId;
   const name = "Referência | tecfag.com.br";
   try {
-    // Busca nas 3 páginas
-    for (let page = 1; page <= 3; page++) {
-      const data = await rdRequest<any[]>("GET", `/sources?page[number]=${page}&page[size]=50`);
-      const found = (Array.isArray(data) ? data : []).find((s: any) => s.name === name);
-      if (found) { _sourceId = found.id; return _sourceId!; }
+    // Busca por nome direto via filter RDQL
+    const data = await rdRequest<any>(
+      "GET", `/sources?filter=name:${encodeURIComponent(name)}&page[size]=50`
+    );
+    const list: any[] = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+    console.log(`[RD CRM] GET /sources retornou ${list.length} resultado(s)`);
+
+    const found = list.find((s: any) => s.name === name);
+    if (found) {
+      _sourceId = found.id;
+      console.log(`[RD CRM] Fonte encontrada: ${_sourceId} ("${name}")`);
+      return _sourceId!;
     }
-    // Não encontrou — cria
+
+    // Não encontrou — busca todas as fontes (fallback)
+    const allData = await rdRequest<any>("GET", `/sources?page[size]=100`);
+    const allList: any[] = Array.isArray(allData) ? allData : (Array.isArray(allData?.data) ? allData.data : []);
+    console.log(`[RD CRM] Todas as fontes (${allList.length}):`, allList.map((s: any) => s.name).join(', '));
+
+    const foundInAll = allList.find((s: any) => s.name === name);
+    if (foundInAll) {
+      _sourceId = foundInAll.id;
+      console.log(`[RD CRM] Fonte encontrada na listagem completa: ${_sourceId}`);
+      return _sourceId!;
+    }
+
+    // Criar fonte nova
+    console.log(`[RD CRM] Fonte "${name}" não encontrada. Criando...`);
     const created = await rdRequest<{ id: string }>("POST", "/sources", { name });
     _sourceId = created.id;
-    console.log(`[RD CRM] Fonte criada: ${_sourceId}`);
+    console.log(`[RD CRM] ✅ Fonte criada: ${_sourceId} ("${name}")`);
   } catch (e: any) {
-    console.warn("[RD CRM] Não foi possível obter source_id:", e.message);
-    _sourceId = "";
+    console.error("[RD CRM] ❌ FALHA ao obter/criar source_id:", e.message);
+    // Não cacheia o erro para permitir nova tentativa
   }
-  return _sourceId!;
+  return _sourceId ?? "";
 }
 
 async function getOrCreateCampaignId(): Promise<string> {
@@ -417,16 +439,26 @@ async function findOrCreateOrganization(
 
       // address — objeto com sub-campos da Receita Federal
       const addressObj: Record<string, any> = {};
-      if (cnpjData.municipio) addressObj.city      = cnpjData.municipio;
-      if (cnpjData.uf)        addressObj.state     = cnpjData.uf;
-      if (cnpjData.bairro)    addressObj.district  = cnpjData.bairro;
-      if (cnpjData.logradouro) addressObj.street   = cnpjData.logradouro;
-      if (cnpjData.cep)       addressObj.zip_code  = cnpjData.cep;
+      if (cnpjData.municipio)  addressObj.city      = cnpjData.municipio;
+      if (cnpjData.uf)         addressObj.state     = cnpjData.uf;
+      if (cnpjData.bairro)     addressObj.district  = cnpjData.bairro;
+      if (cnpjData.logradouro) addressObj.street    = cnpjData.logradouro;
+      if (cnpjData.cep)        addressObj.zip_code  = cnpjData.cep;
       if (Object.keys(addressObj).length > 0) orgPayload.address = addressObj;
 
-      const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
-      console.log(`[RD CRM] Empresa criada (CNPJ): ${org.id} — ${cnpjData.nome}`);
-      return org.id;
+      console.log(`[RD CRM] Criando empresa CNPJ payload:`, JSON.stringify(orgPayload).slice(0, 500));
+      try {
+        const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
+        console.log(`[RD CRM] ✅ Empresa criada (CNPJ): ${org.id} — ${cnpjData.nome}`);
+        return org.id;
+      } catch (orgErr: any) {
+        console.error(`[RD CRM] ❌ Falha ao criar empresa com custom_fields:`, orgErr.message);
+        // Tenta criar SEM custom_fields se falhar (empresa mínima)
+        console.log(`[RD CRM] Tentando criar empresa sem custom_fields...`);
+        const orgMin = await rdRequest<{ id: string }>("POST", "/organizations", { name: cnpjData.nome });
+        console.log(`[RD CRM] ✅ Empresa mínima criada: ${orgMin.id} — ${cnpjData.nome}`);
+        return orgMin.id;
+      }
 
     } else if (isCpf) {
       // Para CPF: empresa com nome do cliente

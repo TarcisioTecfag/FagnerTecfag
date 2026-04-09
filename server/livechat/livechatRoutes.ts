@@ -197,6 +197,45 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
+  // ── Diagnóstico RD CRM — endpoint temporário para debug de fonte/empresa ────
+  router.get("/rd-debug", requireAuth, async (_req: Request, res: Response) => {
+    const result: Record<string, any> = {};
+    try {
+      const at = await getRdValidToken();
+      result.token_ok = !!at;
+      result.token_preview = at?.slice(0, 20) + "...";
+
+      // Testar GET /sources
+      const srcRes = await fetch("https://api.rd.services/crm/v2/sources?page[size]=50", {
+        headers: { Authorization: `Bearer ${at}` }
+      });
+      const srcJson = await srcRes.json();
+      result.sources_status = srcRes.status;
+      result.sources_count = srcJson?.data?.length ?? (Array.isArray(srcJson) ? srcJson.length : "não é array");
+      result.sources_names = (srcJson?.data ?? srcJson ?? []).slice(0, 10).map((s: any) => s.name);
+
+      // Testar GET /organizations (primeiros 5)
+      const orgRes = await fetch("https://api.rd.services/crm/v2/organizations?page[size]=5", {
+        headers: { Authorization: `Bearer ${at}` }
+      });
+      result.organizations_status = orgRes.status;
+      const orgJson = await orgRes.json();
+      result.organizations_sample = (orgJson?.data ?? orgJson ?? []).slice(0, 3).map((o: any) => ({ id: o.id, name: o.name }));
+
+      // Testar GET /custom_fields org
+      const cfRes = await fetch("https://api.rd.services/crm/v2/custom_fields?filter=entity:organization&page[size]=50", {
+        headers: { Authorization: `Bearer ${at}` }
+      });
+      result.org_custom_fields_status = cfRes.status;
+      const cfJson = await cfRes.json();
+      result.org_custom_fields = (cfJson?.data ?? cfJson ?? []).map((f: any) => ({ id: f.id, name: f.name, slug: f.slug }));
+
+    } catch (err: any) {
+      result.error = err?.message;
+    }
+    return res.json(result);
+  });
+
   // ── Usuários do RD CRM (para dropdown de operadores nas configurações) ─────
   router.get("/rd-users", requireAuth, async (_req: Request, res: Response) => {
     try {
