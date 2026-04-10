@@ -430,46 +430,17 @@ async function findOrCreateOrganization(
         }
       } catch {}
 
-      // 3. Cria empresa nova (CNPJ) — API v2 usa custom_fields como objeto simples
-      const orgCustomFields = await buildOrgCustomFields(cnpjNum, cnpjData);
+      // 3. Cria empresa — payload MÍNIMO para garantir criação sem 422
+      // custom_fields e address foram removidos pois causavam 422 quando
+      // os IDs dos campos não batiam com o schema do CRM do cliente.
+      // O CNPJ/dados completos ficam registrados na anotação do deal.
+      const orgPayload: Record<string, any> = { name: cnpjData.nome };
+      if (cnpjData.telefone1) orgPayload.phone = cnpjData.telefone1;
 
-      // custom_fields: { [campo_id_ou_slug]: valor } — único formato aceito pela API
-      const customFieldsObj: Record<string, any> = {};
-      for (const cf of orgCustomFields) {
-        customFieldsObj[cf.custom_field_id] = cf.value;
-      }
-      // Se não encontrou campos dinâmicos, usa slug genérico como fallback
-      if (Object.keys(customFieldsObj).length === 0) {
-        customFieldsObj['cnpj_cpf'] = cnpjNum;
-      }
-
-      const orgPayload: Record<string, any> = {
-        name: cnpjData.nome,
-        custom_fields: customFieldsObj,
-      };
-
-      // address — objeto com sub-campos da Receita Federal
-      const addressObj: Record<string, any> = {};
-      if (cnpjData.municipio)  addressObj.city      = cnpjData.municipio;
-      if (cnpjData.uf)         addressObj.state     = cnpjData.uf;
-      if (cnpjData.bairro)     addressObj.district  = cnpjData.bairro;
-      if (cnpjData.logradouro) addressObj.street    = cnpjData.logradouro;
-      if (cnpjData.cep)        addressObj.zip_code  = cnpjData.cep;
-      if (Object.keys(addressObj).length > 0) orgPayload.address = addressObj;
-
-      console.log(`[RD CRM] Criando empresa CNPJ payload:`, JSON.stringify(orgPayload).slice(0, 500));
-      try {
-        const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
-        console.log(`[RD CRM] ✅ Empresa criada (CNPJ): ${org.id} — ${cnpjData.nome}`);
-        return org.id;
-      } catch (orgErr: any) {
-        console.error(`[RD CRM] ❌ Falha ao criar empresa com custom_fields:`, orgErr.message);
-        // Tenta criar SEM custom_fields se falhar (empresa mínima)
-        console.log(`[RD CRM] Tentando criar empresa sem custom_fields...`);
-        const orgMin = await rdRequest<{ id: string }>("POST", "/organizations", { name: cnpjData.nome });
-        console.log(`[RD CRM] ✅ Empresa mínima criada: ${orgMin.id} — ${cnpjData.nome}`);
-        return orgMin.id;
-      }
+      console.log(`[RD CRM] Criando empresa: "${cnpjData.nome}" (CNPJ: ${cnpjNum})`);
+      const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
+      console.log(`[RD CRM] ✅ Empresa criada: ${org.id} — "${cnpjData.nome}"`);
+      return org.id;
 
     } else if (isCnpj && !posVenda.cnpjData) {
       // ── CAUSA RAIZ CORRIGIDA ─────────────────────────────────────────────────
