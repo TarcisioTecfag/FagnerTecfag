@@ -649,10 +649,25 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               // NÃO mostrar typing ainda — só após os 15s de silêncio do cliente
               const currentVisitorId = visitorId as string;
 
-              // Timer de 15s: só processa quando o cliente pára de digitar por 15 segundos
+              // Timer de 8s: só processa quando o cliente pára de digitar por 8 segundos
+              // (era 15s — reduzido para melhor responsividade, especialmente em fluxos de dados)
               buffer.timer = setTimeout(async () => {
-                const combinedContent = chatMessageBuffers.get(chat.id)?.content.join("\n\n") || data.content;
+                const bufferedContents = chatMessageBuffers.get(chat.id)?.content ?? [data.content];
                 chatMessageBuffers.delete(chat.id);
+
+                // Smart deduplication: se a última mensagem do buffer contém um dado estruturado
+                // (CNPJ, CPF, CEP, email, telefone), usa APENAS ela — evita confundir o Gemini
+                // com repetições do mesmo dado + perguntas avulsas concatenadas.
+                const lastMsg = bufferedContents[bufferedContents.length - 1] ?? data.content;
+                const isStructuredData = /\d{2}\.\d{3}\.\d{3}[\/\\]\d{4}-\d{2}/.test(lastMsg)  // CNPJ
+                  || /\d{3}\.\d{3}\.\d{3}-\d{2}/.test(lastMsg)                                  // CPF
+                  || /\d{5}-?\d{3}/.test(lastMsg)                                               // CEP
+                  || /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/.test(lastMsg);         // Email
+
+                const combinedContent = isStructuredData
+                  ? lastMsg  // Usa só o dado estruturado — descarta conteúdo anterior do buffer
+                  : bufferedContents.join("\n\n");  // Concatena normalmente para mensagens comuns
+
 
                 // Melhoria 3: verifica ruído ANTES de chamar IA — resposta instantânea, sem tokens
                 const noiseCheck = isObviousNoise(combinedContent);
