@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Send, Bot, User, Archive, Trash2, ExternalLink, Wifi, WifiOff, Volume2, VolumeX, PauseCircle } from "lucide-react";
+import { Send, Bot, User, Archive, Trash2, ExternalLink, Wifi, WifiOff, Volume2, VolumeX, PauseCircle, Code } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -71,6 +71,7 @@ export default function ChatArea({
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isCompleted = activeSession?.status === "COMPLETED";
+  const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -183,6 +184,9 @@ export default function ChatArea({
         ) : (
           messages.map((msg) => {
             const isUser = msg.sender === "user";
+            const isLog = !isUser && /^\[[A-Z_]+(?:[:\]])/s.test(msg.content.trim());
+            const isExpanded = expandedLogs[msg.id] || false;
+
             return (
               <motion.div
                 key={msg.id}
@@ -224,6 +228,7 @@ export default function ChatArea({
                             color: "#ffffff",
                             borderRadius: "1.15rem 1.15rem 0.2rem 1.15rem",
                             boxShadow: "0 2px 10px rgba(220,38,38,0.25)",
+                            wordBreak: "break-word",
                           }
                         : {
                             background: "#ffffff",
@@ -231,10 +236,29 @@ export default function ChatArea({
                             borderRadius: "1.15rem 1.15rem 1.15rem 0.2rem",
                             border: "1px solid #e4e4e7",
                             boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                            wordBreak: "break-word",
                           }
                     }
                   >
-                    {msg.content}
+                    {isLog ? (
+                      <div className="flex flex-col gap-1.5 min-w-[180px]">
+                        <button 
+                          onClick={() => setExpandedLogs(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
+                          className="flex items-center gap-1.5 text-xs font-semibold opacity-70 hover:opacity-100 transition-opacity"
+                          style={{ color: "#dc2626" }}
+                        >
+                          <Code size={14} /> 
+                          {isExpanded ? "Ocultar Log" : "Log Oculto (Sistema)"}
+                        </button>
+                        {isExpanded && (
+                          <div className="mt-2 p-2 bg-zinc-50 border border-zinc-200 rounded text-[11px] font-mono text-zinc-600 max-h-64 overflow-y-auto block whitespace-pre-wrap">
+                            {msg.content}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="whitespace-pre-wrap">{msg.content}</span>
+                    )}
                   </div>
                   <span
                     className="text-[9px] mt-1 px-1 font-medium"
