@@ -471,9 +471,33 @@ async function findOrCreateOrganization(
         return orgMin.id;
       }
 
+    } else if (isCnpj && !posVenda.cnpjData) {
+      // ── CAUSA RAIZ CORRIGIDA ─────────────────────────────────────────────────
+      // CNPJ foi informado mas cnpjData=null (Receita não foi consultada ou cliente
+      // não confirmou). O código anterior saía com return null aqui, fazendo a
+      // empresa nunca ser criada/vinculada mesmo com CNPJ válido.
+      const cnpjNum     = doc;
+      const nomeEmpresa = posVenda.nome;
+      console.log(`[RD CRM] CNPJ="${cnpjNum}" presente mas cnpjData=null — empresa mínima: "${nomeEmpresa}"`);
+
+      // Busca pelo nome para evitar duplicata
+      try {
+        const byName = await rdRequest<any[]>("GET", `/organizations?filter=name:${encodeURIComponent(nomeEmpresa)}`);
+        if (Array.isArray(byName) && byName.length > 0) {
+          console.log(`[RD CRM] ✅ Empresa existente (nome): ${byName[0].id}`);
+          return byName[0].id;
+        }
+      } catch {}
+
+      // Cria empresa mínima sem custom_fields (evita 422 por campos inválidos)
+      const org = await rdRequest<{ id: string }>("POST", "/organizations", { name: nomeEmpresa });
+      console.log(`[RD CRM] ✅ Empresa criada (CNPJ sem Receita): ${org.id} — "${nomeEmpresa}"`);
+      return org.id;
+
     } else if (isCpf) {
       // Para CPF: empresa com nome do cliente
       const nomeEmpresa = posVenda.nome;
+
 
       // Tenta buscar pelo nome do cliente
       try {
