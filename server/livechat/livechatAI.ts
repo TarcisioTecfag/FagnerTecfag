@@ -426,6 +426,10 @@ Responda APENAS: "Um momento, vou verificar o CNPJ..." e adicione a tag:
 
 • Máquina: [máquina desejada]
 
+• Produto fabricado: [produtoFabricado]
+
+• Volume de produção: [volumeProducao]
+
 • Nome: [nome]
 
 • Telefone: [tel]
@@ -443,13 +447,19 @@ Depois que o cliente confirmar, diga:
 E adicione a tag SILENCIOSA com os dados coletados + campos interpretados por VOCÊ:
 [MAQUINAS_DADOS:{"nome":"...","telefone":"...","email":"...","cnpjCpf":"...","maquinaDesejada":"...","detalhes":"...","produtoFabricado":"...","volumeProducao":"...","clienteNovo":"...","qualificacaoSDR":"..."}]
 
-⚠️ CAMPOS DO [MAQUINAS_DADOS] — USE TUDO QUE FOI COLETADO:
-- "maquinaDesejada": Modelo/nome da máquina que o cliente quer (ex: "B200", "Envasadora AR35").
-- "detalhes": Informações adicionais sobre a necessidade (ex: "precisa envasar sachês de 50g").
-- "produtoFabricado": O que o cliente fabrica ou vai produzir — colete no Passo 0B. Ex: "sachês de tempero", "cápsulas de suplemento", "biscoitos embalados". NUNCA deixe vazio se o cliente respondeu.
-- "volumeProducao": Nível de produção — colete no Passo 0C. Use: "Baixo volume (< 1.000 un/dia)" | "Médio volume (1.000–10.000 un/dia)" | "Alto volume (> 10.000 un/dia)" — adapte com base no que o cliente disse.
-- "clienteNovo": "SIM" se nunca comprou Tecfag antes. "NAO" se já é cliente. Se não souber, coloque "SIM".
-- "qualificacaoSDR": Escolha UMA das opções abaixo com base no perfil do cliente na conversa:
+🚨 REGRA ABSOLUTA DA TAG [MAQUINAS_DADOS] — NUNCA VIOLE:
+Antes de gerar a tag, releia o histórico COMPLETO da conversa e preencha CADA campo com o que foi coletado.
+NUNCA coloque "..." ou "" ou null em "produtoFabricado", "volumeProducao", "clienteNovo" ou "qualificacaoSDR".
+Se o cliente informou o dado em qualquer parte da conversa, você DEVE colocar na tag — mesmo que tenha sido na primeira mensagem.
+Esses 4 campos são OBRIGATÓRIOS. O sistema de CRM depende deles para preencher o card de vendas.
+
+⚠️ CAMPOS DO [MAQUINAS_DADOS] — DESCRIÇÃO E REGRAS:
+- "maquinaDesejada": Modelo/nome da máquina que o cliente quer (ex: "B200", "Envasadora AR35"). OBRIGATÓRIO.
+- "detalhes": Informações adicionais sobre a necessidade (ex: "precisa envasar sachês de 50g"). Pode ser vazio se não houver.
+- "produtoFabricado": O que o cliente fabrica ou vai produzir — coletado no Passo 0B. Ex: "sachês de tempero", "paletes de PET", "biscoitos embalados". OBRIGATÓRIO — se o cliente respondeu no Passo 0B, preencha aqui. Se disse "não sei ainda", escreva "Não definido".
+- "volumeProducao": Nível de produção — coletado no Passo 0C. Use exatamente uma das opções: "Baixo volume (< 1.000 un/dia)" | "Médio volume (1.000–10.000 un/dia)" | "Alto volume (> 10.000 un/dia)" — adapte com base no que o cliente disse. OBRIGATÓRIO. Se não souber, use "Médio volume (1.000–10.000 un/dia)".
+- "clienteNovo": OBRIGATÓRIO. "SIM" se nunca comprou Tecfag antes. "NAO" se já é cliente. Se não souber, coloque "SIM".
+- "qualificacaoSDR": OBRIGATÓRIO. Escolha UMA das opções abaixo com base no perfil do cliente na conversa. Se não tiver certeza, use "2".
   "1" = Decisor com Pressa (Falou com quem manda e ele quer solução rápida)
   "2" = Planejando Investimento (Interesse real, mas sem data definida)
   "3" = Troca de Máquina (Já tem o processo e quer apenas renovar)

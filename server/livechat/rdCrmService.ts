@@ -794,8 +794,16 @@ export async function createPosVendaOS(
 const RD_MAQUINAS_PIPELINE_ID    = "69cacc81e9770f001324bb44";
 const RD_MAQUINAS_FIRST_STAGE_ID = "69cacc81e9770f001324bb47"; // LEADS RECEBIDOS
 
-// NOTA: loadMaquinasCustomFields foi removida — usa loadDealCustomFields que já funciona
-// rota correta: /deals/custom_fields (não /deal_custom_fields)
+// ── UUIDs hardcoded dos campos personalizados do funil MÁQUINAS 2.0 ──────────
+// Obtidos via GET /api/livechat/rd-debug em 10/04/2026 — não alterar sem re-checar
+// Se um campo novo for criado no CRM, consultar o endpoint de debug para atualizar
+const CF_MAQUINAS = {
+  clienteNovo:  process.env.RD_CF_CLIENTE_NOVO_ID  || '696e23bcce280300133ca1e4', // "CLIENTE NOVO?"
+  sdr:          process.env.RD_CF_SDR_ID            || '67c89b29ab621d001750e51b', // "QUALIFICADO POR SDR"
+  produto:      process.env.RD_CF_PRODUTO_ID        || '696a909d97a619001cf475ad', // "QUAL O PRODUTO FABRICADO?"
+  volume:       process.env.RD_CF_VOLUME_ID         || '696a98c77ce6e30022756978', // "VOLUME DE PRODUÇÃO?"
+  complementar: process.env.RD_CF_COMPLEMENTAR_ID  || '696bd749b44b6d00179417a0', // "INFORMAÇÕES COMPLEMENTARES"
+};
 
 /**
  * Cria uma negociação no funil MÁQUINAS 2.0 do RD CRM.
@@ -859,38 +867,9 @@ async function createMaquinasDeal(
     console.log(`[RD CRM] Vinculando empresa ${organizationId} à negociação de máquinas`);
   }
 
-  // ── Campos personalizados via SLUG (formato oficial API v2) ─────────────────
-  // Endpoint: GET /custom_fields?filter=entity:deal
-  // Formato no deal: custom_fields: { "slug_do_campo": "valor" }
-  const cfs = await loadDealCustomFields() as any[];
-  console.log(`[RD CRM] Custom fields disponíveis (${cfs.length}):`,
-    cfs.map((f: any) => `${f.name}(slug:${f.slug})`).join(' | '));
-
-  const findF = (partial: string): any =>
-    cfs.find((f: any) =>
-      f.name.includes(partial.toLowerCase()) ||
-      f.slug.includes(partial.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''))
-    );
-
-  const fClienteNovo = findF('cliente novo');
-  const fSdr         = findF('qualificado por sdr') || findF('qualificado');
-  const fProduto     = findF('produto fabricado')   || findF('produto');
-  const fVolume      = findF('volume de produ')      || findF('volume');
-  const fInfo        = findF('complementar');
-
-  console.log('[RD CRM] Slugs mapeados:', {
-    clienteNovo:  fClienteNovo?.slug ?? 'NÃO ENCONTRADO',
-    sdr:          fSdr?.slug         ?? 'NÃO ENCONTRADO',
-    produto:      fProduto?.slug     ?? 'NÃO ENCONTRADO',
-    volume:       fVolume?.slug      ?? 'NÃO ENCONTRADO',
-    complementar: fInfo?.slug        ?? 'NÃO ENCONTRADO',
-  });
-
-  dealPayload.custom_fields = {};
-
-  // USA UUID DO CAMPO como chave (formato da API v2) — slug causa 422 'Deal custom fields Não é válido'
-  if (fClienteNovo?.id && maqData.clienteNovo)
-    dealPayload.custom_fields[fClienteNovo.id] = maqData.clienteNovo.toUpperCase();
+  // ── Campos personalizados via UUID hardcoded (confirmados via /rd-debug em 10/04/2026) ──────
+  // Os UUIDs estão em CF_MAQUINAS (constante acima). Não usa mais busca fuzzy por nome.
+  // Fallback via env var permite override sem redeploy se o campo for recriado no CRM.
 
   const SDR_OPTIONS: Record<string, string> = {
     '1': 'Decisor com Pressa (Falou com quem manda e ele quer solução rápida)',
@@ -900,33 +879,37 @@ async function createMaquinasDeal(
     '5': 'Fora de Portfólio (Quer algo que a Tecfag não fabrica)',
     '6': 'Sumiu / Sem contato (Não atendeu ou não retornou)',
   };
-  if (fSdr?.id && maqData.qualificacaoSDR)
-    dealPayload.custom_fields[fSdr.id] = SDR_OPTIONS[maqData.qualificacaoSDR] ?? SDR_OPTIONS['2'];
 
-  if (fProduto?.id && maqData.produtoFabricado)
-    dealPayload.custom_fields[fProduto.id] = maqData.produtoFabricado;
+  // Valores com fallback robusto — nunca deixa campo vazio no CRM
+  const clienteNovoVal  = (maqData.clienteNovo ?? 'SIM').toUpperCase();
+  const qualificacaoKey = maqData.qualificacaoSDR ?? '2';
+  const sdrVal          = SDR_OPTIONS[qualificacaoKey] ?? SDR_OPTIONS['2'];
+  const produtoVal      = maqData.produtoFabricado || 'Não informado';
+  const volumeVal       = maqData.volumeProducao   || 'Não informado';
 
-  if (fVolume?.id && maqData.volumeProducao)
-    dealPayload.custom_fields[fVolume.id] = maqData.volumeProducao;
+  // Monta texto das informações complementares (campo freetext)
+  const partes: string[] = [`Máquina: ${maqData.maquinaDesejada}`];
+  if (maqData.produtoFabricado) partes.push(`Produto: ${maqData.produtoFabricado}`);
+  if (maqData.volumeProducao)   partes.push(`Volume: ${maqData.volumeProducao}`);
+  if (maqData.cnpjCpf)          partes.push(`CNPJ/CPF: ${maqData.cnpjCpf}`);
+  if (maqData.detalhes)         partes.push(`Detalhes: ${maqData.detalhes}`);
+  const complementarVal = partes.join(' | ').slice(0, 500);
 
-  // INFORMAÇÕES COMPLEMENTARES — sempre preenchida (nunca vazia)
-  // Garante que pelo menos a máquina desejada e CNPJ apareçam no campo
-  if (fInfo?.id) {
-    const partes: string[] = [];
-    partes.push(`Máquina: ${maqData.maquinaDesejada}`);
-    if (maqData.produtoFabricado) partes.push(`Produto: ${maqData.produtoFabricado}`);
-    if (maqData.volumeProducao)   partes.push(`Volume: ${maqData.volumeProducao}`);
-    if (maqData.cnpjCpf)          partes.push(`CNPJ/CPF: ${maqData.cnpjCpf}`);
-    if (maqData.detalhes)         partes.push(`Detalhes: ${maqData.detalhes}`);
-    dealPayload.custom_fields[fInfo.id] = partes.join(' | ').slice(0, 500);
-  }
+  dealPayload.custom_fields = {
+    [CF_MAQUINAS.clienteNovo]:  clienteNovoVal,
+    [CF_MAQUINAS.sdr]:          sdrVal,
+    [CF_MAQUINAS.produto]:      produtoVal,
+    [CF_MAQUINAS.volume]:       volumeVal,
+    [CF_MAQUINAS.complementar]: complementarVal,
+  };
 
-  if (Object.keys(dealPayload.custom_fields).length === 0) {
-    delete dealPayload.custom_fields;
-    console.warn('[RD CRM] Nenhum campo de deal encontrado — custom_fields omitido');
-  } else {
-    console.log('[RD CRM] custom_fields MÁQUINAS a enviar:', JSON.stringify(dealPayload.custom_fields));
-  }
+  console.log('[RD CRM] custom_fields MÁQUINAS (UUID hardcoded):', JSON.stringify({
+    'CLIENTE NOVO?':             clienteNovoVal,
+    'QUALIFICADO POR SDR':       sdrVal,
+    'QUAL O PRODUTO FABRICADO?': produtoVal,
+    'VOLUME DE PRODUÇÃO?':       volumeVal,
+    'INFORMAÇÕES COMPLEMENTARES': complementarVal.slice(0, 80) + '...',
+  }));
 
   const deal = await rdRequest<{ id: string }>('POST', '/deals', dealPayload);
   console.log(`[RD CRM] Negociação MÁQUINAS criada: ${deal.id} — "${titulo}"`);
