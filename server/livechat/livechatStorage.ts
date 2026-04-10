@@ -899,8 +899,15 @@ export async function ensureLiveChatSchema(): Promise<void> {
     ['lc_visitors', '"posVendaNotaPedido" TEXT'],
 
     ['lc_visitors', '"posVendaProblema" TEXT'],
+    ['lc_visitors', '"posVendaCnpjData" JSONB'],
     ['lc_visitors', '"pecaDesejada" TEXT'],
     ['lc_visitors', '"pecasECliente" TEXT'],
+    // lc_visitors — Dados Máquinas (coletados pelo Fagner no fluxo de orçamento)
+    ['lc_visitors', '"maquinaDesejada" TEXT'],
+    ['lc_visitors', '"maquinaProdutoFabricado" TEXT'],
+    ['lc_visitors', '"maquinaVolumeProducao" TEXT'],
+    ['lc_visitors', '"maquinaQualificacaoSDR" TEXT'],
+    ['lc_visitors', '"maquinaClienteNovo" TEXT'],
     ['lc_visitors', '"rdCrmDealId" TEXT'],
 
     // lc_chats
