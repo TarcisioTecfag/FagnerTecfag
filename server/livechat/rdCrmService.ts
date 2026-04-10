@@ -323,75 +323,73 @@ async function loadDealCustomFields(): Promise<{ id: string; name: string; slug:
   return [];
 }
 
-// ── Campo CNPJ/CPF de Organization: busca ou cria automaticamente ─────────────
-// Cache em memória do UUID do campo CNPJ/CPF de organization
-let _cnpjFieldId: string | null = null;
+// ── Campos personalizados de Organization — cache de UUIDs ────────────────────
+// Conforme screenshot do CRM: "CNPJ ou CPF" (obrigatório), Cidade, Bairro, Estado
+interface OrgFieldIds {
+  cnpjCpf?: string;
+  cidade?:  string;
+  bairro?:  string;
+  estado?:  string;
+}
+let _orgFieldIds: OrgFieldIds | null = null;
 
 /**
- * Retorna o UUID do campo personalizado CNPJ/CPF de organizations.
- * - Primeiro, faz GET /custom_fields?filter=entity:organization e busca por slug/nome.
- * - Se não existir, cria o campo via POST /custom_fields (type: "text", entity: "organization").
- * - Persiste o UUID em _cnpjFieldId para evitar chamadas repetidas.
- * Fonte: API doc linha 1704 — POST /crm/v2/custom_fields
+ * Faz GET /custom_fields?filter=entity:organization UMA VEZ e extrai os UUIDs
+ * dos 4 campos personalizados visíveis no formulário de empresa do RD CRM.
+ * Resultado em cache — não repete a chamada.
  */
-async function getOrCreateCnpjFieldId(): Promise<string | null> {
-  if (_cnpjFieldId) return _cnpjFieldId;
+async function loadOrgFieldIds(): Promise<OrgFieldIds> {
+  if (_orgFieldIds) return _orgFieldIds;
 
-  // PASSO 1: Listar todos os campos de organization e procurar CNPJ/CPF
+  const ids: OrgFieldIds = {};
+
   try {
     const data = await rdRequest<any>("GET", "/custom_fields?filter=entity:organization&page[size]=100");
     const list: any[] = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
 
+    // Atualiza cache legado também
     if (list.length > 0) {
-      // Atualiza cache completo de campos de org (para outros usos futuros)
       _orgCustomFieldsCache = list.map((f: any) => ({
-        id:   f.id   ?? '',
-        name: (f.name  || '').toLowerCase(),
-        slug: (f.slug  || '').toLowerCase(),
+        id: f.id ?? '', name: (f.name || '').toLowerCase(), slug: (f.slug || '').toLowerCase(),
       }));
-      console.log(`[RD CRM] ${list.length} campos org: ${_orgCustomFieldsCache.map(f => `${f.name}(id:${f.id})`).join(', ')}`);
+    }
 
-      // Busca campo CNPJ ou CPF por slug ou nome
-      const cnpjField = list.find((f: any) => {
-        const s = (f.slug || '').toLowerCase();
-        const n = (f.name || '').toLowerCase();
-        return s.includes('cnpj') || s.includes('cpf') || s.includes('documento') ||
-               n.includes('cnpj') || n.includes('cpf') || n.includes('documento');
-      });
-
-      if (cnpjField) {
-        _cnpjFieldId = cnpjField.id;
-        console.log(`[RD CRM] ✅ Campo CNPJ/CPF org encontrado: id=${cnpjField.id} slug=${cnpjField.slug}`);
-        return _cnpjFieldId;
+    for (const f of list) {
+      const s = (f.slug || '').toLowerCase();
+      const n = (f.name || '').toLowerCase();
+      if (!ids.cnpjCpf && (s.includes('cnpj') || s.includes('cpf') || n.includes('cnpj') || n.includes('cpf') || n.includes('documento'))) {
+        ids.cnpjCpf = f.id;
+        console.log(`[RD CRM] Campo CNPJ/CPF org: id=${f.id} name="${f.name}" slug=${f.slug}`);
+      } else if (!ids.cidade && (s.includes('cidade') || s.includes('city') || s.includes('municipio') || n.includes('cidade') || n.includes('municipio'))) {
+        ids.cidade = f.id;
+        console.log(`[RD CRM] Campo Cidade org: id=${f.id} name="${f.name}"`);
+      } else if (!ids.bairro && (s.includes('bairro') || s.includes('district') || n.includes('bairro') || n.includes('district'))) {
+        ids.bairro = f.id;
+        console.log(`[RD CRM] Campo Bairro org: id=${f.id} name="${f.name}"`);
+      } else if (!ids.estado && (s.includes('estado') || s.includes('state') || s.includes('_uf') || s === 'uf' || n.includes('estado') || n === 'uf')) {
+        ids.estado = f.id;
+        console.log(`[RD CRM] Campo Estado org: id=${f.id} name="${f.name}"`);
       }
-      console.log(`[RD CRM] Campo CNPJ/CPF org NÃO encontrado nos ${list.length} campos. Criando...`);
-    } else {
-      console.log(`[RD CRM] Sem campos org cadastrados. Criando campo CNPJ/CPF...`);
+    }
+
+    if (!ids.cnpjCpf) {
+      console.warn(`[RD CRM] ⚠️ Campo CNPJ/CPF NÃO encontrado nos ${list.length} campos de org. Nomes: ${list.map(f => f.name).join(', ')}`);
     }
   } catch (e: any) {
-    console.warn(`[RD CRM] Falha ao listar custom fields org: ${e.message}`);
+    console.warn(`[RD CRM] Falha ao carregar campos de org: ${e.message}`);
   }
 
-  // PASSO 2: Criar o campo CNPJ/CPF via POST /custom_fields
-  // Fonte: API doc — POST /crm/v2/custom_fields
-  // Body: { name, type, entity } — type "text" é o mais simples e compatível
-  try {
-    const created = await rdRequest<{ id: string; slug: string }>("POST", "/custom_fields", {
-      name:   "CNPJ/CPF",
-      type:   "text",
-      entity: "organization",
-    });
-    _cnpjFieldId = created.id;
-    // Invalida cache de org fields para que a próxima leitura traga o novo campo
-    _orgCustomFieldsCache = null;
-    console.log(`[RD CRM] ✅ Campo CNPJ/CPF criado: id=${created.id} slug=${created.slug}`);
-    return _cnpjFieldId;
-  } catch (e: any) {
-    console.error(`[RD CRM] ❌ Falha ao criar campo CNPJ/CPF org: ${e.message}`);
-    return null;
-  }
+  _orgFieldIds = ids;
+  return ids;
 }
 
+// Mantém _cnpjFieldId para compatibilidade com código legado
+let _cnpjFieldId: string | null = null;
+async function getOrCreateCnpjFieldId(): Promise<string | null> {
+  const ids = await loadOrgFieldIds();
+  _cnpjFieldId = ids.cnpjCpf ?? null;
+  return _cnpjFieldId;
+}
 
 // ─── Empresa (Organization) — CNPJ ou CPF ────────────────────────────────────
 
@@ -432,20 +430,35 @@ async function findOrCreateOrganization(
       }
     } catch {}
 
-    // ── 2. Obtém UUID do campo CNPJ/CPF (cria campo se não existir) ───────────
-    const cnpjFieldId = await getOrCreateCnpjFieldId();
+    // ── 2. Carrega todos UUIDs dos campos personalizados de org ───────────────
+    const fieldIds = await loadOrgFieldIds();
 
-    // ── 3. Monta payload e cria empresa ───────────────────────────────────────
-    const orgPayload: Record<string, any> = { name: nomeEmpresa };
+    // ── 3. Monta payload — custom_fields com os UUIDs reais ──────────────────
+    const customFields: Record<string, string> = {};
 
-    if (cnpjFieldId) {
-      orgPayload.custom_fields = { [cnpjFieldId]: doc };
-      console.log(`[RD CRM] Criando empresa uuid=${cnpjFieldId}: "${nomeEmpresa}" doc=${doc}`);
-    } else {
-      console.warn(`[RD CRM] Sem UUID p/ campo CNPJ/CPF — empresa sem doc: "${nomeEmpresa}"`);
+    // CNPJ ou CPF (obrigatório no CRM conforme screenshot)
+    if (fieldIds.cnpjCpf && doc) {
+      customFields[fieldIds.cnpjCpf] = doc;
+    }
+    // Cidade (da Receita Federal, se disponível)
+    if (fieldIds.cidade && posVenda.cnpjData?.municipio) {
+      customFields[fieldIds.cidade] = posVenda.cnpjData.municipio;
+    }
+    // Bairro
+    if (fieldIds.bairro && posVenda.cnpjData?.bairro) {
+      customFields[fieldIds.bairro] = posVenda.cnpjData.bairro;
+    }
+    // Estado
+    if (fieldIds.estado && posVenda.cnpjData?.uf) {
+      customFields[fieldIds.estado] = posVenda.cnpjData.uf;
     }
 
+    const orgPayload: Record<string, any> = { name: nomeEmpresa };
+    if (Object.keys(customFields).length > 0) orgPayload.custom_fields = customFields;
     if (posVenda.cnpjData?.telefone1) orgPayload.phone = posVenda.cnpjData.telefone1;
+
+    console.log(`[RD CRM] Criando empresa "${nomeEmpresa}" doc=${doc} custom_fields=${JSON.stringify(customFields)}`);
+
 
     const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
     console.log(`[RD CRM] ✅ Empresa criada: ${org.id} — "${nomeEmpresa}" (doc: ${doc})`);
