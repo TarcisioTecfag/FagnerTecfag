@@ -1394,7 +1394,129 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   }
                 }
 
-                // ── Detectar tag de dados de PEÇAS [PECAS_DADOS:{...}] ──
+                // ── 🛡️ FALLBACK SERVER-SIDE: MAQUINAS_DADOS não emitida pela IA ────────────────
+                // Quando o Fagner diz o texto de encerramento mas NÃO inclui a tag [MAQUINAS_DADOS]
+                // (comportamento intermitente do Gemini), o servidor reconstrói os dados
+                // diretamente do OVERVIEW confirmado, que já está salvo no banco como chunks.
+                // GARANTE que os dados nunca se percam independentemente da IA.
+                if (!maquinasTagMatch) {
+                  const hasMaquinasFarewell = /registrei sua solici|equipe comercial entrar|orçamento detalhado/i.test(rawReply);
+                  if (hasMaquinasFarewell) {
+                    try {
+                      const visitorForFallback = await lcStorage.getVisitorById(currentVisitorId);
+                      // Só ativa se:  1) estágio é maquinas  2) os campos ainda não foram salvos
+                      const jaTemDados = visitorForFallback?.maquinaDesejada || visitorForFallback?.produtoFabricado;
+                      if (visitorForFallback?.pipelineStage === 'maquinas' && !jaTemDados) {
+                        console.warn(`[LiveChat] ⚠️ FALLBACK ATIVADO: Fagner disse encerramento sem [MAQUINAS_DADOS] — reconstruindo do OVERVIEW`);
+
+                        const allMsgs = await lcStorage.listMessagesByChat(chat.id);
+
+                        // Extrai o valor de um campo do OVERVIEW a partir dos chunks salvos
+                        // Ex: "• Produto fabricado: Paletes" → "Paletes"
+                        const parseOvField = (...labels: string[]): string | null => {
+                          for (const label of labels) {
+                            const re = new RegExp(`^\\s*[•\\-]\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:\\s*(.+)$`, 'i');
+                            const msg = [...allMsgs].reverse().find(m => m.sender === 'ai' && re.test(m.content.trim()));
+                            if (msg) {
+                              const cap = msg.content.trim().match(re);
+                              if (cap?.[1]) return cap[1].trim();
+                            }
+                          }
+                          return null;
+                        };
+
+                        const maqDataFallback = {
+                          nome:             parseOvField('Nome', 'Cliente')                          ?? visitorForFallback.name ?? 'Não informado',
+                          telefone:         parseOvField('Telefone', 'WhatsApp', 'Tel')              ?? null,
+                          email:            parseOvField('E-mail', 'Email')                          ?? null,
+                          cnpjCpf:          parseOvField('CPF/CNPJ', 'CNPJ', 'CPF')                 ?? null,
+                          maquinaDesejada:  parseOvField('Máquina', 'Equipamento', 'Produto')        ?? 'Não informado',
+                          detalhes:         parseOvField('Detalhes', 'Observação')                   ?? null,
+                          produtoFabricado: parseOvField('Produto fabricado', 'Produto')             ?? null,
+                          volumeProducao:   parseOvField('Volume de produção', 'Volume')             ?? null,
+                          clienteNovo:      'SIM',
+                          qualificacaoSDR:  '2',
+                          cnpjData:         visitorForFallback.posVendaCnpjData
+                            ? (typeof visitorForFallback.posVendaCnpjData === 'string'
+                              ? JSON.parse(visitorForFallback.posVendaCnpjData)
+                              : visitorForFallback.posVendaCnpjData)
+                            : undefined,
+                        };
+
+                        console.log(`[LiveChat] Fallback MAQUINAS_DADOS reconstruído:`, {
+                          maquina: maqDataFallback.maquinaDesejada,
+                          produto: maqDataFallback.produtoFabricado,
+                          volume:  maqDataFallback.volumeProducao,
+                          nome:    maqDataFallback.nome,
+                          cnpj:    maqDataFallback.cnpjCpf,
+                        });
+
+                        // Salva no banco (atualiza painel do visitante)
+                        await lcStorage.updateVisitorMaquinasData(currentVisitorId, {
+                          nome:             maqDataFallback.nome,
+                          telefone:         maqDataFallback.telefone,
+                          email:            maqDataFallback.email,
+                          cnpjCpf:          maqDataFallback.cnpjCpf,
+                          maquinaDesejada:  maqDataFallback.maquinaDesejada,
+                          produtoFabricado: maqDataFallback.produtoFabricado,
+                          volumeProducao:   maqDataFallback.volumeProducao,
+                          qualificacaoSDR:  maqDataFallback.qualificacaoSDR,
+                          clienteNovo:      maqDataFallback.clienteNovo,
+                        });
+                        await lcStorage.updateVisitorPipeline(currentVisitorId, 'maquinas');
+                        broadcastToAgents({ type: 'VISITOR_MAQUINAS_UPDATED', visitorId: currentVisitorId, maqData: maqDataFallback });
+
+                        // Cria deal no RD CRM (mesmo fluxo do caminho normal)
+                        if (isRdCrmConfigured()) {
+                          await lcStorage.addVisitorNote(currentVisitorId, 'RD CRM', '⏳ [FALLBACK] Criando card MÁQUINAS (tag não emitida pela IA)...');
+                          broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
+
+                          (async () => {
+                            try {
+                              const recentForReport = await lcStorage.listMessagesByChat(chat.id);
+                              const snippetFb = recentForReport.slice(-20)
+                                .filter(m => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
+                                .map(m => `${m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]'} ${m.content.slice(0, 120)}`)
+                                .join('\n');
+
+                              const relatorioFb = await generateMaquinasReport({
+                                nome: maqDataFallback.nome, telefone: maqDataFallback.telefone,
+                                email: maqDataFallback.email ?? null, cnpjCpf: maqDataFallback.cnpjCpf ?? null,
+                                maquinaDesejada: maqDataFallback.maquinaDesejada,
+                                detalhes: maqDataFallback.detalhes ?? null,
+                                produtoFabricado: maqDataFallback.produtoFabricado ?? null,
+                                volumeProducao: maqDataFallback.volumeProducao ?? null,
+                                clienteNovo: maqDataFallback.clienteNovo ?? null,
+                                qualificacaoSDR: maqDataFallback.qualificacaoSDR ?? null,
+                                cnpjData: maqDataFallback.cnpjData,
+                                conversationSnippet: snippetFb, transcricaoCompleta: snippetFb,
+                              });
+
+                              let ownerIdFb: string | undefined;
+                              try { ownerIdFb = await lcStorage.getNextOwnerForFunnel('maquinas') ?? undefined; } catch {}
+
+                              const dealIdFb = await createMaquinasOS(currentVisitorId, { ...maqDataFallback, ownerId: ownerIdFb }, relatorioFb);
+                              const dealUrlFb = `https://crm.rdstation.com/app/deals/${dealIdFb}`;
+                              await lcStorage.addVisitorNote(currentVisitorId, 'RD CRM', `✅ [FALLBACK] Card MÁQUINAS criado!\nID: ${dealIdFb}\n${dealUrlFb}`);
+                              await lcStorage.setChatCloseReason(chat.id, 'atendimento_concluido').catch(() => {});
+                              broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
+                              broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId: currentVisitorId, dealId: dealIdFb, dealUrl: dealUrlFb });
+                              console.log(`[RD CRM] ✅ [FALLBACK] Deal MÁQUINAS criado: ${dealIdFb}`);
+                            } catch (fbErr: any) {
+                              console.error(`[RD CRM] ❌ [FALLBACK] Falha:`, fbErr.message);
+                              await lcStorage.addVisitorNote(currentVisitorId, 'RD CRM', `❌ [FALLBACK] Falha ao criar card MÁQUINAS\n${fbErr.message}`).catch(() => {});
+                              broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
+                            }
+                          })();
+                        }
+                      }
+                    } catch (fallbackErr: any) {
+                      console.error(`[LiveChat] ❌ Fallback MAQUINAS_DADOS falhou:`, fallbackErr.message);
+                    }
+                  }
+                }
+
+
                 // Extração robusta por chaves balanceadas
                 const pecasTagIdx = rawReply.indexOf('[PECAS_DADOS:');
                 const pecasTagMatch = pecasTagIdx !== -1 ? ((): [string, string] | null => {
