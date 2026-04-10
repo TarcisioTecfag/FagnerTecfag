@@ -1,4 +1,4 @@
-﻿/**
+/**
  * server/livechat/livechatRoutes.ts
  *
  * Rotas REST do Live Chat â€” /api/livechat/*
@@ -9,6 +9,7 @@ import { Router, type Request, type Response, type NextFunction } from "express"
 import { lcStorage } from "./livechatStorage.js";
 import { getDiagLog } from "./livechatAI.js";
 import { getRdValidToken } from "./rdCrmService.js";
+import { broadcastPipelineUpdateExternal } from "./livechatWs.js";
 
 // â”€â”€â”€ Auth middleware (mesma lÃ³gica do index.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -175,6 +176,36 @@ export function registerLiveChatRoutes(app: any): void {
   router.get("/pipeline/stats", requireAuth, async (_req: Request, res: Response) => {
     const stats = await lcStorage.getPipelineStats();
     return res.json(stats);
+  });
+
+  // ── Mover card no Kanban (drag & drop manual pelo operador) ──────────────────
+  router.patch("/visitors/:id/pipeline", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { stage } = req.body;
+      if (!stage || typeof stage !== "string") {
+        return res.status(400).json({ error: "stage required" });
+      }
+      const VALID_STAGES = [
+        "novo_atendimento", "em_atendimento", "maquinas",
+        "pecas", "pos_venda", "finalizado_com_venda",
+        "sem_resposta", "outros",
+      ];
+      if (!VALID_STAGES.includes(stage)) {
+        return res.status(400).json({ error: `Stage inválido: ${stage}` });
+      }
+      const visitorId = p(req.params.id);
+      const visitor = await lcStorage.updateVisitorPipeline(visitorId, stage);
+      if (!visitor) return res.status(404).json({ error: "Visitante não encontrado" });
+
+      // Notifica todos os agentes via WebSocket em tempo real
+      await broadcastPipelineUpdateExternal(visitorId, stage);
+
+      console.log(`[LiveChat] 🃏 Card ${visitorId} movido manualmente para '${stage}' pelo operador`);
+      return res.json({ ok: true, stage, visitor });
+    } catch (err: any) {
+      console.error("[LiveChat] PATCH /visitors/:id/pipeline error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
   });
 
 

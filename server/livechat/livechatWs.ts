@@ -87,6 +87,11 @@ async function broadcastPipelineUpdate(visitorId: string, stage: string): Promis
   });
 }
 
+// Exportada para uso nas rotas REST (drag & drop manual de cards)
+export async function broadcastPipelineUpdateExternal(visitorId: string, stage: string): Promise<void> {
+  return broadcastPipelineUpdate(visitorId, stage);
+}
+
 // ─── Follow-up Timers (3m, 8m, 10m limit) ────────────────────────────────────
 
 function startFollowUpTimers(visitorId: string, chatId: string): void {
@@ -1624,16 +1629,38 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     }
                   })();
                 }
-                // Start follow-ups (3m, 8m) — só se não for estágio "outros"
-                // Para "outros": follow-up já foi cancelado acima quando a tag foi detectada
-                // Mas se ainda não houve tag, só inicia timers se não está em estágio protegido
+                // ── Controle de Follow-up Timers ─────────────────────────────────────────
+                // Regra: NUNCA iniciar follow-ups quando o atendimento já foi concluído.
+                // Detectamos conclusão por:
+                //   1. Stage final persistido no banco
+                //   2. Tags de dados na RESPOSTA ATUAL (antes do banco ser atualizado)
+                //   3. OUTCOME:SALE detectado nesta mensagem
                 try {
                   const visitorNow = await lcStorage.getVisitorById(currentVisitorId);
-                  const PROTECTED_STAGES = ['outros', 'finalizado_com_venda', 'pos_venda', 'maquinas', 'pecas', 'vendido'];
-                  if (!PROTECTED_STAGES.includes(visitorNow?.pipelineStage ?? '')) {
-                    startFollowUpTimers(currentVisitorId, chat.id);
+                  // Todos os stages onde o atendimento já foi encerrado ou é um fluxo gerenciado
+                  const PROTECTED_STAGES = [
+                    'outros',
+                    'finalizado_com_venda',
+                    'finalizado_sem_venda',
+                    'pos_venda',
+                    'maquinas',
+                    'pecas',
+                    'vendido',
+                    'sem_resposta',
+                  ];
+                  // Também protege pela presença de tags de dados NA RESPOSTA ATUAL
+                  // (o banco pode ainda não ter sido atualizado quando chegamos aqui)
+                  const hasConclusionTag = posVendaTagMatch !== null
+                    || maquinasTagMatch !== null
+                    || pecasTagMatch !== null
+                    || hasSale;
+
+                  if (PROTECTED_STAGES.includes(visitorNow?.pipelineStage ?? '') || hasConclusionTag) {
+                    // Garante que timers anteriores também sejam cancelados
+                    clearFollowUpTimers(currentVisitorId);
+                    console.log(`[LiveChat] Follow-up timers bloqueados — estágio: ${visitorNow?.pipelineStage}${hasConclusionTag ? ' (tag de conclusão detectada)' : ''}`);
                   } else {
-                    console.log(`[LiveChat] Follow-up timers não iniciados — estágio protegido: ${visitorNow?.pipelineStage}`);
+                    startFollowUpTimers(currentVisitorId, chat.id);
                   }
                 } catch {
                   startFollowUpTimers(currentVisitorId, chat.id);

@@ -395,6 +395,11 @@ function LiveChat() {
   // Usuário logado (para exibir nome correto ao assumir atendimento)
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string; username: string } | null>(null);
 
+  // ——— Drag & Drop (Kanban CRM) ———
+  const [draggingVisitorId, setDraggingVisitorId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  const draggingFromStage = useRef<string | null>(null);
+
   // Manter refs sincronizados para uso dentro do WS handler (closure)
   useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
@@ -467,6 +472,45 @@ function LiveChat() {
       loadChatMessages(chatToOpen);
     } else {
       toast({ description: "Chat não encontrado nos registros atuais." });
+    }
+  };
+
+  // ——— Drag & Drop: mover card entre colunas do Kanban ————————————————————
+  const handleMoveCard = async (visitorId: string, toStage: string) => {
+    if (!visitorId || !toStage) return;
+
+    // Atualização otimista: move o card no estado local imediatamente
+    setPipelineData(prev => {
+      const next = { ...prev };
+      let movedVisitor: Visitor | undefined;
+      for (const stage of Object.keys(next)) {
+        const idx = (next[stage] || []).findIndex((v: Visitor) => v.id === visitorId);
+        if (idx >= 0) {
+          movedVisitor = next[stage][idx];
+          next[stage] = next[stage].filter((_: Visitor, i: number) => i !== idx);
+          break;
+        }
+      }
+      if (movedVisitor) {
+        if (!next[toStage]) next[toStage] = [];
+        next[toStage] = [{ ...movedVisitor, pipelineStage: toStage }, ...next[toStage]];
+      }
+      return next;
+    });
+
+    // Persiste no servidor
+    try {
+      const res = await fetch(`/api/livechat/visitors/${visitorId}/pipeline`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ stage: toStage }),
+      });
+      if (!res.ok) throw new Error("Resposta do servidor: " + res.status);
+      toast({ description: `📄 Card movido para "${toStage.replace(/_/g, " ")}" ✓` });
+    } catch (err: any) {
+      toast({ description: "Falha ao mover o card. Recarregando...", variant: "destructive" });
+      fetchData(); // rollback: recarrega estado do servidor
     }
   };
 
@@ -2165,7 +2209,33 @@ function LiveChat() {
                 return (
                   <div
                     key={col.stage}
-                    className="flex-1 min-w-[220px] max-w-[280px] flex flex-col bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden"
+                    className={`flex-1 min-w-[220px] max-w-[280px] flex flex-col rounded-2xl border shadow-sm overflow-hidden transition-all duration-200 ${
+                      dragOverStage === col.stage
+                        ? "scale-[1.015] shadow-xl border-2"
+                        : "bg-white border-zinc-200/60"
+                    }`}
+                    style={{
+                      background: dragOverStage === col.stage ? col.bgLight : "white",
+                      borderColor: dragOverStage === col.stage ? col.color : undefined,
+                    }}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverStage(col.stage); }}
+                    onDragLeave={(e) => {
+                      // Ignora dragLeave de filhos
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        setDragOverStage(null);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOverStage(null);
+                      const vId = draggingVisitorId;
+                      const fromStage = draggingFromStage.current;
+                      setDraggingVisitorId(null);
+                      draggingFromStage.current = null;
+                      if (vId && fromStage !== col.stage) {
+                        handleMoveCard(vId, col.stage);
+                      }
+                    }}
                   >
                     {/* Column header with color bar */}
                     <div className="flex-shrink-0">
@@ -2198,15 +2268,29 @@ function LiveChat() {
                           return (
                             <div
                               key={v.id}
+                              draggable
+                              onDragStart={(e) => {
+                                setDraggingVisitorId(v.id);
+                                draggingFromStage.current = col.stage;
+                                // Snapshot fantasma no drag nativo
+                                e.dataTransfer.effectAllowed = "move";
+                              }}
+                              onDragEnd={() => {
+                                setDraggingVisitorId(null);
+                                setDragOverStage(null);
+                                draggingFromStage.current = null;
+                              }}
                               onClick={() => setSelectedVisitor(isSelected ? null : v)}
-                              className={`p-2.5 rounded-xl border cursor-pointer transition-all duration-200 hover:shadow-md group ${
-                                isSelected
+                              className={`p-2.5 rounded-xl border cursor-grab active:cursor-grabbing select-none transition-all duration-200 hover:shadow-md group ${
+                                draggingVisitorId === v.id
+                                  ? "opacity-40 scale-95 rotate-1 shadow-lg"
+                                  : isSelected
                                   ? "shadow-md"
                                   : "hover:border-zinc-200"
                               }`}
                               style={{
-                                borderColor: isSelected ? col.borderColor : "rgba(228,228,231,0.6)",
-                                background: isSelected ? col.bgLight : "white",
+                                borderColor: isSelected && draggingVisitorId !== v.id ? col.borderColor : "rgba(228,228,231,0.6)",
+                                background: isSelected && draggingVisitorId !== v.id ? col.bgLight : "white",
                               }}
                             >
                               {/* Name + online status */}
