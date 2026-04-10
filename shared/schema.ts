@@ -180,6 +180,12 @@ export const lcVisitors = pgTable("lc_visitors", {
   // ── Dados de Peças (coletados pelo Fagner) ─────────────────────────────────
   pecaDesejada: text("pecaDesejada"),         // Peça que o cliente quer comprar
   pecasECliente: text("pecasECliente"),       // SIM / NAO / NÃO INFORMADO
+  // ── Dados de Máquinas (coletados pelo Fagner) ─────────────────────────────
+  maquinaDesejada: text("maquinaDesejada"),              // Modelo/equipamento desejado
+  maquinaProdutoFabricado: text("maquinaProdutoFabricado"), // O que o cliente fabrica/produz
+  maquinaVolumeProducao: text("maquinaVolumeProducao"),  // Volume de produção (baixo/médio/alto)
+  maquinaQualificacaoSDR: text("maquinaQualificacaoSDR"), // "1" a "6" (perfil do lead)
+  maquinaClienteNovo: text("maquinaClienteNovo"),        // SIM / NAO
   // ── Integração RD Station CRM ──────────────────────────────────────────────
   rdCrmDealId: text("rdCrmDealId"),   // ID da negociação criada no RD CRM (evita duplicatas)
 });

@@ -584,10 +584,10 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 chatMessageBuffers.set(chat.id, buffer);
               }
 
-              // NÃO mostrar typing ainda — só após os 5s de respeit de mensagem
+              // NÃO mostrar typing ainda — só após os 15s de silêncio do cliente
               const currentVisitorId = visitorId as string;
 
-              // Timer de 5s: só processa quando o cliente pára de digitar
+              // Timer de 15s: só processa quando o cliente pára de digitar por 15 segundos
               buffer.timer = setTimeout(async () => {
                 const combinedContent = chatMessageBuffers.get(chat.id)?.content.join("\n\n") || data.content;
                 chatMessageBuffers.delete(chat.id);
@@ -1132,12 +1132,17 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 if (maquinasTagMatch) {
                   try {
                     const maqData = JSON.parse(maquinasTagMatch[1].trim());
-                    // Salva dados no visitante
-                    await lcStorage.updateVisitorPosVendaData(currentVisitorId, {
-                      nome:      maqData.nome      ?? null,
-                      telefone:  maqData.telefone  ?? null,
-                      email:     maqData.email     ?? null,
-                      cnpjCpf:   maqData.cnpjCpf   ?? null,
+                    // Salva TODOS os dados de máquinas no visitante (incluindo campos específicos do funil)
+                    await lcStorage.updateVisitorMaquinasData(currentVisitorId, {
+                      nome:             maqData.nome            ?? null,
+                      telefone:         maqData.telefone        ?? null,
+                      email:            maqData.email           ?? null,
+                      cnpjCpf:          maqData.cnpjCpf         ?? null,
+                      maquinaDesejada:  maqData.maquinaDesejada ?? null,
+                      produtoFabricado: maqData.produtoFabricado ?? null,
+                      volumeProducao:   maqData.volumeProducao  ?? null,
+                      qualificacaoSDR:  maqData.qualificacaoSDR ?? null,
+                      clienteNovo:      maqData.clienteNovo     ?? null,
                     });
                     // Atualiza pipeline para maquinas
                     await lcStorage.updateVisitorPipeline(currentVisitorId, "maquinas");
@@ -1437,7 +1442,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 } catch {
                   startFollowUpTimers(currentVisitorId, chat.id);
                 }
-              }, 5000); // 5 sec cooldown
+              }, 15000); // 15 sec cooldown — Fagner aguarda 15s de silêncio antes de responder
             }
             break;
           }

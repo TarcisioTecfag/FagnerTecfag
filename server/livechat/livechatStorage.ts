@@ -307,10 +307,11 @@ export const lcStorage = {
       `UPDATE lc_visitors SET ${setClauses.join(', ')}, "lastSeenAt" = '${new Date().toISOString()}' WHERE "id" = '${id}'`
     ));
 
-    // Propaga o nome também para todos os chats deste visitante para atualizar a UI
+    // Propaga o nome completo para todos os chats deste visitante — SEMPRE sobrescreve
+    // (o nome completo coletado pelo Fagner prevalece sobre o nome curto do pré-chat)
     if (data.nome) {
       await db.execute(sql.raw(
-        `UPDATE lc_chats SET "visitorName" = '${data.nome.replace(/'/g, "\'\'")}' WHERE "visitorId" = '${id}' AND ("visitorName" IS NULL OR "visitorName" = '')`
+        `UPDATE lc_chats SET "visitorName" = '${data.nome.replace(/'/g, "''")}' WHERE "visitorId" = '${id}'`
       ));
     }
   },
@@ -334,9 +335,44 @@ export const lcStorage = {
     await db.execute(sql.raw(
       `UPDATE lc_visitors SET ${setClauses.join(', ')}, "lastSeenAt" = '${new Date().toISOString()}' WHERE "id" = '${id}'`
     ));
+    // Propaga o nome completo para todos os chats deste visitante — SEMPRE sobrescreve
     if (data.nome) {
       await db.execute(sql.raw(
-        `UPDATE lc_chats SET "visitorName" = '${data.nome.replace(/'/g, "''") }' WHERE "visitorId" = '${id}' AND ("visitorName" IS NULL OR "visitorName" = '')`
+        `UPDATE lc_chats SET "visitorName" = '${data.nome.replace(/'/g, "''")}' WHERE "visitorId" = '${id}'`
+      ));
+    }
+  },
+
+  // ── Máquinas — Dados coletados pelo Fagner (fluxo de orçamento de máquinas) ─
+  async updateVisitorMaquinasData(id: string, data: {
+    nome?: string | null;
+    telefone?: string | null;
+    email?: string | null;
+    cnpjCpf?: string | null;
+    maquinaDesejada?: string | null;
+    produtoFabricado?: string | null;
+    volumeProducao?: string | null;
+    qualificacaoSDR?: string | null;
+    clienteNovo?: string | null;
+  }): Promise<void> {
+    const setClauses: string[] = [];
+    if (data.nome             != null) setClauses.push(`"posVendaNome" = '${data.nome.replace(/'/g, "''")}', "name" = '${data.nome.replace(/'/g, "''")}'`);
+    if (data.telefone         != null) setClauses.push(`"posVendaTelefone" = '${data.telefone.replace(/'/g, "''")}'`);
+    if (data.email            != null) setClauses.push(`"posVendaEmail" = '${data.email.replace(/'/g, "''")}'`);
+    if (data.cnpjCpf          != null) setClauses.push(`"posVendaCnpjCpf" = '${data.cnpjCpf.replace(/'/g, "''")}'`);
+    if (data.maquinaDesejada  != null) setClauses.push(`"maquinaDesejada" = '${data.maquinaDesejada.replace(/'/g, "''")}'`);
+    if (data.produtoFabricado != null) setClauses.push(`"maquinaProdutoFabricado" = '${data.produtoFabricado.replace(/'/g, "''")}'`);
+    if (data.volumeProducao   != null) setClauses.push(`"maquinaVolumeProducao" = '${data.volumeProducao.replace(/'/g, "''")}'`);
+    if (data.qualificacaoSDR  != null) setClauses.push(`"maquinaQualificacaoSDR" = '${data.qualificacaoSDR.replace(/'/g, "''")}'`);
+    if (data.clienteNovo      != null) setClauses.push(`"maquinaClienteNovo" = '${data.clienteNovo.replace(/'/g, "''")}'`);
+    if (setClauses.length === 0) return;
+    await db.execute(sql.raw(
+      `UPDATE lc_visitors SET ${setClauses.join(', ')}, "lastSeenAt" = '${new Date().toISOString()}' WHERE "id" = '${id}'`
+    ));
+    // Propaga o nome completo para todos os chats — SEMPRE sobrescreve
+    if (data.nome) {
+      await db.execute(sql.raw(
+        `UPDATE lc_chats SET "visitorName" = '${data.nome.replace(/'/g, "''")}' WHERE "visitorId" = '${id}'`
       ));
     }
   },
