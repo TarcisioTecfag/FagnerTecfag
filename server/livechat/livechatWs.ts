@@ -702,8 +702,18 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 let aiTurnContent = combinedContent;
                 let internalTurns = 0;
 
+                // Verifica se o CNPJ já foi validado neste chat (existe [CNPJ_RESULT] no histórico).
+                // Se sim, qualquer [CNPJ_CHECK] gerado pelo Gemini será ignorado — mesmo no turno 0.
+                // Isso previne que o AI revalide o CNPJ ao escrever o OVERVIEW ou a farewell,
+                // que são as duas situações que causavam o loop duplicado + perda da [MAQUINAS_DADOS].
+                const recentMsgsPreLoop = await lcStorage.listMessagesByChat(chat.id);
+                let cnpjAlreadyVerified = recentMsgsPreLoop.some(
+                  m => m.sender === 'visitor' && m.content.startsWith('[CNPJ_RESULT:')
+                );
+
                 while (internalTurns < 3) {
                   try {
+
                     aiResponse = await processVisitorMessage(
                       chat.id,
                       aiTurnContent,
@@ -725,12 +735,13 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   rawReply = aiResponse.reply;
                   const cnpjCheckMatch = rawReply.match(/\[CNPJ_CHECK:([^\]]+)\]/);
 
-                  // ⚠️ GUARD: só processa CNPJ_CHECK na PRIMEIRA iteração do while.
-                  // Se o Gemini emitir [CNPJ_CHECK] após o CNPJ já ter sido verificado
-                  // (ex: ao escrever "• CPF/CNPJ: xx.xxx" no OVERVIEW), ignora e quebra o loop
-                  // para evitar duplicação completa do fluxo de confirmação.
-                  if (cnpjCheckMatch && internalTurns > 0) {
-                    console.log(`[LiveChat] ⚠️ CNPJ_CHECK detectado em turno ${internalTurns} (após CNPJ_RESULT) — ignorando para evitar duplicação`);
+                  // ⚠️ GUARD: bloqueia [CNPJ_CHECK] quando:
+                  //   1) internalTurns > 0 (já injetou CNPJ_RESULT neste processamento), OU
+                  //   2) cnpjAlreadyVerified = true (CNPJ foi validado em mensagem anterior deste chat)
+                  // Isso impede que o Gemini re-valide o CNPJ ao escrever o OVERVIEW ou a farewell,
+                  // prevenindo tanto a duplicação de mensagens quanto a perda de [MAQUINAS_DADOS].
+                  if (cnpjCheckMatch && (internalTurns > 0 || cnpjAlreadyVerified)) {
+                    console.log(`[LiveChat] ⚠️ CNPJ_CHECK ignorado (turno=${internalTurns}, jaVerificado=${cnpjAlreadyVerified}) — strip e break`);
                     rawReply = rawReply.replace(/\[CNPJ_CHECK:[^\]]+\]/g, '').trim();
                     break;
                   }
