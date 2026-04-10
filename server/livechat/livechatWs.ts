@@ -361,6 +361,60 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             });
             await lcStorage.incrementVisitorPages(visitorId);
 
+            // ── RECUPERAÇÃO PÓS-RECONEXÃO (MPA/F5) ───────────────────
+            // A VTEX é MPA: cada navegação desmonta o widget e fecha o WS.
+            // Qualquer mensagem enviada durante esse gap (incluindo AGENT_JOINED)
+            // seria perdida silenciosamente. Ao reconectar, reenviamos:
+            //   1. AGENT_JOINED — se o chat estiver em human_active
+            //   2. Últimas mensagens do banco — para sincronizar o histórico
+            // Delay de 800ms para garantir que o WS do cliente está pronto.
+            setTimeout(async () => {
+              try {
+                const activeChat = await lcStorage.getActiveChatByVisitor(visitorId);
+                if (!activeChat) return;
+
+                // 1. Reenviar notificação de agente humano se chat estiver assumido
+                if (activeChat.status === 'human_active') {
+                  const agentLabel = activeChat.agentId ?? 'Atendente';
+                  const systemMsg = `${agentLabel} está respondendo este chat`;
+                  console.log(`[LiveChat] RECONNECT — visitante ${visitorId} reconectou com chat human_active. Reenviando AGENT_JOINED.`);
+                  ws.send(JSON.stringify({
+                    type: 'AGENT_JOINED',
+                    operatorName: agentLabel,
+                    message: systemMsg,
+                    chatId: activeChat.id,
+                  }));
+                }
+
+                // 2. Reenviar mensagens recentes para sincronizar histórico
+                // Envia apenas as últimas 10 mensagens do AI/agente não vistas
+                const recentMsgs = await lcStorage.listMessagesByChat(activeChat.id);
+                const lastMsgs = recentMsgs
+                  .filter((m: any) => m.sender === 'ai' || m.sender === 'agent' || m.sender === 'system')
+                  .slice(-10);
+                for (const msg of lastMsgs) {
+                  if (msg.sender === 'system') {
+                    ws.send(JSON.stringify({
+                      type: 'AGENT_JOINED',
+                      message: msg.content,
+                      chatId: activeChat.id,
+                    }));
+                  } else {
+                    ws.send(JSON.stringify({
+                      type: 'CHAT_REPLY',
+                      chatId: activeChat.id,
+                      sender: msg.sender,
+                      content: msg.content,
+                      timestamp: msg.sentAt ?? new Date().toISOString(),
+                      fromHistory: true,
+                    }));
+                  }
+                }
+              } catch (rErr: any) {
+                console.warn('[LiveChat] RECONNECT healing error:', rErr.message);
+              }
+            }, 800);
+
             break;
           }
 
