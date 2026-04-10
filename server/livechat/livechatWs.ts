@@ -18,6 +18,8 @@ import { lcStorage } from "./livechatStorage.js";
 import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, isObviousNoise, detectStageIntent, generatePosVendaReport, generateMaquinasReport, generatePecasReport } from "./livechatAI.js";
 import { createPosVendaOS, createMaquinasOS, createPecasOS, isRdCrmConfigured } from "./rdCrmService.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
+import { buildCart } from "./vtexCheckoutService.js";
+import type { VtexOrderData } from "./vtexCheckoutService.js";
 
 // ─── Connection maps ─────────────────────────────────────────────────────────
 
@@ -1429,12 +1431,117 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   }
                 }
 
+                // ── Detectar [VTEX_PEDIDO_INICIADO] — cliente autorizou pedido ─────────
+                // Move o card imediatamente para "vendido" antes da coleta de dados
+                if (rawReply.includes('[VTEX_PEDIDO_INICIADO]')) {
+                  try {
+                    await lcStorage.updateVisitorPipeline(currentVisitorId, 'vendido');
+                    broadcastToAgents({ type: 'PIPELINE_UPDATED', visitorId: currentVisitorId, stage: 'vendido' });
+                    await lcStorage.addVisitorNote(currentVisitorId, 'VTEX', '🛒 Cliente autorizou pedido — Fagner iniciando coleta de dados para checkout.');
+                    broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
+                    console.log(`[VTEX Order] card do visitante ${currentVisitorId} movido para "vendido"`);
+                  } catch (e: any) {
+                    console.error('[VTEX Order] Falha ao mover para vendido:', e.message);
+                  }
+                }
+
+                // ── Detectar [VTEX_ORDER_DADOS:{...}] — todos os dados coletados ───────
+                const vtexOrderMatch = rawReply.match(/\[VTEX_ORDER_DADOS:([\s\S]*?)\]/);
+                if (vtexOrderMatch) {
+                  (async () => {
+                    let orderData: VtexOrderData | null = null;
+                    try {
+                      orderData = JSON.parse(vtexOrderMatch[1].trim()) as VtexOrderData;
+                    } catch (parseErr: any) {
+                      console.warn('[VTEX Order] Falha ao parsear VTEX_ORDER_DADOS:', parseErr.message);
+                      return;
+                    }
+                    try {
+                      // 1. Nota interna: iniciando
+                      await lcStorage.addVisitorNote(currentVisitorId, 'VTEX', '⏳ Montando carrinho e calculando frete...');
+                      broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
+
+                      // 2. Garante que o card está em "vendido" (caso [VTEX_PEDIDO_INICIADO] não tenha sido lido)
+                      await lcStorage.updateVisitorPipeline(currentVisitorId, 'vendido');
+
+                      // 3. Monta cart completo na VTEX
+                      const { orderFormId, checkoutLink, total, freteInfo } = await buildCart(orderData!);
+
+                      // 4. Salva dados do pedido no visitante (aba "Sobre o cliente")
+                      await lcStorage.updateVisitorOrderData(currentVisitorId, {
+                        vtexOrderFormId: orderFormId,
+                        vtexOrderStatus: 'link_gerado',
+                        vtexOrderData: {
+                          ...orderData,
+                          checkoutLink,
+                          total,
+                          freteInfo,
+                          geradoEm: new Date().toISOString(),
+                        },
+                      });
+
+                      // 5. Nota de sucesso ao painel
+                      const nomeProduto = orderData!.produto || 'Produto';
+                      await lcStorage.addVisitorNote(
+                        currentVisitorId, 'VTEX',
+                        `✅ Link gerado com sucesso!\nProduto: ${nomeProduto}\nTotal: ${total}\nFrete: ${freteInfo.carrier} — ${freteInfo.priceFormatted} (${freteInfo.deliveryDays} dias úteis)\nLink: ${checkoutLink}`
+                      );
+                      broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
+                      broadcastToAgents({
+                        type: 'VISITOR_ORDER_CREATED',
+                        visitorId: currentVisitorId,
+                        orderFormId,
+                        checkoutLink,
+                        total,
+                      });
+
+                      // 6. Envia link ao cliente (substitui a mensagem vaga do Fagner)
+                      const freteTexto = freteInfo.deliveryDays > 0
+                        ? `${freteInfo.carrier} — ${freteInfo.priceFormatted} (${freteInfo.deliveryDays} dias úteis)`
+                        : `A combinar com nossa equipe`;
+                      const linkMsg = [
+                        `🛒 *Pedido pronto para finalizar!*`,
+                        ``,
+                        `📦 Produto: ${nomeProduto}`,
+                        `💰 Total: ${total}`,
+                        `🚚 Frete: ${freteTexto}`,
+                        ``,
+                        `Para finalizar, basta clicar no link abaixo e escolher sua forma de pagamento (PIX, Boleto ou Cartão) — todos os seus dados já estão preenchidos!`,
+                        ``,
+                        checkoutLink,
+                        ``,
+                        `_O link fica ativo por 1 hora. Se precisar de um novo é só pedir! 😊_`,
+                      ].join('\n');
+
+                      await lcStorage.createMessage({ chatId: chat.id, sender: 'ai', content: linkMsg });
+                      sendToVisitor(currentVisitorId, {
+                        type: 'CHAT_REPLY', chatId: chat.id, sender: 'ai',
+                        content: linkMsg, timestamp: new Date().toISOString(),
+                      });
+                      broadcastToAgents({
+                        type: 'CHAT_MESSAGE', chatId: chat.id, visitorId: currentVisitorId,
+                        sender: 'ai', content: linkMsg, timestamp: new Date().toISOString(),
+                      });
+
+                      console.log(`[VTEX Order] ✅ Link gerado para ${currentVisitorId}: ${checkoutLink}`);
+
+                    } catch (err: any) {
+                      console.error('[VTEX Order] ❌ Erro ao gerar link:', err.message);
+                      await lcStorage.addVisitorNote(currentVisitorId, 'VTEX', `❌ Falha ao gerar link: ${err.message}`).catch(() => {});
+                      broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
+                      // Mensagem de fallback ao cliente
+                      const errMsg = 'Tive um problema ao gerar o link de pagamento 😕 Vou acionar nossa equipe para te ajudar. Em breve entraremos em contato!';
+                      await lcStorage.createMessage({ chatId: chat.id, sender: 'ai', content: errMsg });
+                      sendToVisitor(currentVisitorId, { type: 'CHAT_REPLY', chatId: chat.id, sender: 'ai', content: errMsg, timestamp: new Date().toISOString() });
+                    }
+                  })();
+                }
                 // Start follow-ups (3m, 8m) — só se não for estágio "outros"
                 // Para "outros": follow-up já foi cancelado acima quando a tag foi detectada
                 // Mas se ainda não houve tag, só inicia timers se não está em estágio protegido
                 try {
                   const visitorNow = await lcStorage.getVisitorById(currentVisitorId);
-                  const PROTECTED_STAGES = ['outros', 'finalizado_com_venda', 'pos_venda', 'maquinas', 'pecas'];
+                  const PROTECTED_STAGES = ['outros', 'finalizado_com_venda', 'pos_venda', 'maquinas', 'pecas', 'vendido'];
                   if (!PROTECTED_STAGES.includes(visitorNow?.pipelineStage ?? '')) {
                     startFollowUpTimers(currentVisitorId, chat.id);
                   } else {

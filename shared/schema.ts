@@ -188,6 +188,11 @@ export const lcVisitors = pgTable("lc_visitors", {
   maquinaClienteNovo: text("maquinaClienteNovo"),        // SIM / NAO
   // ── Integração RD Station CRM ──────────────────────────────────────────────
   rdCrmDealId: text("rdCrmDealId"),   // ID da negociação criada no RD CRM (evita duplicatas)
+  // ── Pedido VTEX (gerado pelo Fagner via checkout link) ─────────────────────
+  vtexOrderFormId: text("vtexOrderFormId"),    // ID do cart VTEX gerado (link de pagamento)
+  vtexOrderId: text("vtexOrderId"),            // ID do pedido final (preenchido pelo webhook)
+  vtexOrderStatus: text("vtexOrderStatus"),    // "link_gerado" | "payment-approved" | "canceled"
+  vtexOrderData: jsonb("vtexOrderData").$type<any>(), // CPF/CNPJ, endereço, produto, total, link
 });
 
 export const lcPageviews = pgTable("lc_pageviews", {

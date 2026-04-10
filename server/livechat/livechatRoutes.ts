@@ -160,7 +160,7 @@ export function registerLiveChatRoutes(app: any): void {
   router.get("/pipeline", requireAuth, async (_req: Request, res: Response) => {
     try {
       try { await lcStorage.migrateNullPipelineStages(); } catch {}
-      const stages = ['novo_atendimento', 'em_atendimento', 'maquinas', 'pecas', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'];
+      const stages = ['novo_atendimento', 'em_atendimento', 'maquinas', 'pecas', 'pos_venda', 'vendido', 'outros', 'sem_resposta'];
       const result: Record<string, any[]> = {};
       for (const stage of stages) {
         result[stage] = await lcStorage.listVisitorsByPipeline(stage);
@@ -417,6 +417,91 @@ export function registerLiveChatRoutes(app: any): void {
       const r = await fetch("https://api.rd.services/crm/v2/contacts/custom_fields", { headers: { Authorization: `Bearer ${at}` } });
       return res.json({ status: r.status, data: await r.json() });
     } catch (err: any) { return res.status(500).json({ message: err?.message }); }
+  });
+
+  // ── VTEX Order Hook — chamado pela VTEX quando pagamento confirmado ou cancelado
+  // NÃO usa requireAuth — a VTEX chama sem sessão, protegido por secret no header
+  router.post("/vtex-order-hook", async (req: Request, res: Response) => {
+    // 1. Valida secret
+    const secret = req.headers['x-vtex-hook-secret'] as string | undefined;
+    const expectedSecret = process.env.VTEX_ORDER_HOOK_SECRET;
+    if (expectedSecret && secret !== expectedSecret) {
+      console.warn('[VTEX Hook] ⚠️ Secret inválido — ignorando webhook');
+      return res.status(401).json({ error: 'Invalid secret' });
+    }
+
+    // 2. Responde imediatamente (VTEX não espera processamento longo)
+    res.json({ ok: true });
+
+    // 3. Processa em background
+    setImmediate(async () => {
+      try {
+        const body = req.body as any;
+        const orderId: string  = body.orderId  ?? body.OrderId  ?? '';
+        const status: string   = body.status   ?? body.Status   ?? '';
+        const value: number    = body.value     ?? body.Value    ?? 0;  // centavos
+        const orderFormId: string = body.orderFormId ?? body.OrderFormId ?? '';
+
+        console.log(`[VTEX Hook] orderId=${orderId} status=${status} orderFormId=${orderFormId}`);
+
+        if (!['payment-approved', 'canceled'].includes(status)) return;
+
+        // 4. Encontra visitante pelo orderFormId
+        const visitor = orderFormId
+          ? await lcStorage.getVisitorByOrderFormId(orderFormId)
+          : null;
+
+        if (!visitor) {
+          console.warn(`[VTEX Hook] Não foi encontrado visitante para orderFormId=${orderFormId} — provavelmente pedido externo`);
+          return;
+        }
+
+        // 5. Atualiza status no banco
+        await lcStorage.updateVisitorOrderData(visitor.id, {
+          vtexOrderId:     orderId,
+          vtexOrderStatus: status,
+        });
+
+        // 6. Cria anotação de IA no card (visível no painel)
+        const valorFormatado = value > 0
+          ? (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+          : '';
+        const nota = status === 'payment-approved'
+          ? `✅ Pagamento confirmado!\nPedido: #${orderId}${valorFormatado ? `\nValor: ${valorFormatado}` : ''}\nData: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
+          : `❌ Pedido cancelado\nPedido: #${orderId}\nData: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`;
+
+        await lcStorage.addVisitorNote(visitor.id, 'VTEX', nota);
+
+        // 7. Envia mensagem ao cliente no chat (se houver chat aberto)
+        const chats = await lcStorage.listChatsByVisitor(visitor.id);
+        const openChat = chats.find((c: any) => c.status !== 'closed');
+
+        if (openChat) {
+          const clientMsg = status === 'payment-approved'
+            ? [
+                `✅ Pagamento confirmado! Seu pedido foi aprovado! 🎉`,
+                ``,
+                `📦 Pedido: #${orderId}`,
+                valorFormatado ? `💰 Valor: ${valorFormatado}` : '',
+                `🚚 Em breve você receberá as informações de rastreio por email.`,
+                ``,
+                `Qualquer dúvida, estou por aqui! 😊`,
+              ].filter(Boolean).join('\n')
+            : [
+                `❌ Infelizmente seu pedido foi cancelado.`,
+                `Pedido: #${orderId}`,
+                ``,
+                `Se quiser refazer o pedido ou tiver alguma dúvida, é só falar comigo! 😊`,
+              ].join('\n');
+
+          await lcStorage.createMessage({ chatId: openChat.id, sender: 'ai', content: clientMsg });
+        }
+
+        console.log(`[VTEX Hook] ✅ Processado: visitante=${visitor.id} orderId=${orderId} status=${status}`);
+      } catch (err: any) {
+        console.error('[VTEX Hook] ❌ Erro ao processar webhook:', err.message);
+      }
+    });
   });
 
   // Mount all routes under /api/livechat

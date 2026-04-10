@@ -377,6 +377,38 @@ export const lcStorage = {
     }
   },
 
+  // ── Pedido VTEX — Dados coletados e gerados pelo Fagner ──────────────────
+  async updateVisitorOrderData(id: string, data: {
+    vtexOrderFormId?: string | null;
+    vtexOrderId?: string | null;
+    vtexOrderStatus?: string | null;
+    vtexOrderData?: any;
+  }): Promise<void> {
+    const setClauses: string[] = [];
+    if (data.vtexOrderFormId !== undefined)
+      setClauses.push(`"vtexOrderFormId" = '${(data.vtexOrderFormId ?? '').replace(/'/g, "''")}'`);
+    if (data.vtexOrderId !== undefined)
+      setClauses.push(`"vtexOrderId" = '${(data.vtexOrderId ?? '').replace(/'/g, "''")}'`);
+    if (data.vtexOrderStatus !== undefined)
+      setClauses.push(`"vtexOrderStatus" = '${(data.vtexOrderStatus ?? '').replace(/'/g, "''")}'`);
+    if (data.vtexOrderData !== undefined)
+      setClauses.push(`"vtexOrderData" = '${JSON.stringify(data.vtexOrderData).replace(/'/g, "''")}'::jsonb`);
+    if (setClauses.length === 0) return;
+    await db.execute(sql.raw(
+      `UPDATE lc_visitors SET ${setClauses.join(', ')}, "lastSeenAt" = '${new Date().toISOString()}' WHERE "id" = '${id}'`
+    ));
+  },
+
+  // Busca visitante pelo orderFormId — usado pelo webhook de pagamento VTEX
+  async getVisitorByOrderFormId(orderFormId: string): Promise<LcVisitor | null> {
+    const clean = orderFormId.replace(/'/g, "''");
+    const rows = await db.execute(sql.raw(
+      `SELECT * FROM lc_visitors WHERE "vtexOrderFormId" = '${clean}' LIMIT 1`
+    ));
+    const data = (rows as any)?.rows ?? (Array.isArray(rows) ? rows : []);
+    return (data[0] as LcVisitor) ?? null;
+  },
+
   async setRdCrmDealId(visitorId: string, dealId: string): Promise<void> {
     await db.update(lcVisitors)
       .set({ rdCrmDealId: dealId })
@@ -909,6 +941,11 @@ export async function ensureLiveChatSchema(): Promise<void> {
     ['lc_visitors', '"maquinaQualificacaoSDR" TEXT'],
     ['lc_visitors', '"maquinaClienteNovo" TEXT'],
     ['lc_visitors', '"rdCrmDealId" TEXT'],
+    // lc_visitors — Pedido VTEX (gerado pelo Fagner via checkout link)
+    ['lc_visitors', '"vtexOrderFormId" TEXT'],
+    ['lc_visitors', '"vtexOrderId" TEXT'],
+    ['lc_visitors', '"vtexOrderStatus" TEXT'],
+    ['lc_visitors', '"vtexOrderData" JSONB'],
 
     // lc_chats
     ['lc_chats', '"mood" TEXT'],
