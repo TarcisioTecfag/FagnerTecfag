@@ -725,7 +725,18 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   rawReply = aiResponse.reply;
                   const cnpjCheckMatch = rawReply.match(/\[CNPJ_CHECK:([^\]]+)\]/);
 
+                  // ⚠️ GUARD: só processa CNPJ_CHECK na PRIMEIRA iteração do while.
+                  // Se o Gemini emitir [CNPJ_CHECK] após o CNPJ já ter sido verificado
+                  // (ex: ao escrever "• CPF/CNPJ: xx.xxx" no OVERVIEW), ignora e quebra o loop
+                  // para evitar duplicação completa do fluxo de confirmação.
+                  if (cnpjCheckMatch && internalTurns > 0) {
+                    console.log(`[LiveChat] ⚠️ CNPJ_CHECK detectado em turno ${internalTurns} (após CNPJ_RESULT) — ignorando para evitar duplicação`);
+                    rawReply = rawReply.replace(/\[CNPJ_CHECK:[^\]]+\]/g, '').trim();
+                    break;
+                  }
+
                   if (cnpjCheckMatch) {
+
                     const doc = cnpjCheckMatch[1];
                     // Remove CNPJ_CHECK tag e SCORE antes de enviar ao cliente
                     const cleanMsg = rawReply
