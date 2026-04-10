@@ -421,88 +421,91 @@ async function getOrCreateCnpjFieldId(): Promise<string | null> {
 // ─── Empresa (Organization) — CNPJ ou CPF ────────────────────────────────────
 
 /**
- * Para CNPJ: busca por CNPJ no campo custom, cria com razão social + campos da Receita.
- * Para CPF: cria empresa com nome do cliente e preenche campo CPF.
- * Retorna the organizationId ou null em caso de falha.
+ * Busca ou cria uma empresa no RD CRM.
+ * SEMPRE cria a empresa (com nome do cliente como fallback se sem razão social).
+ * O CNPJ/CPF e outros campos são atualizados via PUT separado após a criaão
+ * para evitar que erros de custom_fields bloqueiem a criaão da empresa.
  */
 async function findOrCreateOrganization(
-  posVenda: PosVendaData
+  posVenda: { nome: string; cnpjCpf?: string | null; cnpjData?: CnpjData | null }
 ): Promise<string | null> {
-  const doc = (posVenda.cnpjCpf ?? "").replace(/\D/g, "");
+  const doc = (posVenda.cnpjCpf ?? '').replace(/\D/g, '');
   const isCnpj = doc.length === 14;
-  const isCpf  = doc.length === 11;
 
-  if (!isCnpj && !isCpf) return null;
+  // Nome da empresa: razao social (CNPJ) ou nome do cliente (CPF/sem doc)
+  const nomeEmpresa = (isCnpj && posVenda.cnpjData?.nome)
+    ? posVenda.cnpjData.nome
+    : posVenda.nome;
 
-  // Para CNPJ: usa razão social da Receita; para CPF: usa nome do cliente
-  const nomeEmpresa = (isCnpj && posVenda.cnpjData?.nome) ? posVenda.cnpjData.nome : posVenda.nome;
+  if (!nomeEmpresa?.trim()) {
+    console.error('[RD CRM] \u274c findOrCreateOrganization: nome vazio — empresa n\u00e3o criada');
+    return null;
+  }
+
+  console.log(`[RD CRM] findOrCreateOrganization: nome="${nomeEmpresa}" doc="${doc}"`);
+
+  // ── 1. Busca empresa existente por nome ──────────────────────────────────────
+  if (doc) {
+    try {
+      const byDoc = await rdRequest<any>('GET',
+        `/organizations?filter=@${encodeURIComponent(doc)}&page[size]=5`);
+      const docList: any[] = Array.isArray(byDoc) ? byDoc : (Array.isArray(byDoc?.data) ? byDoc.data : []);
+      if (docList.length > 0) {
+        console.log(`[RD CRM] \u2705 Empresa existente (doc): ${docList[0].id} "${docList[0].name}"`);
+        return docList[0].id;
+      }
+    } catch { /* ignora — tenta por nome */ }
+  }
 
   try {
-    // ── 1. Busca empresa existente ────────────────────────────────────────────
-    // Por campo personalizado CNPJ/CPF (slug padrão do RD CRM)
-    try {
-      const byField = await rdRequest<any[]>("GET", `/organizations?filter=@cnpj_cpf:${encodeURIComponent(doc)}`);
-      if (Array.isArray(byField) && byField.length > 0) {
-        console.log(`[RD CRM] ✅ Empresa existente (campo CNPJ/CPF): ${byField[0].id}`);
-        return byField[0].id;
-      }
-    } catch {}
-
-    // Por nome (evitar duplicata)
-    try {
-      const byName = await rdRequest<any[]>("GET", `/organizations?filter=name:${encodeURIComponent(nomeEmpresa)}`);
-      if (Array.isArray(byName) && byName.length > 0) {
-        console.log(`[RD CRM] ✅ Empresa existente (nome): ${byName[0].id} — "${nomeEmpresa}"`);
-        return byName[0].id;
-      }
-    } catch {}
-
-    // ── 2. Carrega todos UUIDs dos campos personalizados de org ───────────────
-    const fieldIds = await loadOrgFieldIds();
-
-    // ── 3. Monta payload — custom_fields com os UUIDs reais ──────────────────
-    const customFields: Record<string, string> = {};
-
-    // CNPJ ou CPF (obrigatório no CRM conforme screenshot)
-    if (fieldIds.cnpjCpf && doc) {
-      customFields[fieldIds.cnpjCpf] = doc;
+    const byName = await rdRequest<any>('GET',
+      `/organizations?filter=name:${encodeURIComponent(nomeEmpresa)}&page[size]=5`);
+    const nameList: any[] = Array.isArray(byName) ? byName : (Array.isArray(byName?.data) ? byName.data : []);
+    if (nameList.length > 0) {
+      console.log(`[RD CRM] \u2705 Empresa existente (nome): ${nameList[0].id} "${nomeEmpresa}"`);
+      return nameList[0].id;
     }
-    // Cidade (da Receita Federal, se disponível)
-    if (fieldIds.cidade && posVenda.cnpjData?.municipio) {
-      customFields[fieldIds.cidade] = posVenda.cnpjData.municipio;
-    }
-    // Bairro
-    if (fieldIds.bairro && posVenda.cnpjData?.bairro) {
-      customFields[fieldIds.bairro] = posVenda.cnpjData.bairro;
-    }
-    // Estado
-    if (fieldIds.estado && posVenda.cnpjData?.uf) {
-      customFields[fieldIds.estado] = posVenda.cnpjData.uf;
-    }
+  } catch { /* ignora — vai criar */ }
 
-    const orgPayload: Record<string, any> = { name: nomeEmpresa };
-    if (Object.keys(customFields).length > 0) orgPayload.custom_fields = customFields;
-    if (posVenda.cnpjData?.telefone1) orgPayload.phone = posVenda.cnpjData.telefone1;
-
-    console.log(`[RD CRM] Criando empresa "${nomeEmpresa}" doc=${doc} custom_fields=${JSON.stringify(customFields)}`);
-
-
-    const org = await rdRequest<{ id: string }>("POST", "/organizations", orgPayload);
-    console.log(`[RD CRM] ✅ Empresa criada: ${org.id} — "${nomeEmpresa}" (doc: ${doc})`);
-    return org.id;
-
-  } catch (e: any) {
-    console.error(`[RD CRM] ❌ Falha ao criar empresa "${nomeEmpresa}": ${e.message}`);
-    // Último recurso: empresa sem custom_fields
-    try {
-      const orgMin = await rdRequest<{ id: string }>("POST", "/organizations", { name: nomeEmpresa });
-      console.log(`[RD CRM] ✅ Empresa mínima (fallback): ${orgMin.id}`);
-      return orgMin.id;
-    } catch (e2: any) {
-      console.error(`[RD CRM] ❌ Fallback falhou: ${e2.message}`);
+  // ── 2. Cria empresa com payload M\u00cdNIMO (sem custom_fields no POST) ─────────
+  // custom_fields no POST de org causa 422 — enviamos em PUT separado depois
+  let orgId: string | null = null;
+  try {
+    const createPayload: Record<string, any> = { name: nomeEmpresa };
+    if (posVenda.cnpjData?.telefone1) createPayload.phone = posVenda.cnpjData.telefone1;
+    console.log(`[RD CRM] Criando empresa: ${JSON.stringify(createPayload)}`);
+    const org = await rdRequest<{ id: string }>('POST', '/organizations', createPayload);
+    if (!org?.id) {
+      console.error(`[RD CRM] \u274c POST /organizations retornou sem id: ${JSON.stringify(org)}`);
       return null;
     }
+    orgId = org.id;
+    console.log(`[RD CRM] \u2705 Empresa criada: ${orgId} — "${nomeEmpresa}"`);
+  } catch (createErr: any) {
+    console.error(`[RD CRM] \u274c FALHA CRIAR EMPRESA "${nomeEmpresa}": ${createErr.message}`);
+    return null;
   }
+
+  // ── 3. Atualiza campos personalizados via PUT (separado — se falhar, empresa ainda fica vinculada) ──
+  if (orgId && doc) {
+    try {
+      const fieldIds = await loadOrgFieldIds();
+      const customFields: Record<string, string> = {};
+      if (fieldIds.cnpjCpf)                            customFields[fieldIds.cnpjCpf] = doc;
+      if (fieldIds.cidade && posVenda.cnpjData?.municipio) customFields[fieldIds.cidade] = posVenda.cnpjData.municipio;
+      if (fieldIds.bairro && posVenda.cnpjData?.bairro)    customFields[fieldIds.bairro] = posVenda.cnpjData.bairro;
+      if (fieldIds.estado && posVenda.cnpjData?.uf)        customFields[fieldIds.estado] = posVenda.cnpjData.uf;
+
+      if (Object.keys(customFields).length > 0) {
+        await rdRequest('PUT', `/organizations/${orgId}`, { custom_fields: customFields });
+        console.log(`[RD CRM] \u2705 Campos org atualizados: CNPJ/CPF=${doc}`);
+      }
+    } catch (putErr: any) {
+      console.warn(`[RD CRM] \u26a0\ufe0f Campos org n\u00e3o atualizados (empresa criada, sem doc vinculado): ${putErr.message}`);
+    }
+  }
+
+  return orgId;
 }
 
 
@@ -749,18 +752,14 @@ export async function createPosVendaOS(
 
   console.log(`[RD CRM] Criando OS de Pós Venda para visitante ${visitorId}...`);
 
-  // 1. Empresa — para CNPJ: usa dados da Receita. Para CPF: cria com nome do cliente.
+  // 1. Empresa — SEMPRE cria (com CNPJ se disponível, com nome do cliente como fallback)
+  // Não condiciona mais ao isCnpj/isCpf — toda negociação deve ter empresa vinculada
   let organizationId: string | null = null;
-  const docDigits = (posVendaData.cnpjCpf ?? "").replace(/\D/g, "");
-  const isCnpj = docDigits.length === 14;
-  const isCpf  = docDigits.length === 11;
-
-  if (isCnpj && posVendaData.cnpjData) {
-    // CNPJ com dados da Receita disponíveis
-    organizationId = await findOrCreateOrganization(posVendaData as PosVendaData);
-  } else if (isCpf) {
-    // CPF: cria empresa com o nome do cliente
-    organizationId = await findOrCreateOrganization(posVendaData as PosVendaData);
+  try {
+    organizationId = await findOrCreateOrganization(posVendaData as any);
+    console.log(`[RD CRM] Pós Venda: empresa ${organizationId ? 'criada/encontrada: ' + organizationId : 'FALHOU'}`);
+  } catch (orgErr: any) {
+    console.error(`[RD CRM] ❌ Pós Venda: erro ao criar empresa: ${orgErr.message}`);
   }
 
   // 2. Contato (cria ou busca, e atualiza e-mail se necessário)
