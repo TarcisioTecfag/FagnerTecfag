@@ -692,6 +692,46 @@ async function createNote(dealId: string, relatorio: string): Promise<void> {
   console.log(`[RD CRM] Anotação criada na negociação ${dealId}`);
 }
 
+// ─── Tarefa de Ligação Imediata ───────────────────────────────────────────────
+/**
+ * Cria uma tarefa do tipo "Ligação" associada ao deal recém-criado,
+ * atribuída ao mesmo operador (owner) da negociação.
+ *
+ * - type: "call" — Ligação (conforme enum da API v2)
+ * - due_date: momento exato da criação (ISO 8601 UTC)
+ * - status: "open" (default — tarefas só podem ser criadas como abertas)
+ * - owner_ids: array com o ID do operador alocado ao deal
+ *
+ * Executada com try/catch isolado para não bloquear o fluxo principal
+ * caso a tarefa falhe (rate limit, rede, etc).
+ */
+async function createCallTask(
+  dealId: string,
+  ownerId: string,
+  clienteNome: string,
+  clienteTelefone: string,
+  funil: string
+): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    await rdRequest("POST", "/tasks", {
+      name: "⚡ Ligar para o cliente agora",
+      type: "call",
+      deal_id: dealId,
+      owner_ids: [ownerId],
+      due_date: now,
+      description:
+        `Fagner IA gerou este lead — Funil: ${funil}\n` +
+        `Cliente: ${clienteNome} | Tel: ${clienteTelefone}\n` +
+        `Entre em contato IMEDIATAMENTE para não perder a oportunidade.`,
+    });
+    console.log(`[RD CRM] ✅ Tarefa de ligação criada → deal ${dealId} | owner: ${ownerId} | funil: ${funil}`);
+  } catch (e: any) {
+    // Não bloqueia o fluxo principal — deal já foi criado com sucesso
+    console.warn(`[RD CRM] ⚠️ Falha ao criar tarefa de ligação para deal ${dealId}:`, e.message);
+  }
+}
+
 // ─── Função principal ────────────────────────────────────────────────────────
 export async function createPosVendaOS(
   visitorId: string,
@@ -736,7 +776,15 @@ export async function createPosVendaOS(
   // 4. Anotação com relatório completo
   await createNote(dealId, relatorio);
 
-  // 5. Persistir o dealId no visitante
+  // 5. Tarefa de ligação imediata para o operador
+  const ownerIdPosVenda = (process.env.RD_CRM_OWNER_POS_VENDA_ID ?? "").trim();
+  if (ownerIdPosVenda) {
+    await createCallTask(dealId, ownerIdPosVenda, posVendaData.nome, posVendaData.telefone, "Pós Venda");
+  } else {
+    console.warn("[RD CRM] Pós Venda: owner não configurado — tarefa de ligação não criada.");
+  }
+
+  // 6. Persistir o dealId no visitante
   await db.update(lcVisitors)
     .set({ rdCrmDealId: dealId })
     .where(eq(lcVisitors.id, visitorId));
@@ -919,7 +967,15 @@ export async function createMaquinasOS(
   // 4. Anotação com relatório completo
   await createNote(dealId, relatorio);
 
-  // 5. Persistir dealId
+  // 5. Tarefa de ligação imediata para o operador alocado
+  const ownerIdMaq = (maqData.ownerId || process.env.RD_CRM_OWNER_MAQUINAS_ID || "").trim();
+  if (ownerIdMaq) {
+    await createCallTask(dealId, ownerIdMaq, maqData.nome, maqData.telefone, "Máquinas 2.0");
+  } else {
+    console.warn("[RD CRM] Máquinas: owner não configurado — tarefa de ligação não criada.");
+  }
+
+  // 6. Persistir dealId
   await db.update(lcVisitors)
     .set({ rdCrmDealId: dealId })
     .where(eq(lcVisitors.id, visitorId));
@@ -1130,7 +1186,15 @@ export async function createPecasOS(
   // 4. Anotação com relatório completo
   await createNote(dealId, relatorio);
 
-  // 5. Persistir dealId no visitante
+  // 5. Tarefa de ligação imediata para o operador alocado
+  const ownerIdPecas = (pecasData.ownerId || process.env.RD_CRM_OWNER_PECAS_ID || "").trim();
+  if (ownerIdPecas) {
+    await createCallTask(dealId, ownerIdPecas, pecasData.nome, pecasData.telefone, "Peças 2.0");
+  } else {
+    console.warn("[RD CRM] Peças: owner não configurado — tarefa de ligação não criada.");
+  }
+
+  // 6. Persistir dealId no visitante
   await db.update(lcVisitors)
     .set({ rdCrmDealId: dealId })
     .where(eq(lcVisitors.id, visitorId));
