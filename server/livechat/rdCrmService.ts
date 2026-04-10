@@ -822,10 +822,21 @@ async function createMaquinasDeal(
 
   const pipelineId = RD_MAQUINAS_PIPELINE_ID;
   const stageId    = RD_MAQUINAS_FIRST_STAGE_ID;
-  const ownerId    = (maqData.ownerId || (process.env.RD_CRM_OWNER_MAQUINAS_ID ?? '')).trim();
+  let ownerId = (maqData.ownerId || (process.env.RD_CRM_OWNER_MAQUINAS_ID ?? '')).trim();
 
+  // Se owner não configurado, busca o primeiro usuário ativo do RD CRM
   if (!ownerId) {
-    console.warn('[RD CRM] Owner ID para máquinas não configurado — deal sem responsável definido');
+    console.warn('[RD CRM] ⚠️ Owner MÁQUINAS não configurado — buscando primeiro usuário ativo...');
+    try {
+      const usersData = await rdRequest<any>('GET', '/users?filter=is:active&page[size]=1');
+      const users: any[] = Array.isArray(usersData) ? usersData : (Array.isArray(usersData?.data) ? usersData.data : []);
+      if (users.length > 0) {
+        ownerId = users[0].id;
+        console.log(`[RD CRM] Owner MÁQUINAS resolvido do RD CRM: ${ownerId} (${users[0].name})`);
+      }
+    } catch (e: any) {
+      console.error(`[RD CRM] ❌ Falha ao buscar usuários para owner: ${e.message}`);
+    }
   }
 
   const [sourceId, campaignId] = await Promise.all([getOrCreateSourceId(), getOrCreateCampaignId()]);
@@ -899,15 +910,23 @@ async function createMaquinasDeal(
   if (fVolume?.id && maqData.volumeProducao)
     dealPayload.custom_fields[fVolume.id] = maqData.volumeProducao;
 
-  if (fInfo?.id)
-    dealPayload.custom_fields[fInfo.id] = infoCompl;
+  // INFORMAÇÕES COMPLEMENTARES — sempre preenchida (nunca vazia)
+  // Garante que pelo menos a máquina desejada e CNPJ apareçam no campo
+  if (fInfo?.id) {
+    const partes: string[] = [];
+    partes.push(`Máquina: ${maqData.maquinaDesejada}`);
+    if (maqData.produtoFabricado) partes.push(`Produto: ${maqData.produtoFabricado}`);
+    if (maqData.volumeProducao)   partes.push(`Volume: ${maqData.volumeProducao}`);
+    if (maqData.cnpjCpf)          partes.push(`CNPJ/CPF: ${maqData.cnpjCpf}`);
+    if (maqData.detalhes)         partes.push(`Detalhes: ${maqData.detalhes}`);
+    dealPayload.custom_fields[fInfo.id] = partes.join(' | ').slice(0, 500);
+  }
 
-  // Se nenhum campo personalizado foi encontrado, nao envia custom_fields (evita 422)
   if (Object.keys(dealPayload.custom_fields).length === 0) {
     delete dealPayload.custom_fields;
-    console.warn('[RD CRM] Nenhum campo personalizado de deal encontrado — custom_fields omitido');
+    console.warn('[RD CRM] Nenhum campo de deal encontrado — custom_fields omitido');
   } else {
-    console.log('[RD CRM] custom_fields (por UUID) a enviar:', JSON.stringify(dealPayload.custom_fields));
+    console.log('[RD CRM] custom_fields MÁQUINAS a enviar:', JSON.stringify(dealPayload.custom_fields));
   }
 
   const deal = await rdRequest<{ id: string }>('POST', '/deals', dealPayload);
@@ -982,7 +1001,7 @@ export async function createMaquinasOS(
   if (resolvedOwner) {
     await createCallTask(dealId, resolvedOwner, maqData.nome, maqData.telefone, "Máquinas 2.0");
   } else {
-    console.warn("[RD CRM] Máquinas: sem owner — tarefa de ligação não criada.");
+    console.error("[RD CRM] ❌ Máquinas: owner vazio — tarefa NÃO criada. Configure RD_CRM_OWNER_MAQUINAS_ID ou adicione usuários no rodízio.");
   }
 
   // 6. Persistir dealId
