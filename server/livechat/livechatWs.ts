@@ -566,6 +566,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               chatId: chat.id,
               visitorId,
               sender: "visitor",
+              visitorName: chat.visitorName ?? data.visitorName ?? null,
               content: data.content,
               timestamp: new Date().toISOString(),
             });

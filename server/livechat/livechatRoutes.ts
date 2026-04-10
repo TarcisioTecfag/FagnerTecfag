@@ -130,6 +130,19 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json({ ok: true });
   });
 
+  // ── Renomear título do chat (visitorName) ──────────────────────────────────
+  router.patch("/chats/:id/rename", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { title } = req.body;
+      if (!title || typeof title !== "string") return res.status(400).json({ error: "title required" });
+      await lcStorage.updateChat(p(req.params.id), { visitorName: title.trim() });
+      return res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[LiveChat] PATCH /chats/:id/rename error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
   // ── Settings ──────────────────────────────────────────────────────
   router.get("/settings/:key", requireAuth, async (req: Request, res: Response) => {
     const value = await lcStorage.getSettingParsed(p(req.params.key));

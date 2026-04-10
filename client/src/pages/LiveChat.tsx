@@ -46,6 +46,8 @@ import {
   Trash2,
   RotateCcw,
   UserCheck,
+  Pencil,
+  Check,
 } from "lucide-react";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -363,6 +365,10 @@ function LiveChat() {
   // ——— Notificações ———
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({}); // chatId → count
   const [notifPopups, setNotifPopups] = useState<NotifPopup[]>([]);
+  // ——— Edição de título do chat ———
+  const [editingTitleChatId, setEditingTitleChatId] = useState<string | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState("");
+  const [savingTitle, setSavingTitle] = useState(false);
   const selectedChatRef = useRef<Chat | null>(null);
   const activeTabRef = useRef<string>("chats");
   const wsRef = useRef<WebSocket | null>(null);
@@ -526,31 +532,33 @@ function LiveChat() {
             break;
           case "CHAT_MESSAGE": {
             const isChatOpen = selectedChatRef.current?.id === data.chatId;
+            const isOnChatsTab = activeTabRef.current === "chats";
             const isVisitorMsg = data.sender === "visitor";
 
             // Se é mensagem do visitante → notificação
             if (isVisitorMsg) {
-              // Incrementa contador de não lidas (só se chat não está aberto)
-              if (!isChatOpen || activeTabRef.current !== "chats") {
+              // Incrementa contador de não lidas SEMPRE (some ao abrir o chat)
+              if (!isChatOpen || !isOnChatsTab) {
                 setUnreadCounts((prev) => ({
                   ...prev,
                   [data.chatId]: (prev[data.chatId] ?? 0) + 1,
                 }));
               }
-              // Som de notificação (sempre que visitor enviar)
-              playNotificationSound();
-              // Popup flutuante
-              const visitorName = data.visitorName ||
-                chatsRef.current?.find((c: Chat) => c.id === data.chatId)?.visitorName ||
-                "Visitante";
-              showPopup({
-                id: `${data.chatId}-${Date.now()}`,
-                visitorName,
-                content: data.content?.length > 80
-                  ? data.content.slice(0, 80) + "..."
-                  : (data.content ?? ""),
-                chatId: data.chatId,
-              });
+              // Som e popup SOMENTE quando o chat NÃO está visível
+              if (!isChatOpen || !isOnChatsTab) {
+                playNotificationSound();
+                const visitorName = data.visitorName ||
+                  chatsRef.current?.find((c: Chat) => c.id === data.chatId)?.visitorName ||
+                  "Visitante";
+                showPopup({
+                  id: `${data.chatId}-${Date.now()}`,
+                  visitorName,
+                  content: data.content?.length > 80
+                    ? data.content.slice(0, 80) + "..."
+                    : (data.content ?? ""),
+                  chatId: data.chatId,
+                });
+              }
             }
 
             // Adiciona mensagem ao painel se o chat estiver aberto
@@ -802,10 +810,49 @@ function LiveChat() {
     setSelectedChat(chat);
     // Limpa não lidas ao abrir o chat
     setUnreadCounts((prev) => { const n = { ...prev }; delete n[chat.id]; return n; });
+    // Cancela edição de título se abrir outro chat
+    setEditingTitleChatId(null);
     try {
       const res = await fetch(`/api/livechat/chats/${chat.id}/messages`, { credentials: "include" });
       if (res.ok) setChatMessages(await res.json());
     } catch {}
+  };
+
+  // ——— Renomear título do chat ——————————————————————————————————————————————
+  const startEditTitle = (chat: Chat, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingTitleChatId(chat.id);
+    setEditingTitleValue(chat.visitorName || "");
+  };
+
+  const saveChatTitle = async (chat: Chat) => {
+    const newTitle = editingTitleValue.trim();
+    if (!newTitle || newTitle === chat.visitorName) {
+      setEditingTitleChatId(null);
+      return;
+    }
+    setSavingTitle(true);
+    try {
+      const res = await fetch(`/api/livechat/chats/${chat.id}/rename`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      if (res.ok) {
+        // Atualiza estado local imediatamente
+        setChats(prev => prev.map(c => c.id === chat.id ? { ...c, visitorName: newTitle } : c));
+        if (selectedChat?.id === chat.id) {
+          setSelectedChat(prev => prev ? { ...prev, visitorName: newTitle } : prev);
+        }
+        toast({ description: `Título atualizado: "${newTitle}"` });
+      }
+    } catch {
+      toast({ description: "Erro ao salvar título", variant: "destructive" });
+    } finally {
+      setSavingTitle(false);
+      setEditingTitleChatId(null);
+    }
   };
 
   // ——— Agent send message (human takeover) —————————————————————————————————
@@ -1278,24 +1325,78 @@ function LiveChat() {
                         }}
                       >
                         <div className="flex items-start justify-between mb-1.5">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                               isUrgent ? "bg-red-100 text-red-600" : "bg-zinc-100 text-zinc-600"
                             }`}>
                               {(chat.visitorName || "V")[0].toUpperCase()}
                             </div>
-                            <div>
-                              <p className="text-sm font-semibold text-zinc-800 leading-tight">
-                                {chat.visitorName || "Visitante"}
-                              </p>
+                            <div className="min-w-0 flex-1">
+                              {/* Título editável ao clicar */}
+                              {editingTitleChatId === chat.id ? (
+                                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <input
+                                    autoFocus
+                                    value={editingTitleValue}
+                                    onChange={e => setEditingTitleValue(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter") saveChatTitle(chat);
+                                      if (e.key === "Escape") setEditingTitleChatId(null);
+                                    }}
+                                    className="text-xs font-semibold text-zinc-800 border border-red-300 rounded px-1.5 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-red-300"
+                                    disabled={savingTitle}
+                                  />
+                                  <button
+                                    onClick={() => saveChatTitle(chat)}
+                                    disabled={savingTitle}
+                                    className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded bg-red-500 text-white hover:bg-red-600 transition-colors"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingTitleChatId(null)}
+                                    className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded bg-zinc-200 text-zinc-600 hover:bg-zinc-300 transition-colors"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 group/title">
+                                  <p className="text-sm font-semibold text-zinc-800 leading-tight truncate">
+                                    {chat.visitorName || "Visitante"}
+                                  </p>
+                                  <button
+                                    onClick={e => startEditTitle(chat, e)}
+                                    title="Editar título"
+                                    className="opacity-0 group-hover/title:opacity-100 transition-opacity flex-shrink-0 w-4 h-4 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
+                                  >
+                                    <Pencil className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                              )}
                               <p className="text-[10px] text-zinc-400">
                                 {chat.source === "proactive" ? "Proativo" : "Widget"} &bull; {timeAgo(chat.startedAt)}
                               </p>
                             </div>
                           </div>
-                          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${sb.bg} ${sb.color}`}>
-                            {sb.icon} {sb.label}
-                          </span>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {/* Badge de não-lidas por chat */}
+                            {(unreadCounts[chat.id] ?? 0) > 0 && (
+                              <span
+                                className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[9px] font-black text-white leading-none"
+                                style={{
+                                  background: "linear-gradient(135deg, #dc2626, #b91c1c)",
+                                  boxShadow: "0 0 0 2px white, 0 2px 6px rgba(220,38,38,0.4)",
+                                  animation: "pulse 1.5s ease-in-out infinite",
+                                }}
+                              >
+                                {(unreadCounts[chat.id] ?? 0) > 99 ? "99+" : unreadCounts[chat.id]}
+                              </span>
+                            )}
+                            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${sb.bg} ${sb.color}`}>
+                              {sb.icon} {sb.label}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Melhoria 1: Barra de Temperatura do Lead */}
@@ -1352,13 +1453,54 @@ function LiveChat() {
                   {/* Chat header */}
                   <div className="px-5 py-3 border-b border-zinc-100 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-200 flex items-center justify-center text-sm font-bold text-zinc-600">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-200 flex items-center justify-center text-sm font-bold text-zinc-600 flex-shrink-0">
                         {(selectedChat.visitorName || "V")[0].toUpperCase()}
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-zinc-800">
-                          {selectedChat.visitorName || "Visitante"}
-                        </h3>
+                        {/* Título editável no header */}
+                        {editingTitleChatId === selectedChat.id ? (
+                          <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                            <input
+                              autoFocus
+                              value={editingTitleValue}
+                              onChange={e => setEditingTitleValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter") saveChatTitle(selectedChat);
+                                if (e.key === "Escape") setEditingTitleChatId(null);
+                              }}
+                              className="text-sm font-bold text-zinc-800 border border-red-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-red-200 min-w-[160px]"
+                              disabled={savingTitle}
+                            />
+                            <button
+                              onClick={() => saveChatTitle(selectedChat)}
+                              disabled={savingTitle}
+                              className="w-6 h-6 flex items-center justify-center rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
+                              title="Salvar título"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setEditingTitleChatId(null)}
+                              className="w-6 h-6 flex items-center justify-center rounded-md bg-zinc-200 text-zinc-600 hover:bg-zinc-300 transition-colors"
+                              title="Cancelar"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 group/header-title">
+                            <h3 className="text-sm font-bold text-zinc-800">
+                              {selectedChat.visitorName || "Visitante"}
+                            </h3>
+                            <button
+                              onClick={e => startEditTitle(selectedChat, e)}
+                              title="Editar título do chat"
+                              className="opacity-0 group-hover/header-title:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 text-[10px] text-zinc-400">
                           <span className={`${statusBadge(selectedChat.status).color}`}>
                             {statusBadge(selectedChat.status).icon} {statusBadge(selectedChat.status).label}
