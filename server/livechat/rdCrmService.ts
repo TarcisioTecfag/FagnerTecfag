@@ -354,27 +354,54 @@ async function loadOrgFieldIds(): Promise<OrgFieldIds> {
       }));
     }
 
+    // ── Detecção com scoring para CNPJ/CPF ──────────────────────────────────
+    // Problema real: "Codigo do cliente" (slug:cnpj) vem antes de "CNPJ ou CPF" (slug:cpf)
+    // na lista da API. Sem scoring, o campo errado seria capturado primeiro.
+    // Score 3 = nome contém CNPJ E CPF (ex: "CNPJ ou CPF")
+    // Score 2 = nome contém CNPJ ou CPF
+    // Score 1 = apenas o slug contém cnpj/cpf (ex: "Codigo do cliente" slug:cnpj)
+    let bestCnpjField: any = null;
+    let bestCnpjScore  = -1;
+
     for (const f of list) {
       const s = (f.slug || '').toLowerCase();
       const n = (f.name || '').toLowerCase();
-      if (!ids.cnpjCpf && (s.includes('cnpj') || s.includes('cpf') || n.includes('cnpj') || n.includes('cpf') || n.includes('documento'))) {
-        ids.cnpjCpf = f.id;
-        console.log(`[RD CRM] Campo CNPJ/CPF org: id=${f.id} name="${f.name}" slug=${f.slug}`);
-      } else if (!ids.cidade && (s.includes('cidade') || s.includes('city') || s.includes('municipio') || n.includes('cidade') || n.includes('municipio'))) {
+
+      // CNPJ/CPF — scoring por nome
+      let score = -1;
+      if (n.includes('cnpj') && n.includes('cpf'))  score = 3; // "CNPJ ou CPF" — melhor match
+      else if (n.includes('cnpj') || n.includes('cpf') || n.includes('documento')) score = 2;
+      else if (s.includes('cnpj') || s.includes('cpf'))  score = 1; // só slug bate (ex: Codigo do cliente)
+
+      if (score > bestCnpjScore) {
+        bestCnpjScore  = score;
+        bestCnpjField  = f;
+      }
+
+      // Cidade
+      if (!ids.cidade && (s.includes('cidade') || s.includes('city') || s.includes('municipio') || n.includes('cidade') || n.includes('municipio'))) {
         ids.cidade = f.id;
         console.log(`[RD CRM] Campo Cidade org: id=${f.id} name="${f.name}"`);
-      } else if (!ids.bairro && (s.includes('bairro') || s.includes('district') || n.includes('bairro') || n.includes('district'))) {
+      }
+      // Bairro
+      if (!ids.bairro && (s.includes('bairro') || s.includes('district') || n.includes('bairro') || n.includes('district'))) {
         ids.bairro = f.id;
         console.log(`[RD CRM] Campo Bairro org: id=${f.id} name="${f.name}"`);
-      } else if (!ids.estado && (s.includes('estado') || s.includes('state') || s.includes('_uf') || s === 'uf' || n.includes('estado') || n === 'uf')) {
+      }
+      // Estado
+      if (!ids.estado && (s.includes('estado') || s.includes('state') || s === 'uf' || n.includes('estado') || n === 'uf')) {
         ids.estado = f.id;
         console.log(`[RD CRM] Campo Estado org: id=${f.id} name="${f.name}"`);
       }
     }
 
-    if (!ids.cnpjCpf) {
-      console.warn(`[RD CRM] ⚠️ Campo CNPJ/CPF NÃO encontrado nos ${list.length} campos de org. Nomes: ${list.map(f => f.name).join(', ')}`);
+    if (bestCnpjField && bestCnpjScore >= 0) {
+      ids.cnpjCpf = bestCnpjField.id;
+      console.log(`[RD CRM] ✅ Campo CNPJ/CPF org: id=${bestCnpjField.id} name="${bestCnpjField.name}" slug=${bestCnpjField.slug} score=${bestCnpjScore}`);
+    } else {
+      console.warn(`[RD CRM] ⚠️ Campo CNPJ/CPF NÃO encontrado. Nomes: ${list.map((f: any) => f.name).join(', ')}`);
     }
+
   } catch (e: any) {
     console.warn(`[RD CRM] Falha ao carregar campos de org: ${e.message}`);
   }
