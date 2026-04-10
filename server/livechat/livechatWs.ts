@@ -972,7 +972,19 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 }
 
                 // ── Detectar tag de dados de pós venda [POS_VENDA_DADOS:{...}] ──
-                const posVendaTagMatch = rawReply.match(/\[POS_VENDA_DADOS:([\s\S]*?)\]/);
+                // Extração robusta por chaves balanceadas — o regex [\ s\ S]*?] quebrava
+                // se o JSON continha ] em qualquer valor (datas, arrays, URLs, etc.)
+                const posVendaTagIdx = rawReply.indexOf('[POS_VENDA_DADOS:');
+                const posVendaTagMatch = posVendaTagIdx !== -1 ? ((): [string, string] | null => {
+                  const jsonStart = rawReply.indexOf('{', posVendaTagIdx);
+                  if (jsonStart === -1) return null;
+                  let depth = 0, jsonEnd = -1;
+                  for (let i = jsonStart; i < rawReply.length; i++) {
+                    if (rawReply[i] === '{') depth++;
+                    else if (rawReply[i] === '}') { depth--; if (depth === 0) { jsonEnd = i; break; } }
+                  }
+                  return jsonEnd !== -1 ? [rawReply, rawReply.substring(jsonStart, jsonEnd + 1)] : null;
+                })() : null;
                 if (posVendaTagMatch) {
                   try {
                     const posVendaData = JSON.parse(posVendaTagMatch[1].trim());
@@ -1131,7 +1143,18 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 }
 
                 // ── Detectar tag de dados de MÁQUINAS [MAQUINAS_DADOS:{...}] ──
-                const maquinasTagMatch = rawReply.match(/\[MAQUINAS_DADOS:([\s\S]*?)\]/);
+                // Extração robusta por chaves balanceadas
+                const maquinasTagIdx = rawReply.indexOf('[MAQUINAS_DADOS:');
+                const maquinasTagMatch = maquinasTagIdx !== -1 ? ((): [string, string] | null => {
+                  const jsonStart = rawReply.indexOf('{', maquinasTagIdx);
+                  if (jsonStart === -1) return null;
+                  let depth = 0, jsonEnd = -1;
+                  for (let i = jsonStart; i < rawReply.length; i++) {
+                    if (rawReply[i] === '{') depth++;
+                    else if (rawReply[i] === '}') { depth--; if (depth === 0) { jsonEnd = i; break; } }
+                  }
+                  return jsonEnd !== -1 ? [rawReply, rawReply.substring(jsonStart, jsonEnd + 1)] : null;
+                })() : null;
                 if (maquinasTagMatch) {
                   try {
                     const maqData = JSON.parse(maquinasTagMatch[1].trim());
@@ -1289,7 +1312,18 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 }
 
                 // ── Detectar tag de dados de PEÇAS [PECAS_DADOS:{...}] ──
-                const pecasTagMatch = rawReply.match(/\[PECAS_DADOS:([\s\S]*?)\]/);
+                // Extração robusta por chaves balanceadas
+                const pecasTagIdx = rawReply.indexOf('[PECAS_DADOS:');
+                const pecasTagMatch = pecasTagIdx !== -1 ? ((): [string, string] | null => {
+                  const jsonStart = rawReply.indexOf('{', pecasTagIdx);
+                  if (jsonStart === -1) return null;
+                  let depth = 0, jsonEnd = -1;
+                  for (let i = jsonStart; i < rawReply.length; i++) {
+                    if (rawReply[i] === '{') depth++;
+                    else if (rawReply[i] === '}') { depth--; if (depth === 0) { jsonEnd = i; break; } }
+                  }
+                  return jsonEnd !== -1 ? [rawReply, rawReply.substring(jsonStart, jsonEnd + 1)] : null;
+                })() : null;
                 if (pecasTagMatch) {
                   try {
                     const pecasData = JSON.parse(pecasTagMatch[1].trim());

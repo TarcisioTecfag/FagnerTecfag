@@ -607,7 +607,7 @@ async function createDeal(
   posVenda: PosVendaData,
   contactId: string,
   organizationId?: string | null
-): Promise<string> {
+): Promise<{ dealId: string; ownerId: string }> {
   // ── FIX 1: Título sem "Pós Venda", apenas FAGNER - NOME ──────────────────────
   const titulo = `FAGNER - ${posVenda.nome}`;
 
@@ -680,7 +680,7 @@ async function createDeal(
 
   const deal = await rdRequest<{ id: string }>("POST", "/deals", dealPayload);
   console.log(`[RD CRM] Negociação criada: ${deal.id} — "${titulo}"`);
-  return deal.id;
+  return { dealId: deal.id, ownerId };
 }
 
 // ─── Anotações ───────────────────────────────────────────────────────────────
@@ -728,7 +728,9 @@ async function createCallTask(
     console.log(`[RD CRM] ✅ Tarefa de ligação criada → deal ${dealId} | owner: ${ownerId} | funil: ${funil}`);
   } catch (e: any) {
     // Não bloqueia o fluxo principal — deal já foi criado com sucesso
-    console.warn(`[RD CRM] ⚠️ Falha ao criar tarefa de ligação para deal ${dealId}:`, e.message);
+    // Usa console.ERROR para garantir visibilidade nos logs do Railway
+    console.error(`[RD CRM] ❌ FALHA NA TAREFA — deal=${dealId} owner=${ownerId} funil=${funil}`);
+    console.error(`[RD CRM] ❌ Erro completo: ${e.message}`);
   }
 }
 
@@ -771,17 +773,16 @@ export async function createPosVendaOS(
   const contactId = await upsertContact(posVendaData as PosVendaData, organizationId);
 
   // 3. Negociação
-  const dealId = await createDeal(posVendaData as PosVendaData, contactId, organizationId);
+  const { dealId, ownerId: resolvedOwner } = await createDeal(posVendaData as PosVendaData, contactId, organizationId);
 
   // 4. Anotação com relatório completo
   await createNote(dealId, relatorio);
 
-  // 5. Tarefa de ligação imediata para o operador
-  const ownerIdPosVenda = (process.env.RD_CRM_OWNER_POS_VENDA_ID ?? "").trim();
-  if (ownerIdPosVenda) {
-    await createCallTask(dealId, ownerIdPosVenda, posVendaData.nome, posVendaData.telefone, "Pós Venda");
+  // 5. Tarefa de ligação imediata — usa o MESMO owner já resolvido no deal
+  if (resolvedOwner) {
+    await createCallTask(dealId, resolvedOwner, posVendaData.nome, posVendaData.telefone, "Pós Venda");
   } else {
-    console.warn("[RD CRM] Pós Venda: owner não configurado — tarefa de ligação não criada.");
+    console.warn("[RD CRM] Pós Venda: sem owner — tarefa de ligação não criada.");
   }
 
   // 6. Persistir o dealId no visitante
@@ -812,7 +813,7 @@ async function createMaquinasDeal(
   maqData: MaquinasData,
   contactId: string,
   organizationId?: string | null
-): Promise<string> {
+): Promise<{ dealId: string; ownerId: string }> {
   const titulo = `FAGNER | ${maqData.nome}`;
 
   let infoCompl: string;
@@ -917,7 +918,7 @@ async function createMaquinasDeal(
 
   const deal = await rdRequest<{ id: string }>('POST', '/deals', dealPayload);
   console.log(`[RD CRM] Negociação MÁQUINAS criada: ${deal.id} — "${titulo}"`);
-  return deal.id;
+  return { dealId: deal.id, ownerId };
 }
 
 
@@ -943,36 +944,51 @@ export async function createMaquinasOS(
 
   console.log(`[RD CRM] Criando deal MÁQUINAS para visitante ${visitorId}...`);
 
-  // 1. Empresa — cria para CNPJ ou CPF (sem depender de cnpjData)
+  // FIX #2: empresa sempre criada — com CNPJ/CPF se disponível, com nome do cliente como fallback
   let organizationId: string | null = null;
   const docDigits = (maqData.cnpjCpf ?? "").replace(/\D/g, "");
   const isCnpj = docDigits.length === 14;
   const isCpf  = docDigits.length === 11;
 
-  if (isCnpj || isCpf) {
-    try {
+  try {
+    if (isCnpj || isCpf) {
       organizationId = await findOrCreateOrganization(maqData as any);
-      console.log(`[RD CRM] MÁQUINAS: empresa ${organizationId ? 'criada/encontrada: ' + organizationId : 'não criada'}`);
-    } catch (e: any) {
-      console.warn('[RD CRM] MÁQUINAS: falha ao criar empresa —', e.message);
+      console.log(`[RD CRM] MÁQUINAS: empresa ${organizationId ? 'encontrada/criada: ' + organizationId : 'não criada'}`);
+    } else {
+      // Sem CNPJ/CPF: cria empresa apenas pelo nome (evita negociacao sem empresa)
+      console.log(`[RD CRM] MÁQUINAS: CNPJ/CPF ausente, criando empresa pelo nome: "${maqData.nome}"`);
+      try {
+        const byName = await rdRequest<any[]>('GET', `/organizations?filter=name:${encodeURIComponent(maqData.nome)}`);
+        if (Array.isArray(byName) && byName.length > 0) {
+          organizationId = byName[0].id;
+          console.log(`[RD CRM] MÁQUINAS: empresa existente pelo nome: ${organizationId}`);
+        } else {
+          const org = await rdRequest<{ id: string }>('POST', '/organizations', { name: maqData.nome });
+          organizationId = org.id;
+          console.log(`[RD CRM] MÁQUINAS: empresa criada pelo nome: ${organizationId} — "${maqData.nome}"`);
+        }
+      } catch (orgErr: any) {
+        console.warn('[RD CRM] MÁQUINAS: falha ao criar empresa pelo nome:', orgErr.message);
+      }
     }
+  } catch (e: any) {
+    console.warn('[RD CRM] MÁQUINAS: falha ao criar empresa —', e.message);
   }
 
   // 2. Contato
   const contactId = await upsertContact(maqData as any, organizationId);
 
   // 3. Negociação no funil MÁQUINAS 2.0
-  const dealId = await createMaquinasDeal(maqData, contactId, organizationId);
+  const { dealId, ownerId: resolvedOwner } = await createMaquinasDeal(maqData, contactId, organizationId);
 
   // 4. Anotação com relatório completo
   await createNote(dealId, relatorio);
 
-  // 5. Tarefa de ligação imediata para o operador alocado
-  const ownerIdMaq = (maqData.ownerId || process.env.RD_CRM_OWNER_MAQUINAS_ID || "").trim();
-  if (ownerIdMaq) {
-    await createCallTask(dealId, ownerIdMaq, maqData.nome, maqData.telefone, "Máquinas 2.0");
+  // 5. Tarefa de ligação imediata — usa o MESMO owner já resolvido no deal
+  if (resolvedOwner) {
+    await createCallTask(dealId, resolvedOwner, maqData.nome, maqData.telefone, "Máquinas 2.0");
   } else {
-    console.warn("[RD CRM] Máquinas: owner não configurado — tarefa de ligação não criada.");
+    console.warn("[RD CRM] Máquinas: sem owner — tarefa de ligação não criada.");
   }
 
   // 6. Persistir dealId
@@ -1085,7 +1101,7 @@ async function createPecasDeal(
   pecasData: PecasData,
   contactId: string,
   organizationId?: string | null
-): Promise<string> {
+): Promise<{ dealId: string; ownerId: string }> {
   const titulo = `FAGNER | ${pecasData.nome}`;
 
   const infoCompl = pecasData.conversationSummary
@@ -1141,7 +1157,7 @@ async function createPecasDeal(
 
   const deal = await rdRequest<{ id: string }>('POST', '/deals', dealPayload);
   console.log(`[RD CRM] Negociação PEÇAS criada: ${deal.id} — "${titulo}"`);
-  return deal.id;
+  return { dealId: deal.id, ownerId };
 }
 
 /**
@@ -1166,32 +1182,48 @@ export async function createPecasOS(
 
   console.log(`[RD CRM] Criando deal PEÇAS para visitante ${visitorId}...`);
 
-  // 1. Empresa (CNPJ ou CPF) — mesma lógica do createMaquinasOS
+  // FIX #2: empresa sempre criada — com CNPJ/CPF se disponível, com nome do cliente como fallback
   let organizationId: string | null = null;
   const docDigits = (pecasData.cnpjCpf ?? '').replace(/\D/g, '');
-  if (docDigits.length === 14) {
-    // CNPJ: cria empresa mesmo sem cnpjData (fallback de nome mínimo)
-    organizationId = await findOrCreateOrganization(pecasData as any);
-  } else if (docDigits.length === 11) {
-    // CPF: empresa com nome do cliente
-    organizationId = await findOrCreateOrganization(pecasData as any);
+
+  try {
+    if (docDigits.length === 14 || docDigits.length === 11) {
+      organizationId = await findOrCreateOrganization(pecasData as any);
+    } else {
+      // Sem CNPJ/CPF: cria empresa pelo nome do cliente
+      console.log(`[RD CRM] PEÇAS: CNPJ/CPF ausente, criando empresa pelo nome: "${pecasData.nome}"`);
+      try {
+        const byName = await rdRequest<any[]>('GET', `/organizations?filter=name:${encodeURIComponent(pecasData.nome)}`);
+        if (Array.isArray(byName) && byName.length > 0) {
+          organizationId = byName[0].id;
+          console.log(`[RD CRM] PEÇAS: empresa existente pelo nome: ${organizationId}`);
+        } else {
+          const org = await rdRequest<{ id: string }>('POST', '/organizations', { name: pecasData.nome });
+          organizationId = org.id;
+          console.log(`[RD CRM] PEÇAS: empresa criada pelo nome: ${organizationId} — "${pecasData.nome}"`);
+        }
+      } catch (orgErr: any) {
+        console.warn('[RD CRM] PEÇAS: falha ao criar empresa pelo nome:', orgErr.message);
+      }
+    }
+  } catch (e: any) {
+    console.warn('[RD CRM] PEÇAS: falha ao criar empresa —', e.message);
   }
 
   // 2. Contato
   const contactId = await upsertContact(pecasData as any, organizationId);
 
   // 3. Deal no funil PEÇAS 2.0
-  const dealId = await createPecasDeal(pecasData, contactId, organizationId);
+  const { dealId, ownerId: resolvedOwner } = await createPecasDeal(pecasData, contactId, organizationId);
 
   // 4. Anotação com relatório completo
   await createNote(dealId, relatorio);
 
-  // 5. Tarefa de ligação imediata para o operador alocado
-  const ownerIdPecas = (pecasData.ownerId || process.env.RD_CRM_OWNER_PECAS_ID || "").trim();
-  if (ownerIdPecas) {
-    await createCallTask(dealId, ownerIdPecas, pecasData.nome, pecasData.telefone, "Peças 2.0");
+  // 5. Tarefa de ligação imediata — usa o MESMO owner já resolvido no deal
+  if (resolvedOwner) {
+    await createCallTask(dealId, resolvedOwner, pecasData.nome, pecasData.telefone, "Peças 2.0");
   } else {
-    console.warn("[RD CRM] Peças: owner não configurado — tarefa de ligação não criada.");
+    console.warn("[RD CRM] Peças: sem owner — tarefa de ligação não criada.");
   }
 
   // 6. Persistir dealId no visitante
