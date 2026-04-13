@@ -432,7 +432,8 @@ async function getOrCreateCnpjFieldId(): Promise<string | null> {
  * para evitar que erros de custom_fields bloqueiem a criaão da empresa.
  */
 async function findOrCreateOrganization(
-  posVenda: { nome: string; cnpjCpf?: string | null; cnpjData?: CnpjData | null }
+  posVenda: { nome: string; cnpjCpf?: string | null; cnpjData?: CnpjData | null },
+  ownerId: string
 ): Promise<string | null> {
   const doc = (posVenda.cnpjCpf ?? '').replace(/\D/g, '');
   const isCnpj = doc.length === 14;
@@ -472,12 +473,25 @@ async function findOrCreateOrganization(
     }
   } catch { /* ignora — vai criar */ }
 
-  // ── 2. Cria empresa com payload M\u00cdNIMO (sem custom_fields no POST) ─────────
-  // custom_fields no POST de org causa 422 — enviamos em PUT separado depois
+  // ── 2. Cria empresa passando owner e custom_fields obrigatórios ─────────
   let orgId: string | null = null;
+  const fieldIds = await loadOrgFieldIds();
+  
   try {
-    const createPayload: Record<string, any> = { name: nomeEmpresa };
+    const createPayload: Record<string, any> = { name: nomeEmpresa, user_id: ownerId };
     if (posVenda.cnpjData?.telefone1) createPayload.phone = posVenda.cnpjData.telefone1;
+
+    // Constrói custom_fields mapeando as propriedades para os ObjectId do BD do RD
+    const customFields: Record<string, string> = {};
+    if (doc && fieldIds.cnpjCpf) customFields[fieldIds.cnpjCpf] = doc;
+    if (fieldIds.cidade && posVenda.cnpjData?.municipio) customFields[fieldIds.cidade] = posVenda.cnpjData.municipio;
+    if (fieldIds.bairro && posVenda.cnpjData?.bairro)    customFields[fieldIds.bairro] = posVenda.cnpjData.bairro;
+    if (fieldIds.estado && posVenda.cnpjData?.uf)        customFields[fieldIds.estado] = posVenda.cnpjData.uf;
+
+    if (Object.keys(customFields).length > 0) {
+      createPayload.custom_fields = customFields;
+    }
+
     console.log(`[RD CRM] Criando empresa: ${JSON.stringify(createPayload)}`);
     const org = await rdRequest<{ id: string }>('POST', '/organizations', createPayload);
     if (!org?.id) {
@@ -487,7 +501,23 @@ async function findOrCreateOrganization(
     orgId = org.id;
     console.log(`[RD CRM] \u2705 Empresa criada: ${orgId} — "${nomeEmpresa}"`);
   } catch (createErr: any) {
-    console.error(`[RD CRM] \u274c FALHA CRIAR EMPRESA "${nomeEmpresa}": ${createErr.message}`);
+    console.error(`[RD CRM] ❌ FALHA CRIAR EMPRESA "${nomeEmpresa}": ${createErr.message}`);
+    // Fallback: se o nome já estiver cadastrado, tenta buscar na lista geral (pesquisa ampla)
+    if (createErr.message.includes("Nome Empresa já cadastrada")) {
+      try {
+        console.log(`[RD CRM] Tentando localizar empresa já cadastrada na unha...`);
+        const allList = await rdRequest<any>('GET', `/organizations?limit=100`);
+        const lista: any[] = Array.isArray(allList) ? allList : (Array.isArray(allList?.data) ? allList.data : []);
+        const orgMatch = lista.find(o => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
+        if (orgMatch) {
+          console.log(`[RD CRM] ✅ Empresa resgatada com sucesso (nome): ${orgMatch.id}`);
+          orgId = orgMatch.id;
+          return orgId;
+        }
+      } catch (e) {
+        console.error(`[RD CRM] Falha no fallback de busca: ${e}`);
+      }
+    }
     return null;
   }
 
@@ -759,11 +789,13 @@ export async function createPosVendaOS(
 
   console.log(`[RD CRM] Criando OS de Pós Venda para visitante ${visitorId}...`);
 
+  const ownerId = (process.env.RD_CRM_OWNER_POS_VENDA_ID ?? "").trim();
+  
   // 1. Empresa — SEMPRE cria (com CNPJ se disponível, com nome do cliente como fallback)
   // Não condiciona mais ao isCnpj/isCpf — toda negociação deve ter empresa vinculada
   let organizationId: string | null = null;
   try {
-    organizationId = await findOrCreateOrganization(posVendaData as any);
+    organizationId = await findOrCreateOrganization(posVendaData as any, ownerId);
     console.log(`[RD CRM] Pós Venda: empresa ${organizationId ? 'criada/encontrada: ' + organizationId : 'FALHOU'}`);
   } catch (orgErr: any) {
     console.error(`[RD CRM] ❌ Pós Venda: erro ao criar empresa: ${orgErr.message}`);
@@ -1068,6 +1100,9 @@ export async function createMaquinasOS(
 
   console.log(`[RD CRM] Criando deal MÁQUINAS para visitante ${visitorId}...`);
 
+  // Resolve owner antes de criar a empresa (obrigatório do CRM)
+  const ownerId = (maqData.ownerId || (process.env.RD_MAQUINAS_OWNER_ID ?? process.env.RD_CRM_OWNER_MAQUINAS_ID ?? '')).trim();
+
   // FIX #2: empresa sempre criada — com CNPJ/CPF se disponível, com nome do cliente como fallback
   let organizationId: string | null = null;
   const docDigits = (maqData.cnpjCpf ?? "").replace(/\D/g, "");
@@ -1076,7 +1111,7 @@ export async function createMaquinasOS(
 
   try {
     if (isCnpj || isCpf) {
-      organizationId = await findOrCreateOrganization(maqData as any);
+      organizationId = await findOrCreateOrganization(maqData as any, ownerId);
       console.log(`[RD CRM] MÁQUINAS: empresa ${organizationId ? 'encontrada/criada: ' + organizationId : 'não criada'}`);
     } else {
       // Sem CNPJ/CPF: cria empresa apenas pelo nome (evita negociacao sem empresa)
@@ -1307,12 +1342,15 @@ export async function createPecasOS(
   console.log(`[RD CRM] Criando deal PEÇAS para visitante ${visitorId}...`);
 
   // FIX #2: empresa sempre criada — com CNPJ/CPF se disponível, com nome do cliente como fallback
+  // Resolve owner antes de criar a empresa
+  const ownerId = (pecasData.ownerId || (process.env.RD_PECAS_OWNER_ID ?? process.env.RD_CRM_OWNER_PECAS_ID ?? '')).trim();
+
   let organizationId: string | null = null;
-  const docDigits = (pecasData.cnpjCpf ?? '').replace(/\D/g, '');
+  const docDigits = (pecasData.cnpjCpf ?? "").replace(/\D/g, "");
 
   try {
     if (docDigits.length === 14 || docDigits.length === 11) {
-      organizationId = await findOrCreateOrganization(pecasData as any);
+      organizationId = await findOrCreateOrganization(pecasData as any, ownerId);
     } else {
       // Sem CNPJ/CPF: cria empresa pelo nome do cliente
       console.log(`[RD CRM] PEÇAS: CNPJ/CPF ausente, criando empresa pelo nome: "${pecasData.nome}"`);
