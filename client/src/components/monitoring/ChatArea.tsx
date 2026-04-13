@@ -184,7 +184,7 @@ export default function ChatArea({
         ) : (
           messages.map((msg) => {
             const isUser = msg.sender === "user";
-            const isLog = !isUser && /^\[[A-Z_]+(?:[:\]])/s.test(msg.content.trim());
+            const isLog = /^\[[A-Z0-9_]+(?:[:\]])/s.test(msg.content.trim());
             const isExpanded = expandedLogs[msg.id] || false;
 
             return (
