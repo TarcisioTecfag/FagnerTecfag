@@ -1306,6 +1306,90 @@ export async function processVisitorMessage(
 
 // ─── Gerar Nota e Resumo para CRM ──────────────────────────────────────────
 
+/**
+ * Gera uma nota progressiva de CRM estilo humano, baseada nas últimas mensagens.
+ * Chamada a cada 5 mensagens do visitante durante a conversa.
+ * Produz notas curtas e diretas como SDR faria: "Cliente relatou que a A03 não sela".
+ */
+export async function generateProgressiveNote(chatId: string): Promise<string | null> {
+  const apiKey = (await storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "";
+  if (!apiKey) return null;
+
+  let historyText: string;
+  try {
+    const messages = await lcStorage.listMessagesByChat(chatId);
+    if (!messages || messages.length < 2) return null;
+
+    // Foca nas últimas 12 mensagens para capturar o contexto mais recente
+    const recentMessages = messages.slice(-12);
+    const cleaned = recentMessages
+      .filter(m =>
+        !m.content.startsWith('[CNPJ_RESULT') &&
+        !m.content.startsWith('[CNPJ_CHECK')
+      )
+      .map(m => {
+        const who = m.sender === 'visitor' ? 'Cliente' : 'Fagner';
+        const clean = m.content
+          .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, '')
+          .replace(/\[SCORE:\d+\]/gi, '')
+          .replace(/\[STAGE:[^\]]+\]/gi, '')
+          .replace(/\[POS_VENDA_DADOS:[\s\S]*?\]/gi, '')
+          .replace(/\[MAQUINAS_DADOS:[\s\S]*?\]/gi, '')
+          .replace(/\[PECAS_DADOS:[\s\S]*?\]/gi, '')
+          .replace(/\[PRODUTO_IDENTIFICADO:[^\]]+\]/gi, '')
+          .trim();
+        return clean ? `${who}: ${clean}` : null;
+      })
+      .filter(Boolean)
+      .join('\n');
+
+    if (!cleaned) return null;
+    historyText = cleaned;
+  } catch {
+    return null;
+  }
+
+  const notePrompt = `Você é um assistente de CRM da Tecfag. Analise o trecho de conversa abaixo e gere UMA ÚNICA nota de atendimento curta, direta e no estilo de uma anotação humana de SDR/CRM.
+
+REGRAS CRÍTICAS:
+1. Máximo 2 frases curtas e objetivas.
+2. Use linguagem natural, como se um vendedor estivesse anotando no CRM em tempo real.
+3. Foque no que o CLIENTE disse, precisa ou relatou — não no que o Fagner respondeu.
+4. Comece com "Cliente..." ou diretamente com o assunto.
+5. NUNCA use marcadores, bullets, títulos ou formatação especial.
+6. NUNCA escreva coisas genéricas como "cliente entrou em contato" — seja específico sobre o problema/necessidade.
+7. NUNCA repita informações óbvias. Se não há novidade relevante, escreva apenas: (sem novidades neste trecho)
+
+Bons exemplos de notas:
+- Cliente avisou que a Manual A03 não está selando corretamente.
+- Cliente relatou gargalo na produção de sachês e precisa de orçamento urgente.
+- Cliente está com dúvida sobre garantia da máquina comprada há 6 meses.
+- Cliente é cliente ativo da Tecfag e precisa de peças de reposição para seladora.
+- Cliente informou que fabrica produtos de limpeza e precisa de máquina para sachês de 10ml.
+- Cliente perguntou sobre prazo de entrega e disponibilidade do modelo Compacta 40.
+
+Trecho de conversa:
+${historyText}
+
+Gere apenas a nota, sem introdução nem explicação:`.trim();
+
+  try {
+    const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
+    const payload = {
+      contents: [{ role: 'user', parts: [{ text: notePrompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 120 },
+    };
+    const data = await geminiRequest(url, payload);
+    const note = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+    if (!note || note.includes('sem novidades')) return null;
+    console.log(`[LiveChat AI] Nota progressiva gerada para chat ${chatId}: "${note?.slice(0, 80)}"`);
+    return note;
+  } catch (err) {
+    console.error('[LiveChat AI] Erro ao gerar nota progressiva:', err);
+    return null;
+  }
+}
+
 export async function generateConversationNote(chatId: string): Promise<string | null> {
   const apiKey = (await storage.getSettingParsed<string>("gemini_api_key")) ?? process.env.GEMINI_API_KEY ?? "";
   if (!apiKey) return null;

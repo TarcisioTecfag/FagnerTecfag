@@ -15,7 +15,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
 import { lcStorage } from "./livechatStorage.js";
-import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, isObviousNoise, detectStageIntent, generatePosVendaReport, generateMaquinasReport, generatePecasReport } from "./livechatAI.js";
+import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, generateProgressiveNote, isObviousNoise, detectStageIntent, generatePosVendaReport, generateMaquinasReport, generatePecasReport } from "./livechatAI.js";
 import { createPosVendaOS, createMaquinasOS, createPecasOS, isRdCrmConfigured } from "./rdCrmService.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 import { buildCart } from "./vtexCheckoutService.js";
@@ -52,6 +52,9 @@ interface ChatMessageBuffer {
 }
 const chatMessageBuffers = new Map<string, ChatMessageBuffer>();
 const chatCreationLocks = new Map<string, Promise<any>>();
+
+// ─── Contador de mensagens do visitante por chat (para notas progressivas a cada 5) ─
+const visitorMsgCounters = new Map<string, number>();
 
 // ─── Send to visitor (all open tabs) ──────────────────────────────────────
 
@@ -638,6 +641,29 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               timestamp: new Date().toISOString(),
             });
 
+            // ── Notas Progressivas: a cada 5 mensagens do visitante, gera nota automática ──
+            // Roda em background (não bloqueia o pipeline de resposta da IA)
+            {
+              const currentCount = (visitorMsgCounters.get(chat.id) ?? 0) + 1;
+              visitorMsgCounters.set(chat.id, currentCount);
+              if (currentCount % 5 === 0) {
+                const noteVisitorId = visitorId as string;
+                const noteChatId = chat.id;
+                (async () => {
+                  try {
+                    const progressiveNote = await generateProgressiveNote(noteChatId);
+                    if (progressiveNote) {
+                      await lcStorage.addVisitorNote(noteVisitorId, "Atendimento", progressiveNote);
+                      broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: noteVisitorId });
+                      console.log(`[LiveChat Notes] 📝 Nota progressiva salva para visitante ${noteVisitorId} (msg #${currentCount})`);
+                    }
+                  } catch (noteErr: any) {
+                    console.warn(`[LiveChat Notes] Falha na nota progressiva:`, noteErr.message);
+                  }
+                })();
+              }
+            }
+
             // Se a IA está conduzindo, bufferiza até 5s de silêncio antes de responder
             if (chat.status === "ai_active" || chat.status === "waiting") {
               await lcStorage.updateChat(chat.id, { status: "ai_active" });
@@ -1024,7 +1050,10 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   // naturalmente pelo timer de 10min ou quando o visitante sair.
                   const note = await generateConversationNote(chat.id);
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_com_venda");
-                  if (note) await lcStorage.addVisitorNote(currentVisitorId, "Venda", note);
+                  if (note) {
+                    await lcStorage.addVisitorNote(currentVisitorId, "Venda", note);
+                    broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId }); // ✅ FIX
+                  }
                   // Fagner define motivo automaticamente
                   await lcStorage.setChatCloseReason(chat.id, "venda_fechada").catch(() => {});
                   // ✅ NÃO fechar nem limpar sessão — visitante ainda pode confirmar CEP, pagamento, etc.
@@ -1033,7 +1062,10 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   // NO_SALE só muda stage se NÃO for atendimento de máquinas ou peças
                   const note = await generateConversationNote(chat.id);
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "sem_resposta");
-                  if (note) await lcStorage.addVisitorNote(currentVisitorId, "Sem Venda", note);
+                  if (note) {
+                    await lcStorage.addVisitorNote(currentVisitorId, "Sem Venda", note);
+                    broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId }); // ✅ FIX
+                  }
                   await lcStorage.setChatCloseReason(chat.id, "venda_cancelada").catch(() => {});
                   broadcastPipelineUpdate(currentVisitorId, "sem_resposta");
                 } else if (hasNoSale && (isMaquinasStage || isPecasStage)) {
@@ -1117,6 +1149,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                     // ── Criar OS no RD Station CRM (background, não bloqueia o chat) ──
                     if (isRdCrmConfigured()) {
+                      // Gera nota de conversa ANTES de criar o card (registra contexto completo)
+                      const noteAntesCrmPv = await generateProgressiveNote(chat.id).catch(() => null);
+                      if (noteAntesCrmPv) {
+                        await lcStorage.addVisitorNote(currentVisitorId, "Atendimento", noteAntesCrmPv).catch(() => {});
+                        broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
+                      }
                       // Nota inicial: IA iniciando criação do card
                       await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", "⏳ Iniciando criação de card no RD Station CRM...");
                       broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
@@ -1298,6 +1336,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                     // ── Criar deal no RD Station CRM funil MÁQUINAS 2.0 ──
                     if (isRdCrmConfigured()) {
+                      // Gera nota de conversa ANTES de criar o card (registra contexto completo)
+                      const noteAntesCrmMaq = await generateProgressiveNote(chat.id).catch(() => null);
+                      if (noteAntesCrmMaq) {
+                        await lcStorage.addVisitorNote(currentVisitorId, "Atendimento", noteAntesCrmMaq).catch(() => {});
+                        broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
+                      }
                       await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", "⏳ Criando card no funil MÁQUINAS 2.0...");
                       broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
 
@@ -1495,6 +1539,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                         // Cria deal no RD CRM (mesmo fluxo do caminho normal)
                         if (isRdCrmConfigured()) {
+                          // Gera nota ANTES de criar o card fallback
+                          const noteAntesFallback = await generateProgressiveNote(chat.id).catch(() => null);
+                          if (noteAntesFallback) {
+                            await lcStorage.addVisitorNote(currentVisitorId, 'Atendimento', noteAntesFallback).catch(() => {});
+                            broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
+                          }
                           await lcStorage.addVisitorNote(currentVisitorId, 'RD CRM', '⏳ [FALLBACK] Criando card MÁQUINAS (tag não emitida pela IA)...');
                           broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
 
@@ -1589,6 +1639,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                     // ── Criar deal no RD Station CRM funil PEÇAS 2.0 ──
                     if (isRdCrmConfigured()) {
+                      // Gera nota de conversa ANTES de criar o card (registra contexto completo)
+                      const noteAntesCrmPecas = await generateProgressiveNote(chat.id).catch(() => null);
+                      if (noteAntesCrmPecas) {
+                        await lcStorage.addVisitorNote(currentVisitorId, "Atendimento", noteAntesCrmPecas).catch(() => {});
+                        broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
+                      }
                       await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", "⏳ Criando card no funil PEÇAS 2.0...");
                       broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
 
