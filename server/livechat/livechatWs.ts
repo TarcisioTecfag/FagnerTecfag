@@ -1267,12 +1267,19 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     // Atualiza pipeline para maquinas
                     await lcStorage.updateVisitorPipeline(currentVisitorId, "maquinas");
                     broadcastPipelineUpdate(currentVisitorId, "maquinas");
+                    // Busca visitante atualizado e faz broadcast para o dashboard atualizar "Sobre o Cliente" em tempo real
+                    const updatedMaqVisitor = await lcStorage.getVisitorById(currentVisitorId);
+                    broadcastToAgents({
+                      type: "VISITOR_UPDATED",
+                      visitorId: currentVisitorId,
+                      visitor: updatedMaqVisitor,
+                    });
                     broadcastToAgents({
                       type: "VISITOR_MAQUINAS_UPDATED",
                       visitorId: currentVisitorId,
                       maqData,
                     });
-                    console.log(`[LiveChat] Dados de máquinas salvos para visitante ${currentVisitorId}`);
+                    console.log(`[LiveChat] Dados de máquinas salvos e broadcast feito para visitante ${currentVisitorId}`);
 
                     // CNPJ data
                     if (maqData.cnpjCpf) {
@@ -1475,6 +1482,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                           clienteNovo:      maqDataFallback.clienteNovo,
                         });
                         await lcStorage.updateVisitorPipeline(currentVisitorId, 'maquinas');
+                        // Broadcast para o dashboard atualizar "Sobre o Cliente" imediatamente
+                        const updatedFbVisitor = await lcStorage.getVisitorById(currentVisitorId);
+                        broadcastToAgents({ type: 'VISITOR_UPDATED', visitorId: currentVisitorId, visitor: updatedFbVisitor });
                         broadcastToAgents({ type: 'VISITOR_MAQUINAS_UPDATED', visitorId: currentVisitorId, maqData: maqDataFallback });
 
                         // Cria deal no RD CRM (mesmo fluxo do caminho normal)
