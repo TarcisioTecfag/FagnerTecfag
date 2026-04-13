@@ -450,28 +450,30 @@ async function findOrCreateOrganization(
 
   console.log(`[RD CRM] findOrCreateOrganization: nome="${nomeEmpresa}" doc="${doc}"`);
 
-  // ── 1. Busca empresa existente por nome ──────────────────────────────────────
+  // ── 1. Busca empresa existente — múltiplas estratégias ──────────────────────
+
+  // Estratégia A: busca por CNPJ/CPF via query de busca textual
   if (doc) {
     try {
-      const byDoc = await rdRequest<any>('GET',
-        `/organizations?filter=@${encodeURIComponent(doc)}&page[size]=5`);
+      const byDoc = await rdRequest<any>('GET', `/organizations?query=${encodeURIComponent(doc)}&page[size]=5`);
       const docList: any[] = Array.isArray(byDoc) ? byDoc : (Array.isArray(byDoc?.data) ? byDoc.data : []);
       if (docList.length > 0) {
-        console.log(`[RD CRM] \u2705 Empresa existente (doc): ${docList[0].id} "${docList[0].name}"`);
+        console.log(`[RD CRM] \u2705 Empresa existente (busca por CNPJ/CPF): ${docList[0].id} "${docList[0].name}"`);
         return docList[0].id;
       }
-    } catch { /* ignora — tenta por nome */ }
+    } catch { /* ignora */ }
   }
 
+  // Estratégia B: busca por nome via query de busca textual
   try {
-    const byName = await rdRequest<any>('GET',
-      `/organizations?filter=name:${encodeURIComponent(nomeEmpresa)}&page[size]=5`);
-    const nameList: any[] = Array.isArray(byName) ? byName : (Array.isArray(byName?.data) ? byName.data : []);
-    if (nameList.length > 0) {
-      console.log(`[RD CRM] \u2705 Empresa existente (nome): ${nameList[0].id} "${nomeEmpresa}"`);
-      return nameList[0].id;
+    const byQuery = await rdRequest<any>('GET', `/organizations?query=${encodeURIComponent(nomeEmpresa)}&page[size]=10`);
+    const qList: any[] = Array.isArray(byQuery) ? byQuery : (Array.isArray(byQuery?.data) ? byQuery.data : []);
+    const qMatch = qList.find((o: any) => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
+    if (qMatch) {
+      console.log(`[RD CRM] \u2705 Empresa existente (busca por nome): ${qMatch.id} "${qMatch.name}"`);
+      return qMatch.id;
     }
-  } catch { /* ignora — vai criar */ }
+  } catch { /* ignora — vai tentar criar */ }
 
   // ── 2. Cria empresa passando owner e custom_fields obrigatórios ─────────
   let orgId: string | null = null;
@@ -502,21 +504,32 @@ async function findOrCreateOrganization(
     console.log(`[RD CRM] \u2705 Empresa criada: ${orgId} — "${nomeEmpresa}"`);
   } catch (createErr: any) {
     console.error(`[RD CRM] ❌ FALHA CRIAR EMPRESA "${nomeEmpresa}": ${createErr.message}`);
-    // Fallback: se o nome já estiver cadastrado, tenta buscar na lista geral (pesquisa ampla)
-    if (createErr.message.includes("Nome Empresa já cadastrada")) {
+    // Fallback: se a empresa já existe, recupera o ID com buscas progressivas
+    if (createErr.message.includes("Nome Empresa j\u00e1 cadastrada")) {
+      // Fallback 1: busca por nome via query
       try {
-        console.log(`[RD CRM] Tentando localizar empresa já cadastrada na unha...`);
-        const allList = await rdRequest<any>('GET', `/organizations?limit=100`);
-        const lista: any[] = Array.isArray(allList) ? allList : (Array.isArray(allList?.data) ? allList.data : []);
-        const orgMatch = lista.find(o => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
-        if (orgMatch) {
-          console.log(`[RD CRM] ✅ Empresa resgatada com sucesso (nome): ${orgMatch.id}`);
-          orgId = orgMatch.id;
-          return orgId;
+        console.log(`[RD CRM] Fallback 1: buscando empresa via query...`);
+        const qRes = await rdRequest<any>('GET', `/organizations?query=${encodeURIComponent(nomeEmpresa)}&page[size]=10`);
+        const qList: any[] = Array.isArray(qRes) ? qRes : (Array.isArray(qRes?.data) ? qRes.data : []);
+        const qMatch = qList.find((o: any) => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
+        if (qMatch) {
+          console.log(`[RD CRM] \u2705 Empresa resgatada (Fallback 1 - query): ${qMatch.id} "${qMatch.name}"`);
+          return qMatch.id;
         }
-      } catch (e) {
-        console.error(`[RD CRM] Falha no fallback de busca: ${e}`);
-      }
+      } catch (e: any) { console.warn(`[RD CRM] Fallback 1 falhou: ${e.message}`); }
+
+      // Fallback 2: varredura ampla com page[size]=200
+      try {
+        console.log(`[RD CRM] Fallback 2: varredura com page[size]=200...`);
+        const allRes = await rdRequest<any>('GET', `/organizations?page[size]=200`);
+        const allList: any[] = Array.isArray(allRes) ? allRes : (Array.isArray(allRes?.data) ? allRes.data : []);
+        const orgMatch = allList.find((o: any) => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
+        if (orgMatch) {
+          console.log(`[RD CRM] \u2705 Empresa resgatada (Fallback 2 - varredura): ${orgMatch.id} "${orgMatch.name}"`);
+          return orgMatch.id;
+        }
+        console.warn(`[RD CRM] \u26a0\ufe0f Empresa n\u00e3o localizada entre ${allList.length} registros.`);
+      } catch (e: any) { console.error(`[RD CRM] Fallback 2 falhou: ${e.message}`); }
     }
     return null;
   }
