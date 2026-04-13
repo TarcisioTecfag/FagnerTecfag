@@ -933,14 +933,14 @@ async function createMaquinasDeal(
     '6': 'Sumiu / Sem contato (Não atendeu ou não retornou)',
   };
 
-  // Valores com fallback robusto — nunca deixa campo vazio no CRM
+  // Valores base (sem fallback "Não informado" em campos option/multiple_choice — causa 422)
   const clienteNovoVal  = (maqData.clienteNovo ?? 'SIM').toUpperCase();
   const qualificacaoKey = maqData.qualificacaoSDR ?? '2';
   const sdrVal          = SDR_OPTIONS[qualificacaoKey] ?? SDR_OPTIONS['2'];
-  const produtoVal      = maqData.produtoFabricado || 'Não informado';
-  const volumeVal       = maqData.volumeProducao   || 'Não informado';
+  const produtoVal      = maqData.produtoFabricado || null; // null = omitir se não informado
+  const volumeVal       = maqData.volumeProducao   || null; // null = omitir se não informado (opções fixas no CRM!)
 
-  // Monta texto das informações complementares (campo freetext)
+  // Monta texto das informações complementares (campo freetext — qualquer valor aceito)
   const partes: string[] = [`Máquina: ${maqData.maquinaDesejada}`];
   if (maqData.produtoFabricado) partes.push(`Produto: ${maqData.produtoFabricado}`);
   if (maqData.volumeProducao)   partes.push(`Volume: ${maqData.volumeProducao}`);
@@ -948,30 +948,66 @@ async function createMaquinasDeal(
   if (maqData.detalhes)         partes.push(`Detalhes: ${maqData.detalhes}`);
   const complementarVal = partes.join(' | ').slice(0, 500);
 
-  // Busca slugs dinâmicos (resolve em runtime uma vez e armazena em cache 30min)
+  // Busca slugs dinâmicos (resolve em runtime e armazena em cache 30min)
   const dealCfs = await fetchDealCfCache();
-  const cfKeyClienteNovo  = resolveCfKey(dealCfs, 'cliente novo',  CF_MAQUINAS_FALLBACK_UUID.clienteNovo);
-  const cfKeySdr          = resolveCfKey(dealCfs, 'qualificado',   CF_MAQUINAS_FALLBACK_UUID.sdr);
-  const cfKeyProduto      = resolveCfKey(dealCfs, 'produto fabr',  CF_MAQUINAS_FALLBACK_UUID.produto);
-  const cfKeyVolume       = resolveCfKey(dealCfs, 'volume',        CF_MAQUINAS_FALLBACK_UUID.volume);
-  const cfKeyComplementar = resolveCfKey(dealCfs, 'complementar',  CF_MAQUINAS_FALLBACK_UUID.complementar);
 
-  const customFieldsPayload: Record<string, string> = {
-    [cfKeyClienteNovo]:  clienteNovoVal,
-    [cfKeySdr]:          sdrVal,
-    [cfKeyProduto]:      produtoVal,
-    [cfKeyVolume]:       volumeVal,
-    [cfKeyComplementar]: complementarVal,
+  /**
+   * Mapeia um valor para a opção válida mais próxima de um campo option/multiple_choice.
+   * Retorna null se nenhuma opção compatível for encontrada (campo será OMITIDO do payload,
+   * evitando o erro 422 "Deal custom fields Não é válido.").
+   */
+  const safeMapCfValue = (value: string, cfInfo?: DealCfInfo): string | null => {
+    if (!value) return null;
+    // Para campos text/date/number: qualquer valor é aceito
+    if (!cfInfo || (cfInfo.type !== 'option' && cfInfo.type !== 'multiple_choice')) return value;
+    const opts = cfInfo.options ?? [];
+    if (opts.length === 0) return value; // sem restrição definida
+    const lower = value.toLowerCase().trim();
+    // 1. Correspondência exata (case-insensitive + trim)
+    const exact = opts.find(o => o.toLowerCase().trim() === lower);
+    if (exact) return exact;
+    // 2. Value começa com uma opção (ex: "Baixo volume (< 1.000 un/dia)" → "Baixo volume")
+    const prefix = opts.find(o => lower.startsWith(o.toLowerCase().trim()));
+    if (prefix) return prefix;
+    // 3. Opção contém o value inteiro (ex: "Sumiu..." inclui versão sem ponto)
+    const contains = opts.find(o => o.toLowerCase().includes(lower));
+    if (contains) return contains;
+    // 4. Primeira palavra do value é suficiente para identificar a opção (ex: "Baixo" → "Baixo volume")
+    const firstWord = lower.split(/[\s(,]/)[0];
+    if (firstWord.length > 3) {
+      const fw = opts.find(o => o.toLowerCase().startsWith(firstWord));
+      if (fw) return fw;
+    }
+    // Não encontrou match válido → omite o campo (não envia valor inválido)
+    console.warn(`[RD CRM] ⚠️ Valor "${value.slice(0, 60)}" não é opção válida para "${cfInfo.name}". Opções: [${opts.slice(0, 5).map(o => `"${o.slice(0,30)}"`).join(', ')}]. Campo OMITIDO.`);
+    return null;
   };
+
+  // Monta payload apenas com campos válidos (omite os que causariam 422)
+  const customFieldsPayload: Record<string, string> = {};
+  const addCf = (partialName: string, fallbackKey: string, value: string | null) => {
+    if (value === null) return; // sem valor → omitir
+    const cfInfo = findCfByPartialName(dealCfs, partialName);
+    const key = cfInfo?.slug || fallbackKey;
+    const safeValue = safeMapCfValue(value, cfInfo);
+    if (safeValue !== null) {
+      customFieldsPayload[key] = safeValue;
+    }
+  };
+
+  addCf('cliente novo',  CF_MAQUINAS_FALLBACK_UUID.clienteNovo,  clienteNovoVal);
+  addCf('qualificado',   CF_MAQUINAS_FALLBACK_UUID.sdr,          sdrVal);
+  addCf('produto fabr',  CF_MAQUINAS_FALLBACK_UUID.produto,       produtoVal);
+  addCf('volume',        CF_MAQUINAS_FALLBACK_UUID.volume,        volumeVal);
+  addCf('complementar',  CF_MAQUINAS_FALLBACK_UUID.complementar,  complementarVal);
+
   dealPayload.custom_fields = customFieldsPayload;
 
-  console.log('[RD CRM] custom_fields MÁQUINAS — chaves resolvidas:', JSON.stringify({
-    modo:         dealCfs.length > 0 ? 'SLUG_DINÂMICO' : 'UUID_FALLBACK',
-    clienteNovo:  { key: cfKeyClienteNovo,  val: clienteNovoVal },
-    sdr:          { key: cfKeySdr,          val: sdrVal.slice(0, 40) + '...' },
-    produto:      { key: cfKeyProduto,      val: produtoVal },
-    volume:       { key: cfKeyVolume,       val: volumeVal },
-    complementar: { key: cfKeyComplementar, val: complementarVal.slice(0, 60) + '...' },
+  console.log('[RD CRM] custom_fields MÁQUINAS — payload final:', JSON.stringify({
+    modo:    dealCfs.length > 0 ? 'SLUG_DINÂMICO' : 'UUID_FALLBACK',
+    campos:  Object.entries(customFieldsPayload).map(([k, v]) => ({ key: k, val: String(v).slice(0, 50) })),
+    omitidos: ['clienteNovo', 'sdr', 'produto', 'volume', 'complementar']
+      .filter(f => !Object.keys(customFieldsPayload).some(k => k.includes(f.toLowerCase().replace(' ', '-')))).join(', ') || 'nenhum',
   }));
 
   // ── Criar negociação ──────────────────────────────────────────────────────

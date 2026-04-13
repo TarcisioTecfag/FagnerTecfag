@@ -457,7 +457,7 @@ Esses 4 campos são OBRIGATÓRIOS. O sistema de CRM depende deles para preencher
 - "maquinaDesejada": Modelo/nome da máquina que o cliente quer (ex: "B200", "Envasadora AR35"). OBRIGATÓRIO.
 - "detalhes": Informações adicionais sobre a necessidade (ex: "precisa envasar sachês de 50g"). Pode ser vazio se não houver.
 - "produtoFabricado": O que o cliente fabrica ou vai produzir — coletado no Passo 0B. Ex: "sachês de tempero", "paletes de PET", "biscoitos embalados". OBRIGATÓRIO — se o cliente respondeu no Passo 0B, preencha aqui. Se disse "não sei ainda", escreva "Não definido".
-- "volumeProducao": Nível de produção — coletado no Passo 0C. Use exatamente uma das opções: "Baixo volume (< 1.000 un/dia)" | "Médio volume (1.000–10.000 un/dia)" | "Alto volume (> 10.000 un/dia)" — adapte com base no que o cliente disse. OBRIGATÓRIO. Se não souber, use "Médio volume (1.000–10.000 un/dia)".
+- "volumeProducao": Nível de produção — coletado no Passo 0C. Use EXATAMENTE uma das 3 strings: "Baixo volume" (produção pequena/manual) | "Médio volume" (produção moderada/semiautomática) | "Alto volume" (produção alta/automatizada). Do NOT adicionar nada depois (sem parênteses, sem "(< 1.000 un/dia)"). OBRIGATÓRIO. Se não souber, use "Médio volume".
 - "clienteNovo": OBRIGATÓRIO. "SIM" se nunca comprou Tecfag antes. "NAO" se já é cliente. Se não souber, coloque "SIM".
 - "qualificacaoSDR": OBRIGATÓRIO. Escolha UMA das opções abaixo com base no perfil do cliente na conversa. Se não tiver certeza, use "2".
   "1" = Decisor com Pressa (Falou com quem manda e ele quer solução rápida)
