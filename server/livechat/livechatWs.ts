@@ -526,12 +526,16 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             const chatToClose = await lcStorage.getActiveChatByVisitor(visitorId);
             if (chatToClose) {
               await lcStorage.closeChat(chatToClose.id);
+              // Marca como 'restarted' para impedir que o safety net reabra este chat
+              await lcStorage.setChatCloseReason(chatToClose.id, "restarted");
               clearAISession(chatToClose.id);
               broadcastToAgents({
                 type: "CHAT_STATUS",
                 chatId: chatToClose.id,
                 status: "closed",
+                closeReason: "restarted",
               });
+              console.log(`[LiveChat] Chat ${chatToClose.id} encerrado e marcado como 'restarted' pelo visitante.`);
             }
             break;
           }
@@ -560,7 +564,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   const closedTs = lastChat.endedAt ?? lastChat.startedAt;
                   const closedAgo = Date.now() - new Date(closedTs).getTime();
                   const REOPEN_WINDOW_MS = 30 * 60 * 1000; // 30 minutos
-                  if (closedAgo < REOPEN_WINDOW_MS) {
+                  // NÃO reabrir se o chat foi encerrado intencionalmente pelo visitante (RESTART_CHAT)
+                  const wasRestarted = (lastChat as any).closeReason === 'restarted';
+                  if (closedAgo < REOPEN_WINDOW_MS && !wasRestarted) {
                     await lcStorage.updateChat(lastChat.id, { status: 'ai_active' });
                     chat = await lcStorage.getChatById(lastChat.id);
                     console.log(`[LiveChat] Chat ${lastChat.id} REABERTO (fechado há ${Math.round(closedAgo/60000)}min) ao invés de criar novo.`);
