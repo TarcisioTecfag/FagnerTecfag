@@ -1352,13 +1352,13 @@ export async function generateProgressiveNote(chatId: string): Promise<string | 
   const notePrompt = `Você é um assistente de CRM da Tecfag. Analise o trecho de conversa abaixo e gere UMA ÚNICA nota de atendimento curta, direta e no estilo de uma anotação humana de SDR/CRM.
 
 REGRAS CRÍTICAS:
-1. Máximo 2 frases curtas e objetivas.
+1. Escreva 1 a 2 frases COMPLETAS. NUNCA corte uma frase no meio. SEMPRE termine com ponto final.
 2. Use linguagem natural, como se um vendedor estivesse anotando no CRM em tempo real.
 3. Foque no que o CLIENTE disse, precisa ou relatou — não no que o Fagner respondeu.
 4. Comece com "Cliente..." ou diretamente com o assunto.
 5. NUNCA use marcadores, bullets, títulos ou formatação especial.
 6. NUNCA escreva coisas genéricas como "cliente entrou em contato" — seja específico sobre o problema/necessidade.
-7. NUNCA repita informações óbvias. Se não há novidade relevante, escreva apenas: (sem novidades neste trecho)
+7. Se não há informação específica e relevante do cliente neste trecho, responda apenas: SKIP
 
 Bons exemplos de notas:
 - Cliente avisou que a Manual A03 não está selando corretamente.
@@ -1371,17 +1371,17 @@ Bons exemplos de notas:
 Trecho de conversa:
 ${historyText}
 
-Gere apenas a nota, sem introdução nem explicação:`.trim();
+Gere apenas a nota completa (com ponto final), sem introdução nem explicação:`.trim();
 
   try {
     const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ role: 'user', parts: [{ text: notePrompt }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 120 },
+      generationConfig: { temperature: 0.2, maxOutputTokens: 350 },
     };
     const data = await geminiRequest(url, payload);
     const note = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
-    if (!note || note.includes('sem novidades')) return null;
+    if (!note || note.toUpperCase() === 'SKIP' || note.toUpperCase().startsWith('SKIP')) return null;
     console.log(`[LiveChat AI] Nota progressiva gerada para chat ${chatId}: "${note?.slice(0, 80)}"`);
     return note;
   } catch (err) {
