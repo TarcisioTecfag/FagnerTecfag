@@ -293,19 +293,24 @@ export function registerLiveChatRoutes(app: any): void {
       const cfList: any[] = cfJson?.data ?? (Array.isArray(cfJson) ? cfJson : []);
       result.org_custom_fields = cfList.map((f: any) => ({ id: f.id, name: f.name, slug: f.slug }));
 
-      // Diagnostico campos deal
+      // Diagnostico completo de campos personalizados de DEAL (id + slug + type + options)
       const dealCfRes = await fetch("https://api.rd.services/crm/v2/custom_fields?filter=entity:deal&page[size]=100", {
         headers: { Authorization: `Bearer ${at}` }
       });
       result.deal_custom_fields_status = dealCfRes.status;
       const dealCfJson = await dealCfRes.json();
       const dealCfList: any[] = dealCfJson?.data ?? (Array.isArray(dealCfJson) ? dealCfJson : []);
-      result.deal_custom_fields_raw = dealCfList.map((f: any) => ({ id: f.id, name: f.name, slug: f.slug }));
+      result.deal_custom_fields_raw = dealCfList.map((f: any) => ({
+        id: f.id, name: f.name, slug: f.slug, type: f.type,
+        options: f.options ?? null,
+      }));
       const findFD = (partial: string) => dealCfList.find((f: any) =>
         (f.name || '').toLowerCase().includes(partial.toLowerCase()) ||
         (f.slug || '').toLowerCase().includes(partial.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''))
       );
-      const hit = (f: any) => f ? { found: true, id: f.id, name: f.name, slug: f.slug } : { found: false };
+      const hit = (f: any) => f
+        ? { found: true, id: f.id, name: f.name, slug: f.slug, type: f.type, options: f.options ?? [] }
+        : { found: false };
       result.deal_fields_mapping = {
         clienteNovo:  hit(findFD('cliente novo')),
         sdr:          hit(findFD('qualificado por sdr') || findFD('qualificado')),
@@ -313,6 +318,28 @@ export function registerLiveChatRoutes(app: any): void {
         volume:       hit(findFD('volume de produ') || findFD('volume')),
         complementar: hit(findFD('complementar')),
       };
+      // DIAGNOSTICO CHAVE: busca deals recentes para ver estrutura real de custom_fields
+      try {
+        const recentDealsRes = await fetch(
+          "https://api.rd.services/crm/v2/deals?sort[created_at]=desc&page[size]=3",
+          { headers: { Authorization: `Bearer ${at}` } }
+        );
+        const recentDealsJson = await recentDealsRes.json();
+        const recentDeals: any[] = recentDealsJson?.data ?? [];
+        result.recent_deals_custom_fields = recentDeals.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          pipeline_id: d.pipeline_id,
+          custom_fields: d.custom_fields ?? {},
+          custom_fields_keys: Object.keys(d.custom_fields ?? {}),
+          custom_fields_all_empty: !d.custom_fields || Object.values(d.custom_fields).every((v: any) => !v),
+        }));
+        result.diagnostico = {
+          instrucao: "Compare 'recent_deals_custom_fields[N].custom_fields_keys' com 'deal_fields_mapping[campo].id' e 'deal_fields_mapping[campo].slug' para saber qual formato a API usa.",
+        };
+      } catch (dealErr: any) {
+        result.recent_deals_error = (dealErr as any)?.message;
+      }
 
     } catch (err: any) {
       result.error = err?.message;

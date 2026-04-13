@@ -1416,7 +1416,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     try {
                       const visitorForFallback = await lcStorage.getVisitorById(currentVisitorId);
                       // Só ativa se:  1) estágio é maquinas  2) os campos ainda não foram salvos
-                      const jaTemDados = visitorForFallback?.maquinaDesejada || visitorForFallback?.produtoFabricado;
+                      const jaTemDados = visitorForFallback?.maquinaDesejada || visitorForFallback?.maquinaProdutoFabricado;
                       if (visitorForFallback?.pipelineStage === 'maquinas' && !jaTemDados) {
                         console.warn(`[LiveChat] ⚠️ FALLBACK ATIVADO: Fagner disse encerramento sem [MAQUINAS_DADOS] — reconstruindo do OVERVIEW`);
 

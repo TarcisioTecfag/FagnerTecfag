@@ -23,6 +23,11 @@ let _campaignId: string | null = null;
 let _customFieldsCache: { id: string; name: string }[] | null = null;
 let _orgCustomFieldsCache: { id: string; name: string; slug: string }[] | null = null;
 
+// Cache dos campos personalizados de deal (resolve slugs dinamicamente)
+interface DealCfInfo { id: string; name: string; slug: string; type?: string; options?: string[]; }
+let _dealCfCache: DealCfInfo[] | null = null;
+let _dealCfCacheLoadedAt = 0;
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface CnpjData {
   nome: string;           // razão social
@@ -794,16 +799,63 @@ export async function createPosVendaOS(
 const RD_MAQUINAS_PIPELINE_ID    = "69cacc81e9770f001324bb44";
 const RD_MAQUINAS_FIRST_STAGE_ID = "69cacc81e9770f001324bb47"; // LEADS RECEBIDOS
 
-// ── UUIDs hardcoded dos campos personalizados do funil MÁQUINAS 2.0 ──────────
-// Obtidos via GET /api/livechat/rd-debug em 10/04/2026 — não alterar sem re-checar
-// Se um campo novo for criado no CRM, consultar o endpoint de debug para atualizar
-const CF_MAQUINAS = {
-  clienteNovo:  process.env.RD_CF_CLIENTE_NOVO_ID  || '696e23bcce280300133ca1e4', // "CLIENTE NOVO?"
-  sdr:          process.env.RD_CF_SDR_ID            || '67c89b29ab621d001750e51b', // "QUALIFICADO POR SDR"
-  produto:      process.env.RD_CF_PRODUTO_ID        || '696a909d97a619001cf475ad', // "QUAL O PRODUTO FABRICADO?"
-  volume:       process.env.RD_CF_VOLUME_ID         || '696a98c77ce6e30022756978', // "VOLUME DE PRODUÇÃO?"
-  complementar: process.env.RD_CF_COMPLEMENTAR_ID  || '696bd749b44b6d00179417a0', // "INFORMAÇÕES COMPLEMENTARES"
+// ── Fallback UUIDs dos campos personalizados do funil MÁQUINAS 2.0 ──────────
+// ⚠️ ATENÇÃO: A API RD CRM v2 usa SLUGS como chaves em custom_fields, não UUIDs.
+// Esses UUIDs são mantidos apenas como fallback caso o fetchDealCfCache() falhe.
+// Os slugs reais são resolvidos dinamicamente via GET /custom_fields em tempo de execução.
+const CF_MAQUINAS_FALLBACK_UUID = {
+  clienteNovo:  process.env.RD_CF_CLIENTE_NOVO_ID  || '696e23bcce280300133ca1e4', // fallback UUID
+  sdr:          process.env.RD_CF_SDR_ID            || '67c89b29ab621d001750e51b', // fallback UUID
+  produto:      process.env.RD_CF_PRODUTO_ID        || '696a909d97a619001cf475ad', // fallback UUID
+  volume:       process.env.RD_CF_VOLUME_ID         || '696a98c77ce6e30022756978', // fallback UUID
+  complementar: process.env.RD_CF_COMPLEMENTAR_ID  || '696bd749b44b6d00179417a0', // fallback UUID
 };
+// Slugs reais (preenchidos dinamicamente pelo fetchDealCfCache — não editar manualmente)
+const CF_MAQUINAS_SLUGS: Record<string, string> = {}; // ex: { clienteNovo: 'cliente_novo', ... }
+
+/** Carrega e armazena em cache os campos personalizados de deal (id + slug + tipo). */
+async function fetchDealCfCache(): Promise<DealCfInfo[]> {
+  const CACHE_TTL = 30 * 60 * 1000; // 30 min TTL
+  if (_dealCfCache && Date.now() - _dealCfCacheLoadedAt < CACHE_TTL) return _dealCfCache;
+  try {
+    const raw = await rdRequest<any>('GET', '/custom_fields?filter=entity:deal&page[size]=100');
+    const list: any[] = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+    _dealCfCache = list.map(f => ({ id: f.id ?? '', name: f.name ?? '', slug: f.slug ?? '', type: f.type, options: f.options }));
+    _dealCfCacheLoadedAt = Date.now();
+    console.log(`[RD CRM] Deal CFs carregados: ${_dealCfCache.length} campos`);
+    console.log('[RD CRM] Deal CF catalog:', JSON.stringify(_dealCfCache.map(f => ({ id: f.id, name: f.name, slug: f.slug, type: f.type }))));
+    return _dealCfCache;
+  } catch (e: any) {
+    console.error('[RD CRM] ⚠️ Falha ao carregar deal CFs (usando UUID fallback):', e.message);
+    return [];
+  }
+}
+
+/** Encontra um campo personalizado de deal pelo nome parcial. */
+function findCfByPartialName(cfs: DealCfInfo[], partial: string): DealCfInfo | undefined {
+  const lower = partial.toLowerCase();
+  return cfs.find(f =>
+    f.name.toLowerCase().includes(lower) ||
+    f.slug.toLowerCase().includes(lower.replace(/[\s?]/g, '_').replace(/[^a-z0-9_]/g, ''))
+  );
+}
+
+/**
+ * Resolve a chave a usar em custom_fields:
+ *  1. Slug dinâmico (preferido — o que a API aceita de verdade)
+ *  2. UUID fallback hardcoded (caso a busca falhe)
+ */
+function resolveCfKey(cfs: DealCfInfo[], partialName: string, fallbackUuid: string): string {
+  const found = findCfByPartialName(cfs, partialName);
+  if (found?.slug) {
+    CF_MAQUINAS_SLUGS[partialName] = found.slug; // armazena para debug
+    return found.slug;
+  }
+  // Se a busca por slug falhou mas encontrou por id, usa o id
+  if (found?.id) return found.id;
+  console.warn(`[RD CRM] Campo "${partialName}" não encontrado no CRM — usando UUID fallback: ${fallbackUuid}`);
+  return fallbackUuid;
+}
 
 /**
  * Cria uma negociação no funil MÁQUINAS 2.0 do RD CRM.
@@ -867,9 +919,10 @@ async function createMaquinasDeal(
     console.log(`[RD CRM] Vinculando empresa ${organizationId} à negociação de máquinas`);
   }
 
-  // ── Campos personalizados via UUID hardcoded (confirmados via /rd-debug em 10/04/2026) ──────
-  // Os UUIDs estão em CF_MAQUINAS (constante acima). Não usa mais busca fuzzy por nome.
-  // Fallback via env var permite override sem redeploy se o campo for recriado no CRM.
+  // ── Campos personalizados: resolução DINÂMICA por slug ─────────────────────
+  // A API RD CRM aceita chaves em custom_fields como SLUG (ex: "cliente_novo"),
+  // não como UUID. Buscamos os slugs em tempo de execução via GET /custom_fields.
+  // UUID é mantido apenas como fallback de emergência.
 
   const SDR_OPTIONS: Record<string, string> = {
     '1': 'Decisor com Pressa (Falou com quem manda e ele quer solução rápida)',
@@ -895,24 +948,62 @@ async function createMaquinasDeal(
   if (maqData.detalhes)         partes.push(`Detalhes: ${maqData.detalhes}`);
   const complementarVal = partes.join(' | ').slice(0, 500);
 
-  dealPayload.custom_fields = {
-    [CF_MAQUINAS.clienteNovo]:  clienteNovoVal,
-    [CF_MAQUINAS.sdr]:          sdrVal,
-    [CF_MAQUINAS.produto]:      produtoVal,
-    [CF_MAQUINAS.volume]:       volumeVal,
-    [CF_MAQUINAS.complementar]: complementarVal,
-  };
+  // Busca slugs dinâmicos (resolve em runtime uma vez e armazena em cache 30min)
+  const dealCfs = await fetchDealCfCache();
+  const cfKeyClienteNovo  = resolveCfKey(dealCfs, 'cliente novo',  CF_MAQUINAS_FALLBACK_UUID.clienteNovo);
+  const cfKeySdr          = resolveCfKey(dealCfs, 'qualificado',   CF_MAQUINAS_FALLBACK_UUID.sdr);
+  const cfKeyProduto      = resolveCfKey(dealCfs, 'produto fabr',  CF_MAQUINAS_FALLBACK_UUID.produto);
+  const cfKeyVolume       = resolveCfKey(dealCfs, 'volume',        CF_MAQUINAS_FALLBACK_UUID.volume);
+  const cfKeyComplementar = resolveCfKey(dealCfs, 'complementar',  CF_MAQUINAS_FALLBACK_UUID.complementar);
 
-  console.log('[RD CRM] custom_fields MÁQUINAS (UUID hardcoded):', JSON.stringify({
-    'CLIENTE NOVO?':             clienteNovoVal,
-    'QUALIFICADO POR SDR':       sdrVal,
-    'QUAL O PRODUTO FABRICADO?': produtoVal,
-    'VOLUME DE PRODUÇÃO?':       volumeVal,
-    'INFORMAÇÕES COMPLEMENTARES': complementarVal.slice(0, 80) + '...',
+  const customFieldsPayload: Record<string, string> = {
+    [cfKeyClienteNovo]:  clienteNovoVal,
+    [cfKeySdr]:          sdrVal,
+    [cfKeyProduto]:      produtoVal,
+    [cfKeyVolume]:       volumeVal,
+    [cfKeyComplementar]: complementarVal,
+  };
+  dealPayload.custom_fields = customFieldsPayload;
+
+  console.log('[RD CRM] custom_fields MÁQUINAS — chaves resolvidas:', JSON.stringify({
+    modo:         dealCfs.length > 0 ? 'SLUG_DINÂMICO' : 'UUID_FALLBACK',
+    clienteNovo:  { key: cfKeyClienteNovo,  val: clienteNovoVal },
+    sdr:          { key: cfKeySdr,          val: sdrVal.slice(0, 40) + '...' },
+    produto:      { key: cfKeyProduto,      val: produtoVal },
+    volume:       { key: cfKeyVolume,       val: volumeVal },
+    complementar: { key: cfKeyComplementar, val: complementarVal.slice(0, 60) + '...' },
   }));
 
-  const deal = await rdRequest<{ id: string }>('POST', '/deals', dealPayload);
-  console.log(`[RD CRM] Negociação MÁQUINAS criada: ${deal.id} — "${titulo}"`);
+  // ── Criar negociação ──────────────────────────────────────────────────────
+  const deal = await rdRequest<{ id: string; custom_fields?: any }>('POST', '/deals', dealPayload);
+  console.log(`[RD CRM] ✅ Negociação MÁQUINAS criada: ${deal.id} — "${titulo}"`);
+
+  // ── Verificação pós-criação: confirma se custom_fields foram salvos ────────
+  // Se a API ignorou os custom_fields (ex: chave inválida), faz um PUT síncrono para forçar
+  try {
+    const savedDeal = await rdRequest<any>('GET', `/deals/${deal.id}`);
+    const savedCf = savedDeal?.custom_fields ?? {};
+    const allEmpty = Object.values(savedCf).every((v: any) => v === null || v === undefined || v === '');
+    console.log(`[RD CRM] Deal ${deal.id} — custom_fields na base:`, JSON.stringify(savedCf));
+
+    if (allEmpty) {
+      console.warn(`[RD CRM] ⚠️ custom_fields vazio após criação! API ignorou as chaves. Tentando PUT para corrigir...`);
+      try {
+        await rdRequest('PUT', `/deals/${deal.id}`, { custom_fields: customFieldsPayload });
+        console.log('[RD CRM] ✅ custom_fields enviados via PUT (fallback)');
+        // Reset cache para forçar re-fetch dos slugs na próxima tentativa
+        _dealCfCache = null;
+        _dealCfCacheLoadedAt = 0;
+      } catch (putErr: any) {
+        console.error('[RD CRM] ❌ PUT custom_fields também falhou:', putErr.message);
+      }
+    } else {
+      console.log('[RD CRM] ✅ custom_fields confirmados na base do CRM');
+    }
+  } catch (verifyErr: any) {
+    console.warn('[RD CRM] Verificação pós-criação falhou (não crítico):', verifyErr.message);
+  }
+
   return { dealId: deal.id, ownerId };
 }
 
