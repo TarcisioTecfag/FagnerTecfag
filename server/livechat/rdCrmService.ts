@@ -721,6 +721,8 @@ async function createCallTask(
       type: "call",
       deal_id: dealId,
       owner_ids: [ownerId],
+      user_id: ownerId, // <--- Adicionado para satisfazer 'Created by is required'
+      created_by_id: ownerId, // Garantia de payload para a API
       due_date: now,
       description:
         `Fagner IA gerou este lead — Funil: ${funil}\n` +
