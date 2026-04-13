@@ -48,6 +48,7 @@ import {
   UserCheck,
   Pencil,
   Check,
+  Code,
 } from "lucide-react";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -346,6 +347,7 @@ function LiveChat() {
   const [activeTab, setActiveTab] = useState<"chats" | "visitors" | "crm" | "arquivados" | "atencao" | "stats">("chats");
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
+  const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
   const [stats, setStats] = useState<Stats | null>(null);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
@@ -1784,7 +1786,33 @@ function LiveChat() {
                               <span>{isVisitor ? "Visitante" : isAI ? "Fagner (IA)" : "Agente"}</span>
                               <span>&bull; {timeAgo(msg.sentAt)}</span>
                             </div>
-                            <div className="whitespace-pre-wrap break-words text-sm">{renderMessageContent(msg.content)}</div>
+                            <div className="whitespace-pre-wrap break-words text-sm">
+                              {(() => {
+                                const isLog = /^\s*\[[A-Z0-9_]+(?:[:\]])/s.test(msg.content.trim());
+                                const isExpanded = expandedLogs[msg.id] || false;
+                                
+                                if (isLog) {
+                                  return (
+                                    <div className="flex flex-col gap-1.5 min-w-[180px]">
+                                      <button 
+                                        onClick={() => setExpandedLogs(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
+                                        className="flex items-center gap-1.5 text-xs font-semibold opacity-70 hover:opacity-100 transition-opacity"
+                                        style={{ color: isAI ? "#ffc2c2" : "#dc2626" }}
+                                      >
+                                        <Code size={14} /> 
+                                        {isExpanded ? "Ocultar Log" : "Log Oculto (Sistema)"}
+                                      </button>
+                                      {isExpanded && (
+                                        <div className="mt-2 p-2 bg-zinc-50/10 border border-zinc-200/20 rounded text-[11px] font-mono text-current max-h-64 overflow-y-auto block whitespace-pre-wrap">
+                                          {renderMessageContent(msg.content)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                return renderMessageContent(msg.content);
+                              })()}
+                            </div>
                           </div>
                         </div>
                       );
