@@ -478,15 +478,15 @@ async function findOrCreateOrganization(
   const fieldIds = await loadOrgFieldIds();
   
   try {
-    const createPayload: Record<string, any> = { name: nomeEmpresa, user_id: ownerId };
+    const createPayload: Record<string, any> = { name: nomeEmpresa, user_id: ownerId, owner_id: ownerId };
     if (posVenda.cnpjData?.telefone1) createPayload.phone = posVenda.cnpjData.telefone1;
 
-    // Constrói custom_fields mapeando as propriedades para os ObjectId do BD do RD
+    // Constrói custom_fields usando SLUGS (O RD CRM API v2 exige slugs, não ObjectIds!)
     const customFields: Record<string, string> = {};
-    if (doc && fieldIds.cnpjCpf) customFields[fieldIds.cnpjCpf] = doc;
-    if (fieldIds.cidade && posVenda.cnpjData?.municipio) customFields[fieldIds.cidade] = posVenda.cnpjData.municipio;
-    if (fieldIds.bairro && posVenda.cnpjData?.bairro)    customFields[fieldIds.bairro] = posVenda.cnpjData.bairro;
-    if (fieldIds.estado && posVenda.cnpjData?.uf)        customFields[fieldIds.estado] = posVenda.cnpjData.uf;
+    if (doc) customFields["cpf"] = doc; // A API indicou explicitamente slug "cpf" no erro
+    if (posVenda.cnpjData?.municipio) customFields["cidade"] = posVenda.cnpjData.municipio;
+    if (posVenda.cnpjData?.bairro)    customFields["bairro"] = posVenda.cnpjData.bairro;
+    if (posVenda.cnpjData?.uf)        customFields["estado"] = posVenda.cnpjData.uf;
 
     if (Object.keys(customFields).length > 0) {
       createPayload.custom_fields = customFields;
