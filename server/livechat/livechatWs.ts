@@ -15,12 +15,15 @@ import { WebSocket, WebSocketServer } from "ws";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
 import { lcStorage } from "./livechatStorage.js";
+import db from "../db.js";
+import { sql } from "drizzle-orm";
 import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, generateProgressiveNote, isObviousNoise, detectStageIntent, generatePosVendaReport, generateMaquinasReport, generatePecasReport, setProductContext } from "./livechatAI.js";
 import { createPosVendaOS, createMaquinasOS, createPecasOS, isRdCrmConfigured } from "./rdCrmService.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 import { buildCart } from "./vtexCheckoutService.js";
 import type { VtexOrderData } from "./vtexCheckoutService.js";
 import { getProductBySlug, formatProductContextForAI } from "./vtexCatalogService.js";
+import { resolvePageIntent } from "./livechatIntentResolver.js";
 
 // ─── Connection maps ─────────────────────────────────────────────────────────
 
@@ -174,6 +177,18 @@ function detectBrowser(ua?: string): string {
   return "other";
 }
 
+// ─── Detect device type ───────────────────────────────────────────────────────
+
+function detectDevice(ua?: string): string {
+  if (!ua) return "desktop";
+  const u = ua.toLowerCase();
+  // Tablets primeiro (iPad, Android tablet, etc.)
+  if (/ipad|tablet|playbook|silk|(android(?!.*mobile))/i.test(u)) return "tablet";
+  // Mobile
+  if (/mobile|iphone|ipod|android.*mobile|blackberry|iemobile|opera mini|opera mobi|windows phone/i.test(u)) return "mobile";
+  return "desktop";
+}
+
 // ─── GeoIP (free API) ─────────────────────────────────────────────────────────
 
 async function geoLookup(ip: string): Promise<{ city?: string; country?: string }> {
@@ -281,6 +296,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               ?? request.socket.remoteAddress ?? "";
             const ua = request.headers["user-agent"] ?? "";
             const browser = detectBrowser(ua);
+            const deviceType = detectDevice(ua);
             const source = detectSource(data.referrer, data.utmSource, data.utmMedium);
 
             // Find or create visitor
@@ -298,10 +314,37 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 isOnline: "true",
                 source: visitor.source ?? source,
               });
+              // Atualiza deviceType separadamente (campo não está no updateVisitor padrão)
+              if (visitor?.id) {
+                await db.execute(sql`UPDATE lc_visitors SET "deviceType" = ${deviceType} WHERE "id" = ${visitor.id}`);
+              }
               visitorId = visitor!.id;
               await recalculateVisitorCategory(visitorId);
 
-              // — F5 / Reconexão: NUNCA fechar chats na reconexão.
+              // ── Alerta de Lead Quente Voltando (#6) ────────────────────────
+              // Só alerta se: tem nome + múltiplas visitas + é lead_hot
+              const updatedV = await lcStorage.getVisitorById(visitorId);
+              if (
+                updatedV?.name &&
+                (updatedV.totalVisits ?? 0) >= 2 &&
+                updatedV.category === 'lead_hot'
+              ) {
+                broadcastToAgents({
+                  type: "RETURNING_HOT_LEAD",
+                  visitorId,
+                  visitorName: updatedV.name,
+                  city: updatedV.city,
+                  country: updatedV.country,
+                  currentPage: data.currentPage,
+                  currentPageTitle: data.pageTitle,
+                  totalVisits: updatedV.totalVisits,
+                  engagementScore: updatedV.engagementScore,
+                  purchaseIntentScore: (updatedV as any).purchaseIntentScore ?? 0,
+                  source: updatedV.source,
+                  timestamp: new Date().toISOString(),
+                });
+                console.log(`[LiveChat] 🔥 RETURNING_HOT_LEAD: ${updatedV.name} voltou ao site (${updatedV.totalVisits} visitas)`);
+              }
               // O visitante pode estar navegando entre páginas no site VTEX (MPA).
               // O sweepOrphanedChats cuida de fechar chats realmente abandonados (>90min).
               // Essa lógica foi REMOVIDA pois causava fragmentação de chats.
@@ -325,6 +368,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 referrer: data.referrer,
               });
               visitorId = visitor.id;
+              // Salva deviceType para novos visitantes
+              await db.execute(sql`UPDATE lc_visitors SET "deviceType" = ${deviceType} WHERE "id" = ${visitorId}`);
             }
 
             // Set pipeline stage — NUNCA rebaixa estágios de atendimento ativo
@@ -445,11 +490,17 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               currentPage: data.url,
               currentPageTitle: data.pageTitle,
             });
-            await lcStorage.createPageview({
+
+            // Resolve intenção da página (#2)
+            const intentData = resolvePageIntent(data.url);
+
+            const pvRecord = await lcStorage.createPageview({
               visitorId,
               url: data.url,
               pageTitle: data.pageTitle,
+              intentTag: intentData.tag,
             });
+
             await lcStorage.incrementVisitorPages(visitorId);
 
             // Add engagement points
@@ -461,6 +512,11 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 engagementScore: Math.min((visitor.engagementScore ?? 0) + scoreBoost, 100),
               });
               await recalculateVisitorCategory(visitorId);
+
+              // Incrementa Purchase Intent Score (#4) com base na intenção da página
+              if (intentData.scoreBoost > 0) {
+                await lcStorage.incrementPurchaseIntentScore(visitorId, intentData.scoreBoost);
+              }
             }
 
             broadcastToAgents({
@@ -468,10 +524,28 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               visitorId,
               url: data.url,
               pageTitle: data.pageTitle,
+              intentTag: intentData.tag,
+              intentLabel: intentData.label,
+              intentIcon: intentData.icon,
+              pageviewId: pvRecord.id,
             });
 
             // Reset proactive timer
             startProactiveTimer(visitorId);
+            break;
+          }
+
+          // ── VISITOR: Pageview time/scroll update (#1) ─────────────
+          case "PAGEVIEW_UPDATE": {
+            if (!visitorId || !data.pageviewId) break;
+            await lcStorage.updatePageview(data.pageviewId, {
+              timeSpent: typeof data.timeSpent === 'number' ? Math.round(data.timeSpent) : undefined,
+              scrollDepth: typeof data.scrollDepth === 'number' ? Math.min(100, Math.round(data.scrollDepth)) : undefined,
+            });
+            // Purchase intent: se ficou mais de 2 min em página de produto (+5)
+            if (data.timeSpent >= 120 && data.intentTag && data.intentTag !== 'navegacao_geral') {
+              await lcStorage.incrementPurchaseIntentScore(visitorId, 5);
+            }
             break;
           }
 

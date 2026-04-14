@@ -452,6 +452,7 @@ export const lcStorage = {
     visitorId: string;
     url: string;
     pageTitle?: string;
+    intentTag?: string;
   }): Promise<LcPageview> {
     const id = uuidv4();
     await db.insert(lcPageviews).values({
@@ -459,16 +460,18 @@ export const lcStorage = {
       visitorId: data.visitorId,
       url: data.url,
       pageTitle: data.pageTitle ?? null,
-    });
+      intentTag: data.intentTag ?? null,
+    } as any);
     const rows = await db.select().from(lcPageviews).where(eq(lcPageviews.id, id)).limit(1);
     return rows[0]!;
   },
 
-  async updatePageview(id: string, data: { scrollDepth?: number; timeSpent?: number }): Promise<void> {
+  async updatePageview(id: string, data: { scrollDepth?: number; timeSpent?: number; intentTag?: string }): Promise<void> {
     await db.update(lcPageviews)
       .set({
         scrollDepth: data.scrollDepth ?? undefined,
         timeSpent: data.timeSpent ?? undefined,
+        ...(data.intentTag !== undefined ? { intentTag: data.intentTag } as any : {}),
       })
       .where(eq(lcPageviews.id, id));
   },
@@ -883,6 +886,156 @@ export const lcStorage = {
     return operators[index].id;
   },
 
+  // ── Purchase Intent Score ────────────────────────────────────────────────
+  async updatePurchaseIntentScore(visitorId: string, score: number): Promise<void> {
+    await db.execute(
+      sql`UPDATE lc_visitors SET "purchaseIntentScore" = ${Math.min(score, 100)} WHERE "id" = ${visitorId}`
+    );
+  },
+
+  async incrementPurchaseIntentScore(visitorId: string, points: number): Promise<number> {
+    const result = await db.execute(
+      sql`UPDATE lc_visitors SET "purchaseIntentScore" = LEAST(COALESCE("purchaseIntentScore", 0) + ${points}, 100) WHERE "id" = ${visitorId} RETURNING "purchaseIntentScore"`
+    ) as any;
+    return Number(result?.rows?.[0]?.purchaseIntentScore ?? 0);
+  },
+
+  // ── AI Briefing ──────────────────────────────────────────────────────────
+  async updateAiBriefing(visitorId: string, briefing: { produtoInteresse?: string; fabricaO?: string; volume?: string; sentimento?: string; proximaAcao?: string; geradoEm?: string }): Promise<void> {
+    const jsonStr = JSON.stringify(briefing).replace(/'/g, "''");
+    await db.execute(sql.raw(`UPDATE lc_visitors SET "aiBriefing" = '${jsonStr}'::jsonb WHERE "id" = '${visitorId}'`));
+  },
+
+  // ── Análise Pré-Chat: top páginas visitadas antes do primeiro chat ────────
+  async getPreChatTopPages(limit = 10): Promise<{ url: string; pageTitle: string | null; count: number }[]> {
+    // Busca pageviews cujo visitedAt é ANTERIOR ao primeiro chat do mesmo visitante
+    const result = await db.execute(sql.raw(`
+      SELECT pv.url, pv."pageTitle", COUNT(*)::int AS count
+      FROM lc_pageviews pv
+      INNER JOIN (
+        SELECT "visitorId", MIN("startedAt") AS first_chat_at
+        FROM lc_chats
+        GROUP BY "visitorId"
+      ) fc ON pv."visitorId" = fc."visitorId"
+      WHERE pv."visitedAt"::timestamptz < fc.first_chat_at::timestamptz
+        AND pv.url NOT LIKE '%/api/%'
+        AND pv.url NOT LIKE '%favicon%'
+      GROUP BY pv.url, pv."pageTitle"
+      ORDER BY count DESC
+      LIMIT ${limit}
+    `)) as any;
+    const rows = result?.rows ?? result ?? [];
+    return Array.isArray(rows)
+      ? rows.map((r: any) => ({ url: r.url, pageTitle: r.pageTitle ?? null, count: Number(r.count) }))
+      : [];
+  },
+
+  // ── Taxa de conversão para chat por página ─────────────────────────────
+  async getPageChatConversionRates(limit = 10): Promise<{ url: string; visitors: number; converted: number; rate: number }[]> {
+    const result = await db.execute(sql.raw(`
+      SELECT
+        pv.url,
+        COUNT(DISTINCT pv."visitorId") AS visitors,
+        COUNT(DISTINCT CASE WHEN ch."visitorId" IS NOT NULL THEN pv."visitorId" END) AS converted
+      FROM lc_pageviews pv
+      LEFT JOIN lc_chats ch ON pv."visitorId" = ch."visitorId"
+      WHERE pv.url NOT LIKE '%/api/%'
+        AND pv.url NOT LIKE '%favicon%'
+      GROUP BY pv.url
+      HAVING COUNT(DISTINCT pv."visitorId") >= 5
+      ORDER BY (COUNT(DISTINCT CASE WHEN ch."visitorId" IS NOT NULL THEN pv."visitorId" END)::float / COUNT(DISTINCT pv."visitorId")::float) DESC
+      LIMIT ${limit}
+    `)) as any;
+    const rows = result?.rows ?? result ?? [];
+    return Array.isArray(rows)
+      ? rows.map((r: any) => ({
+          url: r.url,
+          visitors: Number(r.visitors),
+          converted: Number(r.converted),
+          rate: Number(r.visitors) > 0 ? Math.round((Number(r.converted) / Number(r.visitors)) * 100) : 0,
+        }))
+      : [];
+  },
+
+  // ── Timeline Unificada do Visitante ─────────────────────────────────────
+  async getVisitorTimeline(visitorId: string): Promise<{
+    type: string;
+    timestamp: string;
+    label: string;
+    meta?: Record<string, any>;
+  }[]> {
+    const [visitor, pageviews, chats, history] = await Promise.all([
+      this.getVisitorById(visitorId),
+      this.listPageviewsByVisitor(visitorId, 100),
+      this.listChatsByVisitor(visitorId, 20),
+      db.select().from(lcPageviews) // placeholder
+        .where(eq(lcPageviews.visitorId, visitorId))
+        .orderBy(desc(lcPageviews.visitedAt))
+        .limit(0), // empty
+    ]);
+
+    const events: { type: string; timestamp: string; label: string; meta?: Record<string, any> }[] = [];
+
+    // Evento: primeira visita
+    if (visitor) {
+      events.push({
+        type: 'session_start',
+        timestamp: visitor.firstSeenAt,
+        label: `Primeira visita via ${visitor.source ?? 'desconhecido'}`,
+        meta: { source: visitor.source, city: visitor.city, country: visitor.country },
+      });
+    }
+
+    // Eventos: pageviews
+    for (const pv of pageviews) {
+      events.push({
+        type: 'pageview',
+        timestamp: pv.visitedAt,
+        label: pv.pageTitle ?? pv.url,
+        meta: {
+          url: pv.url,
+          timeSpent: (pv as any).timeSpent,
+          scrollDepth: (pv as any).scrollDepth,
+          intentTag: (pv as any).intentTag,
+        },
+      });
+    }
+
+    // Eventos: chats
+    for (const ch of chats) {
+      events.push({
+        type: 'chat_start',
+        timestamp: ch.startedAt,
+        label: `Chat iniciado${ch.visitorName ? ` (${ch.visitorName})` : ''}`,
+        meta: { chatId: ch.id, status: ch.status },
+      });
+      if (ch.endedAt) {
+        events.push({
+          type: 'chat_closed',
+          timestamp: ch.endedAt,
+          label: `Chat encerrado (${(ch as any).closeReason ?? 'sem motivo'})`,
+          meta: { chatId: ch.id, closeReason: (ch as any).closeReason },
+        });
+      }
+    }
+
+    // Eventos: notas da IA
+    if (visitor && Array.isArray(visitor.notes)) {
+      for (const note of visitor.notes as any[]) {
+        events.push({
+          type: 'note_added',
+          timestamp: note.date,
+          label: `Nota IA: ${(note.content ?? '').slice(0, 80)}`,
+          meta: { stage: note.stage, content: note.content },
+        });
+      }
+    }
+
+    // Ordenar cronologicamente
+    events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return events;
+  },
+
 };
 
 /**
@@ -962,6 +1115,11 @@ export async function ensureLiveChatSchema(): Promise<void> {
     ['lc_chats', '"noiseFiltered" INTEGER NOT NULL DEFAULT 0'],
     // lc_messages
     ['lc_messages', '"read" TEXT NOT NULL DEFAULT \'false\''],
+    // Novas colunas Fase 1 & 2 — melhorias visitor intelligence
+    ['lc_visitors', '"deviceType" TEXT'],
+    ['lc_visitors', '"purchaseIntentScore" INTEGER NOT NULL DEFAULT 0'],
+    ['lc_visitors', '"aiBriefing" JSONB'],
+    ['lc_pageviews', '"intentTag" TEXT'],
   ];
 
   let applied = 0;

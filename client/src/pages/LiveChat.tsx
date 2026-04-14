@@ -63,6 +63,7 @@ interface Visitor {
   city?: string;
   country?: string;
   browser?: string;
+  deviceType?: string;                   // #9 — 'mobile' | 'tablet' | 'desktop'
   currentPage?: string;
   currentPageTitle?: string;
   source?: string;
@@ -74,6 +75,15 @@ interface Visitor {
   totalChats: number;
   category: string;
   engagementScore: number;
+  purchaseIntentScore?: number;           // #4 — Score de intenção de compra (0-100)
+  aiBriefing?: {                          // #7 — Briefing estruturado gerado pela IA
+    produtoInteresse?: string;
+    fabricaO?: string;
+    volume?: string;
+    sentimento?: string;
+    proximaAcao?: string;
+    geradoEm?: string;
+  };
   isOnline: string;
   pipelineStage: string;
   firstSeenAt: string;
@@ -140,7 +150,32 @@ interface Pageview {
   visitorId: string;
   url: string;
   pageTitle?: string;
+  scrollDepth?: number;     // #1 — % da página scrollada
+  timeSpent?: number;       // #1 — segundos na página
+  intentTag?: string;       // #2 — tag de intenção resolvida
   visitedAt: string;
+}
+
+// #10 — Evento na timeline unificada
+interface TimelineEvent {
+  type: string;
+  timestamp: string;
+  label: string;
+  meta?: Record<string, any>;
+}
+
+// #8 — Analytics pré-chat
+interface PreChatPage {
+  url: string;
+  pageTitle: string | null;
+  count: number;
+}
+
+interface ConversionRate {
+  url: string;
+  visitors: number;
+  converted: number;
+  rate: number;
 }
 
 // ——— Helpers —————————————————————————————————————————————————
@@ -381,7 +416,7 @@ function LiveChat() {
   const [attentionObs, setAttentionObs] = useState("");
   const [visitorChats, setVisitorChats] = useState<Chat[]>([]);
   const [pastNegotiations, setPastNegotiations] = useState<any[]>([]);
-  const [historyModal, setHistoryModal] = useState<{ visitor: Visitor; pageviews: Pageview[] } | null>(null);
+  const [historyModal, setHistoryModal] = useState<{ visitor: Visitor; pageviews: Pageview[]; timeline?: TimelineEvent[] } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [closeReasonOpen, setCloseReasonOpen] = useState<string | null>(null); // chatId
   const [closeReasonSaving, setCloseReasonSaving] = useState(false);
@@ -392,6 +427,13 @@ function LiveChat() {
   const [editingTitleChatId, setEditingTitleChatId] = useState<string | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
+  // ——— Analytics pré-chat (#8) ———
+  const [preChatAnalytics, setPreChatAnalytics] = useState<{ topPages: PreChatPage[]; conversionRates: ConversionRate[] } | null>(null);
+  const [preChatLoading, setPreChatLoading] = useState(false);
+  // ——— Timeline modal (#10) ———
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  // ——— Modal de histórico: aba ativa ———
+  const [historyActiveTab, setHistoryActiveTab] = useState<'pageviews' | 'timeline' | 'briefing'>('pageviews');
   const selectedChatRef = useRef<Chat | null>(null);
   const activeTabRef = useRef<string>("chats");
   const wsRef = useRef<WebSocket | null>(null);
@@ -469,12 +511,38 @@ function LiveChat() {
 
   const openHistoryModal = async (v: Visitor) => {
     try {
+      setHistoryActiveTab('pageviews');
       const res = await fetch(`/api/livechat/visitors/${v.id}/pageviews`, { credentials: "include" });
       const pageviews: Pageview[] = res.ok ? await res.json() : [];
       setHistoryModal({ visitor: v, pageviews: pageviews.reverse() });
     } catch {
       setHistoryModal({ visitor: v, pageviews: [] });
     }
+  };
+
+  // #10 — Carregar timeline unificada do visitante
+  const loadVisitorTimeline = async (visitorId: string) => {
+    setTimelineLoading(true);
+    try {
+      const res = await fetch(`/api/livechat/visitors/${visitorId}/timeline`, { credentials: "include" });
+      const timeline: TimelineEvent[] = res.ok ? await res.json() : [];
+      setHistoryModal(prev => prev ? { ...prev, timeline } : prev);
+    } catch {
+      setHistoryModal(prev => prev ? { ...prev, timeline: [] } : prev);
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
+  // #8 — Carregar analytics pré-chat
+  const loadPreChatAnalytics = async () => {
+    if (preChatAnalytics || preChatLoading) return;
+    setPreChatLoading(true);
+    try {
+      const res = await fetch('/api/livechat/stats/pre-chat-pages', { credentials: 'include' });
+      if (res.ok) setPreChatAnalytics(await res.json());
+    } catch {}
+    finally { setPreChatLoading(false); }
   };
 
   // ——— Fetch initial data —————————————————————————————————————————————————
@@ -587,11 +655,12 @@ function LiveChat() {
           case "VISITOR_PAGE_UPDATE":
             setHistoryModal(prev => {
               if (prev && prev.visitor.id === data.visitorId) {
-                const newPv = {
-                   id: `live-${Date.now()}`,
+                const newPv: Pageview = {
+                   id: data.pageviewId ?? `live-${Date.now()}`,
                    visitorId: data.visitorId,
                    url: data.url,
                    pageTitle: data.pageTitle || data.url,
+                   intentTag: data.intentTag,
                    visitedAt: new Date().toISOString()
                 };
                 return { ...prev, pageviews: [newPv, ...prev.pageviews] };
@@ -601,7 +670,33 @@ function LiveChat() {
             setVisitors((prev) => prev.map((v) =>
               v.id === data.visitorId ? { ...v, currentPage: data.url, currentPageTitle: data.pageTitle } : v
             ));
+            // Atualiza purchaseIntentScore no visitor se vier no evento
+            if (data.purchaseIntentScore !== undefined) {
+              setAllVisitors(prev => prev.map(v => v.id === data.visitorId ? { ...v, purchaseIntentScore: data.purchaseIntentScore } : v));
+            }
             break;
+
+          case "RETURNING_HOT_LEAD": {
+            // #6 — Lead quente voltou ao site: toast especial com link de visita
+            const leadUrl = data.currentPageTitle || data.currentPage || "site";
+            toast({
+              title: `🔥 ${data.visitorName ?? 'Lead Quente'} voltou!`,
+              description: `${data.totalVisits} visitas | Engajamento: ${data.engagementScore} | 🎯 Compra: ${data.purchaseIntentScore ?? 0} | Página: ${leadUrl}`,
+            });
+            break;
+          }
+
+          case "VISITOR_BRIEFING_UPDATED": {
+            // #7 — Atualiza o briefing da IA no estado do visitor
+            setAllVisitors(prev => prev.map(v =>
+              v.id === data.visitorId ? { ...v, aiBriefing: data.briefing } : v
+            ));
+            setHistoryModal(prev => prev && prev.visitor.id === data.visitorId
+              ? { ...prev, visitor: { ...prev.visitor, aiBriefing: data.briefing } }
+              : prev
+            );
+            break;
+          }
           case "NEW_CHAT":
             setChats((prev) => [data.chat, ...prev]);
             if (data.proactive) {
@@ -2335,12 +2430,22 @@ function LiveChat() {
                 </div>
               </div>
 
-              {/* Info row + Dados do Cliente (se existirem) */}
+              {/* Info row */}
               <div className="px-6 py-3 bg-zinc-50 border-b border-zinc-100 flex flex-wrap gap-4 text-[11px]">
                 <span className="text-zinc-500">Source: <strong className="text-zinc-700">{sourceLabel(historyModal.visitor.source).label}</strong></span>
                 <span className="text-zinc-500">Páginas: <strong className="text-zinc-700">{historyModal.visitor.totalPages}</strong></span>
                 <span className="text-zinc-500">Chats: <strong className="text-zinc-700">{historyModal.visitor.totalChats}</strong></span>
-                <span className="text-zinc-500">Score: <strong className="text-zinc-700">{historyModal.visitor.engagementScore}</strong></span>
+                {/* #9 — Dispositivo */}
+                {historyModal.visitor.deviceType && (
+                  <span className="text-zinc-500">
+                    {historyModal.visitor.deviceType === 'mobile' ? '📱' : historyModal.visitor.deviceType === 'tablet' ? '📲' : '💻'} <strong className="text-zinc-700 capitalize">{historyModal.visitor.deviceType}</strong>
+                  </span>
+                )}
+                {/* #4 — Engagement + Purchase Intent duals scores */}
+                <span className="text-zinc-500">⚡ Eng: <strong className={`${historyModal.visitor.engagementScore >= 60 ? 'text-red-600' : historyModal.visitor.engagementScore >= 30 ? 'text-amber-600' : 'text-zinc-700'}`}>{historyModal.visitor.engagementScore}</strong></span>
+                {(historyModal.visitor.purchaseIntentScore ?? 0) > 0 && (
+                  <span className="text-zinc-500">🎯 Compra: <strong className={`${(historyModal.visitor.purchaseIntentScore ?? 0) >= 60 ? 'text-emerald-600' : (historyModal.visitor.purchaseIntentScore ?? 0) >= 30 ? 'text-amber-600' : 'text-zinc-700'}`}>{historyModal.visitor.purchaseIntentScore}</strong></span>
+                )}
                 <span className="text-zinc-500">Primeiro acesso: <strong className="text-zinc-700">{timeAgo(historyModal.visitor.firstSeenAt)}</strong></span>
                 {historyModal.visitor.pipelineStage && historyModal.visitor.pipelineStage !== 'novo_atendimento' && (
                   <span className="text-zinc-500">
@@ -2390,35 +2495,162 @@ function LiveChat() {
                 </div>
               )}
 
+              {/* #7 — Briefing da IA (card sempre visível quando disponível) */}
+              {historyModal.visitor.aiBriefing && (
+                <div className="px-6 py-3 border-b border-zinc-100" style={{ background: 'linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%)' }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 mb-2 flex items-center gap-1">🧠 Briefing da IA</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {historyModal.visitor.aiBriefing.produtoInteresse && (
+                      <div className="text-[11px]"><span className="text-amber-600 font-semibold">🎯 Produto:</span> <span className="text-zinc-700">{historyModal.visitor.aiBriefing.produtoInteresse}</span></div>
+                    )}
+                    {historyModal.visitor.aiBriefing.fabricaO && (
+                      <div className="text-[11px]"><span className="text-amber-600 font-semibold">🏭 Fabrica:</span> <span className="text-zinc-700">{historyModal.visitor.aiBriefing.fabricaO}</span></div>
+                    )}
+                    {historyModal.visitor.aiBriefing.volume && (
+                      <div className="text-[11px]"><span className="text-amber-600 font-semibold">📦 Volume:</span> <span className="text-zinc-700">{historyModal.visitor.aiBriefing.volume}</span></div>
+                    )}
+                    {historyModal.visitor.aiBriefing.sentimento && (
+                      <div className="text-[11px]"><span className="text-amber-600 font-semibold">💬 Sentimento:</span> <span className="text-zinc-700">{historyModal.visitor.aiBriefing.sentimento}</span></div>
+                    )}
+                    {historyModal.visitor.aiBriefing.proximaAcao && (
+                      <div className="col-span-2 text-[11px]"><span className="text-amber-600 font-semibold">⚡ Próxima Ação:</span> <span className="text-zinc-700 font-medium">{historyModal.visitor.aiBriefing.proximaAcao}</span></div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tabs: Navegação | Jornada */}
+              <div className="px-6 pt-3 flex items-center gap-1 border-b border-zinc-100 bg-white">
+                {(['pageviews', 'timeline'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      setHistoryActiveTab(tab);
+                      if (tab === 'timeline' && !historyModal.timeline) {
+                        loadVisitorTimeline(historyModal.visitor.id);
+                      }
+                    }}
+                    className={`px-3 py-1.5 text-[11px] font-semibold rounded-t-lg transition-colors ${
+                      historyActiveTab === tab
+                        ? 'bg-zinc-100 text-zinc-800 border border-b-0 border-zinc-200'
+                        : 'text-zinc-400 hover:text-zinc-600'
+                    }`}
+                  >
+                    {tab === 'pageviews' ? '🗺️ Navegação' : '📅 Jornada'}
+                  </button>
+                ))}
+              </div>
+
               {/* Pageview list */}
               <div className="flex-1 overflow-y-auto px-6 py-4">
-                <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                  <MousePointer className="w-3.5 h-3.5" /> Histórico de Navegação
-                </h3>
-                {historyModal.pageviews.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-zinc-400">
-                    <Globe className="w-10 h-10 mb-3 opacity-20" />
-                    <p className="text-sm">Nenhuma página registrada</p>
-                  </div>
+                {historyActiveTab === 'pageviews' ? (
+                  historyModal.pageviews.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-zinc-400">
+                      <Globe className="w-10 h-10 mb-3 opacity-20" />
+                      <p className="text-sm">Nenhuma página registrada</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {historyModal.pageviews.map((pv, i) => {
+                        // #2 — Intent tag badge
+                        const INTENT_COLORS: Record<string, string> = {
+                          checkout_compra:           'bg-emerald-50 text-emerald-700 border-emerald-200',
+                          orcamento_contato:         'bg-blue-50 text-blue-700 border-blue-200',
+                          maquinas_seladora_premium: 'bg-orange-50 text-orange-700 border-orange-200',
+                          maquinas_seladora:         'bg-orange-50 text-orange-600 border-orange-100',
+                          maquinas_geral:            'bg-amber-50 text-amber-700 border-amber-200',
+                          pecas_reposicao:           'bg-yellow-50 text-yellow-700 border-yellow-200',
+                          pos_venda_suporte:         'bg-purple-50 text-purple-700 border-purple-200',
+                          institucional:             'bg-zinc-50 text-zinc-500 border-zinc-200',
+                          blog_conteudo:             'bg-sky-50 text-sky-600 border-sky-200',
+                        };
+                        const INTENT_ICONS: Record<string, string> = {
+                          checkout_compra: '🛒', orcamento_contato: '📋',
+                          maquinas_seladora_premium: '🏭', maquinas_seladora: '⚙️',
+                          maquinas_geral: '🔧', pecas_reposicao: '🔩',
+                          pos_venda_suporte: '🛠️', institucional: '🏢', blog_conteudo: '📰',
+                        };
+                        const intentClass = pv.intentTag ? (INTENT_COLORS[pv.intentTag] ?? 'bg-zinc-50 text-zinc-500 border-zinc-200') : null;
+                        const intentIcon = pv.intentTag ? (INTENT_ICONS[pv.intentTag] ?? '🌐') : null;
+
+                        return (
+                          <div key={pv.id} className="flex items-start gap-3 p-3 rounded-lg border border-zinc-100 hover:border-zinc-200 transition-colors bg-white">
+                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 border border-red-100 flex items-center justify-center text-[10px] font-bold text-red-500">
+                              {i + 1}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                                <p className="text-[12px] font-semibold text-zinc-800 truncate">
+                                  {pv.pageTitle || pv.url}
+                                </p>
+                                {/* #2 — Intent tag badge */}
+                                {intentClass && (
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex-shrink-0 ${intentClass}`}>
+                                    {intentIcon} {pv.intentTag!.replace(/_/g, ' ')}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-zinc-400 truncate">{pv.url}</p>
+                              {/* #1 — Time-on-page + scroll depth */}
+                              {(pv.timeSpent || pv.scrollDepth) && (
+                                <div className="flex items-center gap-2 mt-1">
+                                  {pv.timeSpent != null && pv.timeSpent > 0 && (
+                                    <span className="text-[9px] text-blue-500 font-medium">
+                                      ⏱ {pv.timeSpent >= 60 ? `${Math.floor(pv.timeSpent / 60)}min${pv.timeSpent % 60 > 0 ? `${pv.timeSpent % 60}s` : ''}` : `${pv.timeSpent}s`}
+                                    </span>
+                                  )}
+                                  {pv.scrollDepth != null && pv.scrollDepth > 0 && (
+                                    <span className="text-[9px] text-purple-500 font-medium">
+                                      📜 {pv.scrollDepth}%
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-zinc-300 flex-shrink-0 flex items-center gap-0.5">
+                              <Clock className="w-3 h-3" /> {timeAgo(pv.visitedAt)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
                 ) : (
-                  <div className="space-y-2">
-                    {historyModal.pageviews.map((pv, i) => (
-                      <div key={pv.id} className="flex items-start gap-3 p-3 rounded-lg border border-zinc-100 hover:border-zinc-200 transition-colors bg-white">
-                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 border border-red-100 flex items-center justify-center text-[10px] font-bold text-red-500">
-                          {i + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-semibold text-zinc-800 truncate">
-                            {pv.pageTitle || pv.url}
-                          </p>
-                          <p className="text-[10px] text-zinc-400 truncate mt-0.5">{pv.url}</p>
-                        </div>
-                        <span className="text-[10px] text-zinc-300 flex-shrink-0 flex items-center gap-0.5">
-                          <Clock className="w-3 h-3" /> {timeAgo(pv.visitedAt)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  // #10 — Timeline unificada
+                  timelineLoading ? (
+                    <div className="flex items-center justify-center py-12 text-zinc-400">
+                      <RefreshCw className="w-6 h-6 animate-spin" />
+                      <span className="ml-2 text-sm">Carregando jornada...</span>
+                    </div>
+                  ) : !historyModal.timeline || historyModal.timeline.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-zinc-400">
+                      <Calendar className="w-10 h-10 mb-3 opacity-20" />
+                      <p className="text-sm">Nenhum evento na timeline</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {historyModal.timeline.map((evt, i) => {
+                        const TYPE_META: Record<string, { icon: string; color: string }> = {
+                          session_start: { icon: '🌐', color: 'text-blue-500' },
+                          pageview:      { icon: '🖼️', color: 'text-zinc-400' },
+                          chat_start:    { icon: '💬', color: 'text-emerald-500' },
+                          chat_closed:   { icon: '✅', color: 'text-zinc-400' },
+                          note_added:    { icon: '🧠', color: 'text-amber-500' },
+                          returned:      { icon: '🔄', color: 'text-purple-500' },
+                        };
+                        const meta = TYPE_META[evt.type] ?? { icon: '●', color: 'text-zinc-300' };
+                        return (
+                          <div key={i} className="flex items-start gap-3 py-2 border-l-2 border-zinc-100 pl-4 ml-3">
+                            <span className={`text-base flex-shrink-0 ${meta.color}`}>{meta.icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[12px] text-zinc-700 font-medium truncate">{evt.label}</p>
+                              <p className="text-[10px] text-zinc-400">{new Date(evt.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
                 )}
               </div>
             </div>
@@ -3580,10 +3812,80 @@ function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) 
           </div>
         </div>
 
+        {/* Card 4 — #8 Analytics Pré-Chat */}
+        <PreChatAnalyticsCard />
+
       </div>
     </div>
   );
 }
 
+// ─── PreChatAnalyticsCard (melhoria #8) ─────────────────────────────────────
+function PreChatAnalyticsCard() {
+  const [data, setData] = useState<{ topPages: { url: string; pageTitle: string | null; count: number }[]; conversionRates: any[] } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  const load = () => {
+    if (loaded) return;
+    setLoading(true);
+    fetch('/api/livechat/stats/pre-chat-pages?limit=8', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setData(d); setLoaded(true); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-zinc-200/60 shadow-sm p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7c3aed,#a78bfa)' }}>
+          <MousePointer className="w-4 h-4 text-white" />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-sm font-bold text-zinc-800">Páginas Pré-Chat</h3>
+          <p className="text-[10px] text-zinc-400">URLs mais visitadas antes do 1º chat</p>
+        </div>
+        {!loaded && (
+          <button onClick={load} className="text-[10px] text-violet-600 font-semibold hover:underline">Carregar</button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8 text-zinc-400">
+          <div className="w-5 h-5 border-2 border-violet-400 border-t-transparent rounded-full animate-spin mr-2" />
+          <span className="text-xs">Analisando...</span>
+        </div>
+      ) : !loaded ? (
+        <div className="flex flex-col items-center justify-center py-8 text-zinc-300">
+          <MousePointer className="w-10 h-10 mb-2 opacity-30" />
+          <p className="text-xs">Clique em "Carregar" para ver os dados</p>
+        </div>
+      ) : !data?.topPages?.length ? (
+        <p className="text-xs text-zinc-400 text-center py-8">Ainda sem dados suficientes</p>
+      ) : (
+        <div className="space-y-2">
+          {data.topPages.slice(0, 6).map((page, i) => {
+            const maxCount = data.topPages[0]?.count ?? 1;
+            const pct = Math.round((page.count / maxCount) * 100);
+            const displayUrl = page.pageTitle || page.url.replace(/^https?:\/\/[^/]+/, '').slice(0, 50) || page.url;
+            return (
+              <div key={i}>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[11px] text-zinc-700 font-medium truncate flex-1 mr-2">{displayUrl}</span>
+                  <span className="text-[10px] font-bold text-violet-600 flex-shrink-0">{page.count}x</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-400" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default LiveChat;
+
 

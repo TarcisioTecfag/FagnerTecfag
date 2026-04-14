@@ -149,6 +149,7 @@ export const lcVisitors = pgTable("lc_visitors", {
   city: text("city"),
   country: text("country"),
   browser: text("browser"),
+  deviceType: text("deviceType"),            // 'mobile', 'tablet', 'desktop'
   userAgent: text("userAgent"),
   currentPage: text("currentPage"),
   currentPageTitle: text("currentPageTitle"),
@@ -162,6 +163,15 @@ export const lcVisitors = pgTable("lc_visitors", {
   totalChats: integer("totalChats").notNull().default(0),
   category: text("category").notNull().default("visitor"),   // 'visitor', 'lead_warm', 'lead_hot', 'customer', 'returning'
   engagementScore: integer("engagementScore").notNull().default(0),
+  purchaseIntentScore: integer("purchaseIntentScore").notNull().default(0),  // 0-100 — score de intenção de compra
+  aiBriefing: jsonb("aiBriefing").$type<{
+    produtoInteresse?: string;
+    fabricaO?: string;
+    volume?: string;
+    sentimento?: string;
+    proximaAcao?: string;
+    geradoEm?: string;
+  }>(),
   isOnline: text("isOnline").notNull().default("true"),
   pipelineStage: text("pipelineStage").notNull().default("novo_atendimento"),
   // Valores: 'novo_atendimento', 'em_atendimento', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'sem_resposta'
@@ -202,6 +212,7 @@ export const lcPageviews = pgTable("lc_pageviews", {
   pageTitle: text("pageTitle"),
   scrollDepth: integer("scrollDepth"),         // 0-100 %
   timeSpent: integer("timeSpent"),             // seconds
+  intentTag: text("intentTag"),                // 'maquinas_seladora', 'pecas_reposicao', 'checkout', 'contato', 'institucional', etc.
   visitedAt: text("visitedAt").notNull().default(sql`now()::text`),
 });
 

@@ -578,13 +578,53 @@ export function registerLiveChatRoutes(app: any): void {
 
         console.log(`[VTEX Hook] âœ… Processado: visitante=${visitor.id} orderId=${orderId} status=${status}`);
       } catch (err: any) {
-        console.error('[VTEX Hook] âŒ Erro ao processar webhook:', err.message);
+        console.error('[VTEX Hook] ❌ Erro ao processar webhook:', err.message);
       }
     });
+  });
+
+  // ── Visitor Intelligence — Fase 1 & 2 & 3 ──────────────────────────────────
+
+  // #8 — Analytics: top páginas visitadas ANTES do primeiro chat
+  router.get("/stats/pre-chat-pages", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const [topPages, conversionRates] = await Promise.all([
+        lcStorage.getPreChatTopPages(limit),
+        lcStorage.getPageChatConversionRates(limit),
+      ]);
+      return res.json({ topPages, conversionRates });
+    } catch (err: any) {
+      console.error("[LiveChat] GET /stats/pre-chat-pages error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
+  // #10 — Timeline unificada do visitante
+  router.get("/visitors/:id/timeline", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const timeline = await lcStorage.getVisitorTimeline(p(req.params.id));
+      return res.json(timeline);
+    } catch (err: any) {
+      console.error("[LiveChat] GET /visitors/:id/timeline error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
+  // #7 — Salvar aiBriefing manualmente (opcional — também gerado automaticamente)
+  router.patch("/visitors/:id/briefing", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const briefing = req.body;
+      if (!briefing || typeof briefing !== "object") return res.status(400).json({ error: "Briefing inválido" });
+      await lcStorage.updateAiBriefing(p(req.params.id), briefing);
+      return res.json({ ok: true });
+    } catch (err: any) {
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
   });
 
   // Mount all routes under /api/livechat
   app.use("/api/livechat", router);
 
-  console.log("[LiveChat] âœ… Rotas /api/livechat/* registradas");
+  console.log("[LiveChat] ✅ Rotas /api/livechat/* registradas");
 }
