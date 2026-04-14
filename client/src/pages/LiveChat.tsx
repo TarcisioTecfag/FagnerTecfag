@@ -989,7 +989,7 @@ function LiveChat() {
           const fd = new FormData();
           fd.append("audio", audioBlob, `audio-${Date.now()}.${ext}`);
 
-          const uploadRes = await fetch(`${BACKEND}/api/livechat/audio-upload`, {
+          const uploadRes = await fetch(`/api/livechat/audio-upload`, {
             method: "POST",
             credentials: "include",
             body: fd,
