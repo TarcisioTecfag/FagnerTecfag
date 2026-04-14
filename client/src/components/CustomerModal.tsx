@@ -324,7 +324,7 @@ export function CustomerModal({
         </div>
 
         {/* ── Tabs ─────────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-hidden mt-4 animate-slide-up min-h-0" style={{ animationDelay: "350ms" }}>
+        <div className="mt-4 animate-slide-up" style={{ animationDelay: "350ms" }}>
           <Tabs
             value={activeTab}
             onValueChange={(v) => {
@@ -333,7 +333,6 @@ export function CustomerModal({
                 onLoadTimeline(visitor.id);
               }
             }}
-            className="flex flex-col h-full min-h-0"
           >
             <div className="px-8">
               <TabsList className="w-full bg-muted/50 p-1 rounded-lg">
@@ -358,235 +357,242 @@ export function CustomerModal({
               </TabsList>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-8 pb-6 mt-4 min-h-0">
+            {/* ── Tab: Cliente ─────────────────────────────────────── */}
+            <TabsContent
+              value="cliente"
+              className="mt-0 px-8 pb-6 pt-4 space-y-4 overflow-y-scroll"
+              style={{ maxHeight: "calc(90vh - 330px)" }}
+            >
+              {/* Dados de contato */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <InfoChip icon={User} delay={0} empty={!visitor.posVendaNome && !visitor.name}>
+                  {visitor.posVendaNome || visitor.name || "Não identificado"}
+                </InfoChip>
+                <InfoChip icon={Phone} delay={50} empty={!visitor.posVendaTelefone}>
+                  {visitor.posVendaTelefone || "Telefone não informado"}
+                </InfoChip>
+                <InfoChip icon={Mail} delay={100} empty={!visitor.posVendaEmail}>
+                  {visitor.posVendaEmail || "E-mail não informado"}
+                </InfoChip>
+                <InfoChip icon={CreditCard} delay={150} empty={!visitor.posVendaCnpjCpf}>
+                  {visitor.posVendaCnpjCpf || "CPF/CNPJ não informado"}
+                </InfoChip>
+              </div>
 
-              {/* ── Tab: Cliente ─────────────────────────────────────── */}
-              <TabsContent value="cliente" className="mt-0 space-y-4">
-                {/* Dados de contato */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <InfoChip icon={User} delay={0} empty={!visitor.posVendaNome && !visitor.name}>
-                    {visitor.posVendaNome || visitor.name || "Não identificado"}
-                  </InfoChip>
-                  <InfoChip icon={Phone} delay={50} empty={!visitor.posVendaTelefone}>
-                    {visitor.posVendaTelefone || "Telefone não informado"}
-                  </InfoChip>
-                  <InfoChip icon={Mail} delay={100} empty={!visitor.posVendaEmail}>
-                    {visitor.posVendaEmail || "E-mail não informado"}
-                  </InfoChip>
-                  <InfoChip icon={CreditCard} delay={150} empty={!visitor.posVendaCnpjCpf}>
-                    {visitor.posVendaCnpjCpf || "CPF/CNPJ não informado"}
-                  </InfoChip>
+              {/* Produto / Interesse */}
+              {(visitor.maquinaDesejada || visitor.pecaDesejada || visitor.aiBriefing?.produtoInteresse) && (
+                <div className="mt-2 p-4 rounded-xl bg-amber-50 border border-amber-100">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 mb-2">🧠 Interesse Detectado</p>
+                  <div className="grid grid-cols-2 gap-2 text-[12px]">
+                    {(visitor.maquinaDesejada || visitor.aiBriefing?.produtoInteresse) && (
+                      <div>
+                        <span className="text-amber-600 font-semibold">🎯 Produto:</span>{" "}
+                        <span className="text-zinc-700">{visitor.maquinaDesejada || visitor.aiBriefing?.produtoInteresse}</span>
+                      </div>
+                    )}
+                    {visitor.pecaDesejada && (
+                      <div>
+                        <span className="text-amber-600 font-semibold">🔩 Peça:</span>{" "}
+                        <span className="text-zinc-700">{visitor.pecaDesejada}</span>
+                      </div>
+                    )}
+                    {visitor.aiBriefing?.volume && (
+                      <div>
+                        <span className="text-amber-600 font-semibold">📦 Volume:</span>{" "}
+                        <span className="text-zinc-700">{visitor.aiBriefing.volume}</span>
+                      </div>
+                    )}
+                    {visitor.aiBriefing?.fabricaO && (
+                      <div>
+                        <span className="text-amber-600 font-semibold">🏭 Fabrica:</span>{" "}
+                        <span className="text-zinc-700">{visitor.aiBriefing.fabricaO}</span>
+                      </div>
+                    )}
+                    {visitor.aiBriefing?.sentimento && (
+                      <div className="col-span-2">
+                        <span className="text-amber-600 font-semibold">💬 Sentimento:</span>{" "}
+                        <span className="text-zinc-700">{visitor.aiBriefing.sentimento}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
+              )}
 
-                {/* Produto / Interesse */}
-                {(visitor.maquinaDesejada || visitor.pecaDesejada || visitor.aiBriefing?.produtoInteresse) && (
-                  <div className="mt-2 p-4 rounded-xl bg-amber-50 border border-amber-100">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 mb-2">🧠 Interesse Detectado</p>
-                    <div className="grid grid-cols-2 gap-2 text-[12px]">
-                      {(visitor.maquinaDesejada || visitor.aiBriefing?.produtoInteresse) && (
-                        <div>
-                          <span className="text-amber-600 font-semibold">🎯 Produto:</span>{" "}
-                          <span className="text-zinc-700">{visitor.maquinaDesejada || visitor.aiBriefing?.produtoInteresse}</span>
-                        </div>
-                      )}
-                      {visitor.pecaDesejada && (
-                        <div>
-                          <span className="text-amber-600 font-semibold">🔩 Peça:</span>{" "}
-                          <span className="text-zinc-700">{visitor.pecaDesejada}</span>
-                        </div>
-                      )}
-                      {visitor.aiBriefing?.volume && (
-                        <div>
-                          <span className="text-amber-600 font-semibold">📦 Volume:</span>{" "}
-                          <span className="text-zinc-700">{visitor.aiBriefing.volume}</span>
-                        </div>
-                      )}
-                      {visitor.aiBriefing?.fabricaO && (
-                        <div>
-                          <span className="text-amber-600 font-semibold">🏭 Fabrica:</span>{" "}
-                          <span className="text-zinc-700">{visitor.aiBriefing.fabricaO}</span>
-                        </div>
-                      )}
-                      {visitor.aiBriefing?.sentimento && (
-                        <div className="col-span-2">
-                          <span className="text-amber-600 font-semibold">💬 Sentimento:</span>{" "}
-                          <span className="text-zinc-700">{visitor.aiBriefing.sentimento}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+              {/* Primeiro acesso */}
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Calendar className="w-3.5 h-3.5 text-brand/60" />
+                Primeiro acesso: <strong className="text-foreground">{timeAgo(visitor.firstSeenAt)}</strong>
+                &nbsp;·&nbsp;
+                Última visita: <strong className="text-foreground">{timeAgo(visitor.lastSeenAt)}</strong>
+              </div>
 
-                {/* Primeiro acesso */}
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <Calendar className="w-3.5 h-3.5 text-brand/60" />
-                  Primeiro acesso: <strong className="text-foreground">{timeAgo(visitor.firstSeenAt)}</strong>
-                  &nbsp;·&nbsp;
-                  Última visita: <strong className="text-foreground">{timeAgo(visitor.lastSeenAt)}</strong>
+              {/* Problema Pós-Venda */}
+              {visitor.posVendaProblema && (
+                <div className="p-4 rounded-xl bg-purple-50 border border-purple-100 text-[12px]">
+                  <p className="text-purple-600 font-bold mb-1">⚙️ Problema Relatado</p>
+                  <p className="text-zinc-700 leading-relaxed">{visitor.posVendaProblema}</p>
                 </div>
+              )}
+            </TabsContent>
 
-                {/* Problema Pós-Venda */}
-                {visitor.posVendaProblema && (
-                  <div className="p-4 rounded-xl bg-purple-50 border border-purple-100 text-[12px]">
-                    <p className="text-purple-600 font-bold mb-1">⚙️ Problema Relatado</p>
-                    <p className="text-zinc-700 leading-relaxed">{visitor.posVendaProblema}</p>
-                  </div>
-                )}
-              </TabsContent>
+            {/* ── Tab: Histórico / Navegação ───────────────────────── */}
+            <TabsContent
+              value="historico"
+              className="mt-0 px-8 pb-6 pt-4 overflow-y-scroll"
+              style={{ maxHeight: "calc(90vh - 330px)" }}
+            >
+              {pageviews.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <Globe className="w-12 h-12 mb-3 opacity-20" />
+                  <p className="text-sm">Nenhuma página registrada</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {pageviews.map((pv, i) => {
+                    const showIntent = pv.intentTag && pv.intentTag !== "navegacao_geral";
+                    const intentClass = showIntent ? (INTENT_COLORS[pv.intentTag!] ?? "bg-zinc-50 text-zinc-500 border-zinc-200") : null;
+                    const intentIcon = showIntent ? (INTENT_ICONS[pv.intentTag!] ?? "🌐") : null;
 
-              {/* ── Tab: Histórico / Navegação ───────────────────────── */}
-              <TabsContent value="historico" className="mt-0">
-                {pageviews.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                    <Globe className="w-12 h-12 mb-3 opacity-20" />
-                    <p className="text-sm">Nenhuma página registrada</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {pageviews.map((pv, i) => {
-                      const showIntent = pv.intentTag && pv.intentTag !== "navegacao_geral";
-                      const intentClass = showIntent ? (INTENT_COLORS[pv.intentTag!] ?? "bg-zinc-50 text-zinc-500 border-zinc-200") : null;
-                      const intentIcon = showIntent ? (INTENT_ICONS[pv.intentTag!] ?? "🌐") : null;
+                    return (
+                      <div
+                        key={String(pv.id)}
+                        className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border hover:border-brand/30 hover:bg-brand-light/30 transition-all group cursor-pointer animate-stagger-in"
+                        style={{ animationDelay: `${i * 60}ms` }}
+                      >
+                        {/* Número */}
+                        <div className="w-8 h-8 rounded-full bg-brand-light text-brand text-xs font-bold flex items-center justify-center flex-shrink-0 group-hover:bg-brand group-hover:text-primary-foreground transition-all group-hover:scale-110">
+                          {i + 1}
+                        </div>
+
+                        {/* Conteúdo */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium text-foreground truncate">{pv.pageTitle || pv.url}</p>
+                            {intentClass && (
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex-shrink-0 ${intentClass}`}>
+                                {intentIcon} {pv.intentTag!.replace(/_/g, " ")}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{pv.url}</p>
+                          {(pv.timeSpent || pv.scrollDepth) && (
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {pv.timeSpent != null && pv.timeSpent > 0 && (
+                                <span className="text-[9px] text-blue-500 font-medium">⏱ {fmtTime(pv.timeSpent)}</span>
+                              )}
+                              {pv.scrollDepth != null && pv.scrollDepth > 0 && (
+                                <span className="text-[9px] text-purple-500 font-medium">📜 {pv.scrollDepth}%</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Tempo atrás */}
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0">
+                          <Clock className="w-3 h-3" />
+                          {timeAgo(pv.visitedAt)}
+                        </div>
+
+                        <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 flex-shrink-0" />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── Tab: Atividades / Jornada ────────────────────────── */}
+            <TabsContent
+              value="atividades"
+              className="mt-0 px-8 pb-6 pt-4 overflow-y-scroll"
+              style={{ maxHeight: "calc(90vh - 330px)" }}
+            >
+              {timelineLoading ? (
+                <div className="flex items-center justify-center py-16 text-muted-foreground">
+                  <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin mr-2" />
+                  <span className="text-sm">Carregando jornada...</span>
+                </div>
+              ) : !timeline || timeline.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <Activity className="w-12 h-12 mb-3 opacity-20" />
+                  <p className="text-sm">Nenhum evento registrado</p>
+                  {onLoadTimeline && (
+                    <button
+                      onClick={() => onLoadTimeline(visitor.id)}
+                      className="mt-3 text-xs text-brand hover:underline font-medium"
+                    >
+                      Carregar jornada
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="relative">
+                  {/* Linha do tempo */}
+                  <div className="absolute left-[19px] top-4 bottom-4 w-px bg-border" />
+
+                  <div className="space-y-1">
+                    {timeline.map((evt, i) => {
+                      const TYPE_META: Record<string, { icon: React.ElementType; label: string }> = {
+                        session_start: { icon: Globe,             label: "Sessão iniciada" },
+                        pageview:      { icon: FileText,          label: "Página visitada" },
+                        chat_start:    { icon: MessageSquare,     label: "Chat iniciado" },
+                        chat_closed:   { icon: Activity,          label: "Chat encerrado" },
+                        note_added:    { icon: FileText,          label: "Nota adicionada" },
+                        returned:      { icon: MousePointerClick, label: "Retornou ao site" },
+                      };
+                      const meta = TYPE_META[evt.type] ?? { icon: Activity, label: evt.type };
+                      const Icon = meta.icon;
+                      const urlPath = evt.meta?.url
+                        ? (evt.meta.url as string).replace(/^https?:\/\/[^/]+/, "").slice(0, 55)
+                        : null;
+
+                      const QUICK_INTENT: Record<string, string> = {
+                        checkout_compra: "🛒", orcamento_contato: "📋",
+                        maquinas_seladora_premium: "🏭", maquinas_seladora: "⚙️",
+                        maquinas_geral: "🔧", pecas_reposicao: "🔩",
+                        pos_venda_suporte: "🛠️",
+                      };
+                      const intentEmoji = evt.meta?.intentTag && evt.meta.intentTag !== "navegacao_geral"
+                        ? (QUICK_INTENT[evt.meta.intentTag as string] ?? null)
+                        : null;
 
                       return (
                         <div
-                          key={String(pv.id)}
-                          className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border hover:border-brand/30 hover:bg-brand-light/30 transition-all group cursor-pointer animate-stagger-in"
+                          key={i}
+                          className="flex items-start gap-4 px-4 py-3 rounded-xl hover:bg-muted/50 transition-all cursor-default animate-stagger-in relative"
                           style={{ animationDelay: `${i * 60}ms` }}
                         >
-                          {/* Número */}
-                          <div className="w-8 h-8 rounded-full bg-brand-light text-brand text-xs font-bold flex items-center justify-center flex-shrink-0 group-hover:bg-brand group-hover:text-primary-foreground transition-all group-hover:scale-110">
-                            {i + 1}
+                          <div className="w-[22px] h-[22px] rounded-full bg-brand-light text-brand flex items-center justify-center flex-shrink-0 z-10 ring-2 ring-background">
+                            <Icon className="w-3 h-3" />
                           </div>
-
-                          {/* Conteúdo */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-medium text-foreground truncate">{pv.pageTitle || pv.url}</p>
-                              {intentClass && (
-                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex-shrink-0 ${intentClass}`}>
-                                  {intentIcon} {pv.intentTag!.replace(/_/g, " ")}
-                                </span>
-                              )}
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-medium text-foreground truncate">{evt.label}</p>
+                              {intentEmoji && <span className="text-[11px]">{intentEmoji}</span>}
                             </div>
-                            <p className="text-xs text-muted-foreground truncate">{pv.url}</p>
-                            {/* Time-on-page + scroll */}
-                            {(pv.timeSpent || pv.scrollDepth) && (
-                              <div className="flex items-center gap-2 mt-0.5">
-                                {pv.timeSpent != null && pv.timeSpent > 0 && (
-                                  <span className="text-[9px] text-blue-500 font-medium">⏱ {fmtTime(pv.timeSpent)}</span>
-                                )}
-                                {pv.scrollDepth != null && pv.scrollDepth > 0 && (
-                                  <span className="text-[9px] text-purple-500 font-medium">📜 {pv.scrollDepth}%</span>
-                                )}
-                              </div>
+                            {urlPath && urlPath !== "/" && (
+                              <p className="text-[10px] text-muted-foreground font-mono truncate">{urlPath}</p>
                             )}
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(evt.timestamp).toLocaleString("pt-BR", {
+                                timeZone: "America/Sao_Paulo",
+                                day: "2-digit", month: "2-digit",
+                                hour: "2-digit", minute: "2-digit",
+                              })}
+                            </p>
                           </div>
-
-                          {/* Tempo atrás */}
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0 mt-0.5">
                             <Clock className="w-3 h-3" />
-                            {timeAgo(pv.visitedAt)}
+                            {timeAgo(evt.timestamp)}
                           </div>
-
-                          <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 flex-shrink-0" />
                         </div>
                       );
                     })}
                   </div>
-                )}
-              </TabsContent>
+                </div>
+              )}
+            </TabsContent>
 
-              {/* ── Tab: Atividades / Jornada ────────────────────────── */}
-              <TabsContent value="atividades" className="mt-0">
-                {timelineLoading ? (
-                  <div className="flex items-center justify-center py-16 text-muted-foreground">
-                    <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin mr-2" />
-                    <span className="text-sm">Carregando jornada...</span>
-                  </div>
-                ) : !timeline || timeline.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                    <Activity className="w-12 h-12 mb-3 opacity-20" />
-                    <p className="text-sm">Nenhum evento registrado</p>
-                    {onLoadTimeline && (
-                      <button
-                        onClick={() => onLoadTimeline(visitor.id)}
-                        className="mt-3 text-xs text-brand hover:underline font-medium"
-                      >
-                        Carregar jornada
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="relative">
-                    {/* Linha do tempo */}
-                    <div className="absolute left-[19px] top-4 bottom-4 w-px bg-border" />
-
-                    <div className="space-y-1">
-                      {timeline.map((evt, i) => {
-                        const TYPE_META: Record<string, { icon: React.ElementType; label: string }> = {
-                          session_start: { icon: Globe,           label: "Sessão iniciada" },
-                          pageview:      { icon: FileText,        label: "Página visitada" },
-                          chat_start:    { icon: MessageSquare,   label: "Chat iniciado" },
-                          chat_closed:   { icon: Activity,        label: "Chat encerrado" },
-                          note_added:    { icon: FileText,        label: "Nota adicionada" },
-                          returned:      { icon: MousePointerClick, label: "Retornou ao site" },
-                        };
-                        const meta = TYPE_META[evt.type] ?? { icon: Activity, label: evt.type };
-                        const Icon = meta.icon;
-                        const urlPath = evt.meta?.url
-                          ? (evt.meta.url as string).replace(/^https?:\/\/[^/]+/, "").slice(0, 55)
-                          : null;
-
-                        // Intent emoji inline
-                        const QUICK_INTENT: Record<string, string> = {
-                          checkout_compra: "🛒", orcamento_contato: "📋",
-                          maquinas_seladora_premium: "🏭", maquinas_seladora: "⚙️",
-                          maquinas_geral: "🔧", pecas_reposicao: "🔩",
-                          pos_venda_suporte: "🛠️",
-                        };
-                        const intentEmoji = evt.meta?.intentTag && evt.meta.intentTag !== "navegacao_geral"
-                          ? (QUICK_INTENT[evt.meta.intentTag as string] ?? null)
-                          : null;
-
-                        return (
-                          <div
-                            key={i}
-                            className="flex items-start gap-4 px-4 py-3 rounded-xl hover:bg-muted/50 transition-all cursor-default animate-stagger-in relative"
-                            style={{ animationDelay: `${i * 60}ms` }}
-                          >
-                            <div className="w-[22px] h-[22px] rounded-full bg-brand-light text-brand flex items-center justify-center flex-shrink-0 z-10 ring-2 ring-background">
-                              <Icon className="w-3 h-3" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <p className="text-sm font-medium text-foreground truncate">{evt.label}</p>
-                                {intentEmoji && <span className="text-[11px]">{intentEmoji}</span>}
-                              </div>
-                              {urlPath && urlPath !== "/" && (
-                                <p className="text-[10px] text-muted-foreground font-mono truncate">{urlPath}</p>
-                              )}
-                              <p className="text-xs text-muted-foreground">
-                                {new Date(evt.timestamp).toLocaleString("pt-BR", {
-                                  timeZone: "America/Sao_Paulo",
-                                  day: "2-digit", month: "2-digit",
-                                  hour: "2-digit", minute: "2-digit",
-                                })}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0 mt-0.5">
-                              <Clock className="w-3 h-3" />
-                              {timeAgo(evt.timestamp)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </TabsContent>
-
-            </div>
           </Tabs>
         </div>
       </div>
