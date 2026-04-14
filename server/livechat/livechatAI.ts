@@ -189,9 +189,26 @@ interface ChatAISession {
   history: { role: string; parts: any[] }[];
   lastSkuId?: string;
   lastProductName?: string;
+  /** Specs completos do produto consultado via botão — persiste por toda a conversa */
+  productContext?: string;
 }
 
 const aiSessions = new Map<string, ChatAISession>();
+
+/**
+ * Salva o contexto de produto na sessão do Gemini para que Fagner
+ * possa responder qualquer pergunta técnica subsequente sem
+ * precisar consultar novamente a VTEX ou dizer "vou verificar".
+ */
+export function setProductContext(chatId: string, productContext: string): void {
+  let session = aiSessions.get(chatId);
+  if (!session) {
+    session = { chatId, mood: pickMood(), history: [] };
+    aiSessions.set(chatId, session);
+  }
+  session.productContext = productContext;
+  console.log(`[LiveChat AI] 💾 productContext salvo na sessão ${chatId} (${productContext.length} chars)`);
+}
 
 // ─── Buffer de diagnóstico em memória (últimas 20 interações) ─────────────────
 interface DiagEntry {
@@ -616,13 +633,20 @@ O sistema enviará automaticamente o link com todos os valores calculados. NÃO 
 ## CONTEXTO DE PRODUTO (BOTÃO "QUERO SABER MAIS") — PRIORIDADE MÁXIMA
 Quando a mensagem do cliente contiver o bloco [CONTEXTO_PRODUTO_VTEX]...[/CONTEXTO_PRODUTO_VTEX]:
 1. LEIA ATENTAMENTE todos os dados do produto dentro desse bloco (nome, descrição, especificações técnicas, preço, disponibilidade).
-2. Apresente o produto de forma CONSULTIVA e ENTUSIASMADA — como um especialista que conhece a máquina de cor.
-3. Destaque 2-3 especificações técnicas mais relevantes na sua resposta inicial.
-4. Ao final, faça UMA pergunta proativa para descobrir a necessidade do cliente. Ex: "O que você gostaria de saber sobre ela?" ou "Sua produção tem qual volume aproximado?"
-5. SE o produto estiver disponível com preço, mencione o preço naturalmente na apresentação.
-6. NÃO diga que "recebeu um contexto" ou mencione a tag. Apresente as informações como se você já soubesse tudo sobre a máquina naturalmente.
-7. O texto após o bloco [/CONTEXTO_PRODUTO_VTEX] é a mensagem real do cliente — use-a como base para responder.
-8. NUNCA comece apenas com "Olá!" ou saudação genérica — vá direto ao produto.
+2. Apresente o produto de forma CONCISA e CONSULTIVA. Mencione APENAS: o preço (se disponível) + 1 ou 2 especificações técnicas mais impressionantes/diferenciadoras. NÃO jogue todos os dados de uma vez.
+3. Ao final de sua apresentação inicial, faça UMA pergunta proativa e específica para entender a necessidade do cliente. Ex: "O que você gostaria de saber sobre ela?" ou "Qual é o volume de produção que você precisa?"
+4. NÃO mencione a tag, o contexto ou qualquer coisa sobre "um contexto que recebi". Apresente como conhecimento natural.
+5. NUNCA comece com saudação genérica. Vá direto ao produto.
+6. RESPOSTA MÁXIMA DA APRESENTAÇÃO INICIAL: 3 frases.
+
+## PRODUTO EM FOCO (PERGUNTAS SUBSEQUENTES) — OBRIGATÓRIO
+Se o contexto contiver a seção «## PRODUTO EM FOCO (specs completos):»:
+1. TODOS os detalhes técnicos nessa seção são VERÍDICOS e vieram diretamente da página do produto.
+2. Quando o cliente fizer qualquer pergunta técnica (prazo de garantia, dimenções, voltagem, capacidade, diâmetro, peso, etc.), CONSULTE ESSA SEÇÃO ANTES de responder.
+3. Se a informação ESTIVER nessa seção: responda DIRETAMENTE com o dado exato. PROIBIDO dizer "vou verificar com a equipe" ou "vou confirmar".
+4. Se a informação NÃO ESTIVER nessa seção: só então diga que irá verificar com a equipe técnica.
+5. Exemplo CORRETO: cliente pergunta "qual o diâmetro?", você encontra "Diâmetro máximo: 300mm" nas specs → responda "O diâmetro máximo suportado é 300mm."
+6. Exemplo PROIBIDO: informação está nas specs → você diz "vou confirmar com a equipe técnica" = ERRADO.
 
 ## SEU PAPEL NO SITE
 Você está atendendo visitantes no site tecfag.com.br. Seu objetivo principal é CONVERTER VENDAS.
@@ -1126,6 +1150,13 @@ export async function processVisitorMessage(
     } else {
       contextParts.unshift(`## DADOS DO CLIENTE\nNome: ${visitorName}\nINSTRUÇÃO: Você JÁ SABE o nome do cliente. Use-o naturalmente quando fizer sentido, mas não force em toda frase.`);
     }
+  }
+
+  // Produto em foco (spec salvo via setProductContext no PRODUCT_INQUIRY)
+  // Injetado em TODAS as mensagens subsequentes para que Fagner responda
+  // perguntas técnicas sem precisar dizer "vou verificar com a equipe"
+  if (session.productContext) {
+    contextParts.push(`## PRODUTO EM FOCO (specs completos):\n${session.productContext}\n\nINSTRUÇÃO CRÍTICA: Use estas informações para responder QUALQUER pergunta técnica do cliente. NUNCA diga "vou verificar" se o dado está acima.`);
   }
 
   // Add visitor page context

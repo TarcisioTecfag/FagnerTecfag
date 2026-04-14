@@ -15,7 +15,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
 import { lcStorage } from "./livechatStorage.js";
-import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, generateProgressiveNote, isObviousNoise, detectStageIntent, generatePosVendaReport, generateMaquinasReport, generatePecasReport } from "./livechatAI.js";
+import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, generateProgressiveNote, isObviousNoise, detectStageIntent, generatePosVendaReport, generateMaquinasReport, generatePecasReport, setProductContext } from "./livechatAI.js";
 import { createPosVendaOS, createMaquinasOS, createPecasOS, isRdCrmConfigured } from "./rdCrmService.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 import { buildCart } from "./vtexCheckoutService.js";
@@ -615,6 +615,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 let productContext: string;
                 if (productInfo) {
                   productContext = formatProductContextForAI(productInfo);
+                  // Salva na sessão do Gemini para uso em toda a conversa
+                  setProductContext(piqChatId, productContext);
                   console.log(`[ProductInquiry] ✅ Dados VTEX encontrados para "${productInfo.productName}"`);
                 } else {
                   // Fallback: sem dados da VTEX, usa só o slug formatado
