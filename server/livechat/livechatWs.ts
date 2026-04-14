@@ -20,6 +20,7 @@ import { createPosVendaOS, createMaquinasOS, createPecasOS, isRdCrmConfigured } 
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 import { buildCart } from "./vtexCheckoutService.js";
 import type { VtexOrderData } from "./vtexCheckoutService.js";
+import { getProductBySlug, formatProductContextForAI } from "./vtexCatalogService.js";
 
 // ─── Connection maps ─────────────────────────────────────────────────────────
 
@@ -551,6 +552,122 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               });
               console.log(`[LiveChat] Chat ${chatToClose.id} encerrado e marcado como 'restarted' pelo visitante.`);
             }
+            break;
+          }
+
+          // ── VISITOR: Product inquiry (botão contextual de produto) ──
+          case "PRODUCT_INQUIRY": {
+            if (!visitorId) break;
+            const { productSlug, productUrl, visitorMessage } = data;
+            if (!productSlug || !visitorMessage) break;
+
+            console.log(`[ProductInquiry] Visitante ${visitorId} perguntou sobre produto: "${productSlug}"`);
+
+            // 1. Garante/cria o chat (mesma lógica de CHAT_MESSAGE)
+            let piqChat: any = await lcStorage.getActiveChatByVisitor(visitorId);
+            if (!piqChat) {
+              const lastChat = await lcStorage.getLastChatByVisitor(visitorId);
+              if (lastChat && lastChat.status === 'closed') {
+                const closedTs = lastChat.endedAt ?? lastChat.startedAt;
+                const closedAgo = Date.now() - new Date(closedTs).getTime();
+                if (closedAgo < 30 * 60 * 1000 && (lastChat as any).closeReason !== 'restarted') {
+                  await lcStorage.updateChat(lastChat.id, { status: 'ai_active' });
+                  piqChat = await lcStorage.getChatById(lastChat.id);
+                }
+              }
+            }
+            if (!piqChat) {
+              piqChat = await lcStorage.createChat({ visitorId, source: "widget" });
+            }
+
+            // 2. Salva mensagem do visitante no banco
+            await lcStorage.createMessage({ chatId: piqChat.id, sender: "visitor", content: visitorMessage });
+            clearFollowUpTimers(visitorId);
+
+            // Notifica agentes
+            broadcastToAgents({
+              type: "CHAT_MESSAGE",
+              chatId: piqChat.id,
+              visitorId,
+              sender: "visitor",
+              visitorName: piqChat.visitorName ?? null,
+              content: visitorMessage,
+              timestamp: new Date().toISOString(),
+            });
+
+            // Move pipeline para em_atendimento
+            try {
+              await lcStorage.updateVisitorPipeline(visitorId, "em_atendimento");
+              broadcastPipelineUpdate(visitorId, "em_atendimento");
+            } catch {}
+
+            // 3. Mostra typing enquanto busca produto
+            sendToVisitor(visitorId, { type: "TYPING_START" });
+
+            // 4. Consulta VTEX — em background, não bloqueia o WS
+            const piqVisitorId = visitorId as string;
+            const piqChatId    = piqChat.id;
+            (async () => {
+              try {
+                const productInfo = await getProductBySlug(productSlug);
+
+                // Monta contexto enriquecido para o Gemini
+                let productContext: string;
+                if (productInfo) {
+                  productContext = formatProductContextForAI(productInfo);
+                  console.log(`[ProductInquiry] ✅ Dados VTEX encontrados para "${productInfo.productName}"`);
+                } else {
+                  // Fallback: sem dados da VTEX, usa só o slug formatado
+                  const readableName = productSlug
+                    .replace(/---[^-]+$/, "")
+                    .replace(/-/g, " ")
+                    .replace(/\b\w/g, (c: string) => c.toUpperCase());
+                  productContext = `Nome do Produto (estimado pelo slug): ${readableName}\nURL: ${productUrl}\nObs: dados técnicos detalhados não disponíveis no momento.`;
+                  console.warn(`[ProductInquiry] ⚠️ Produto não encontrado na VTEX para slug "${productSlug}" — usando fallback.`);
+                }
+
+                // 5. Chama o Fagner com contexto injetado
+                const piqVisitor = await lcStorage.getVisitorById(piqVisitorId);
+                const contextualMessage = `[CONTEXTO_PRODUTO_VTEX]\n${productContext}\n[/CONTEXTO_PRODUTO_VTEX]\n\n${visitorMessage}`;
+
+                const aiResponse: any = await processVisitorMessage(
+                  piqChatId,
+                  contextualMessage,
+                  piqVisitor?.currentPage ?? undefined,
+                  piqVisitor?.name ?? undefined,
+                );
+
+                sendToVisitor(piqVisitorId, { type: "TYPING_STOP" });
+
+                const aiReply: string = aiResponse?.reply ?? "Vou buscar as informações sobre esse produto para você! 😊";
+
+                await lcStorage.createMessage({ chatId: piqChatId, sender: "ai", content: aiReply });
+                sendToVisitor(piqVisitorId, {
+                  type: "CHAT_REPLY",
+                  chatId: piqChatId,
+                  sender: "ai",
+                  content: aiReply,
+                  timestamp: new Date().toISOString(),
+                });
+                broadcastToAgents({
+                  type: "CHAT_MESSAGE",
+                  chatId: piqChatId,
+                  visitorId: piqVisitorId,
+                  sender: "ai",
+                  content: aiReply,
+                  timestamp: new Date().toISOString(),
+                });
+
+                startFollowUpTimers(piqVisitorId, piqChatId);
+              } catch (err: any) {
+                console.error(`[ProductInquiry] ❌ Erro ao processar produto:`, err.message);
+                sendToVisitor(piqVisitorId, { type: "TYPING_STOP" });
+                const fallbackMsg = "Vou verificar as informações sobre esse produto! Um momento. 😊";
+                await lcStorage.createMessage({ chatId: piqChatId, sender: "ai", content: fallbackMsg });
+                sendToVisitor(piqVisitorId, { type: "CHAT_REPLY", chatId: piqChatId, sender: "ai", content: fallbackMsg, timestamp: new Date().toISOString() });
+              }
+            })();
+
             break;
           }
 
