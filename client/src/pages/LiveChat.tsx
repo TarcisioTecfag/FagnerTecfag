@@ -1,12 +1,12 @@
 /**
  * client/src/pages/LiveChat.tsx
  *
- * Painel de monitoramento do Live Chat Ã¢â‚¬â€ REFATORADO
- * 4 abas: Chats | Visitantes | CRM | EstatÃƒÂ­sticas
+ * Painel de monitoramento do Live Chat â€” REFATORADO
+ * 4 abas: Chats | Visitantes | CRM | EstatÃ­sticas
  * 
  * Layout 100vh fixo, scroll apenas interno.
- * Fagner atende 100% via IA Ã¢â‚¬â€ este painel ÃƒÂ© para MONITORAMENTO.
- * OpÃƒÂ§ÃƒÂ£o de assumir manualmente em emergÃƒÂªncia.
+ * Fagner atende 100% via IA â€” este painel Ã© para MONITORAMENTO.
+ * OpÃ§Ã£o de assumir manualmente em emergÃªncia.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -56,7 +56,7 @@ import {
 } from "lucide-react";
 import { CustomerModal } from "@/components/CustomerModal";
 
-// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Types Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface Visitor {
   id: string;
@@ -65,7 +65,7 @@ interface Visitor {
   city?: string;
   country?: string;
   browser?: string;
-  deviceType?: string;                   // #9 â€” 'mobile' | 'tablet' | 'desktop'
+  deviceType?: string;                   // #9 — 'mobile' | 'tablet' | 'desktop'
   currentPage?: string;
   currentPageTitle?: string;
   source?: string;
@@ -77,8 +77,8 @@ interface Visitor {
   totalChats: number;
   category: string;
   engagementScore: number;
-  purchaseIntentScore?: number;           // #4 â€” Score de intenÃ§Ã£o de compra (0-100)
-  aiBriefing?: {                          // #7 â€” Briefing estruturado gerado pela IA
+  purchaseIntentScore?: number;           // #4 — Score de intenção de compra (0-100)
+  aiBriefing?: {                          // #7 — Briefing estruturado gerado pela IA
     produtoInteresse?: string;
     fabricaO?: string;
     volume?: string;
@@ -92,18 +92,18 @@ interface Visitor {
   lastSeenAt: string;
   name?: string;
   notes?: { date: string; stage: string; content: string }[];
-  // Dados do cliente (base â€” usados em todos os fluxos)
+  // Dados do cliente (base — usados em todos os fluxos)
   posVendaNome?: string;
   posVendaTelefone?: string;
   posVendaEmail?: string;
   posVendaCnpjCpf?: string;
-  // PÃ³s Venda especÃ­fico
+  // Pós Venda específico
   posVendaNotaPedido?: string;
   posVendaProblema?: string;
-  // PeÃ§as especÃ­fico
+  // Peças específico
   pecaDesejada?: string;
   pecasECliente?: string;
-  // MÃ¡quinas especÃ­fico
+  // Máquinas específico
   maqProdutoFabricado?: string;
   maqVolumeProducao?: string;
   maqQualificacaoSDR?: string;
@@ -126,7 +126,7 @@ interface Chat {
   engagementScore?: number;
   // Melhoria 2: produto VTEX detectado na conversa
   vtexProduct?: string;
-  // Melhoria 3: quantidade de msgs filtradas como ruÃ­do
+  // Melhoria 3: quantidade de msgs filtradas como ruído
   noiseFiltered?: number;
 }
 
@@ -152,13 +152,13 @@ interface Pageview {
   visitorId: string;
   url: string;
   pageTitle?: string;
-  scrollDepth?: number;     // #1 â€” % da pÃ¡gina scrollada
-  timeSpent?: number;       // #1 â€” segundos na pÃ¡gina
-  intentTag?: string;       // #2 â€” tag de intenÃ§Ã£o resolvida
+  scrollDepth?: number;     // #1 — % da página scrollada
+  timeSpent?: number;       // #1 — segundos na página
+  intentTag?: string;       // #2 — tag de intenção resolvida
   visitedAt: string;
 }
 
-// #10 â€” Evento na timeline unificada
+// #10 — Evento na timeline unificada
 interface TimelineEvent {
   type: string;
   timestamp: string;
@@ -166,7 +166,7 @@ interface TimelineEvent {
   meta?: Record<string, any>;
 }
 
-// #8 â€” Analytics prÃ©-chat
+// #8 — Analytics pré-chat
 interface PreChatPage {
   url: string;
   pageTitle: string | null;
@@ -180,7 +180,7 @@ interface ConversionRate {
   rate: number;
 }
 
-// â€”â€”â€” Helpers â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+// ——— Helpers —————————————————————————————————————————————————
 
 function categoryLabel(cat: string): { label: string; emoji: string; color: string; bg: string } {
   switch (cat) {
@@ -204,13 +204,13 @@ function statusBadge(status: string): { label: string; icon: string; color: stri
 
 function sourceLabel(src?: string): { label: string; icon: string } {
   switch (src) {
-    case "google_organic": return { label: "Google OrgÃ¢nico", icon: "\u{1F50D}" };
+    case "google_organic": return { label: "Google Orgânico", icon: "\u{1F50D}" };
     case "google_ads": return { label: "Google Ads", icon: "\u{1F4E2}" };
     case "instagram": return { label: "Instagram", icon: "\u{1F4F8}" };
     case "facebook": return { label: "Facebook", icon: "\u{1F4D8}" };
     case "youtube": return { label: "YouTube", icon: "\u25B6\uFE0F" };
     case "direct": return { label: "Direto", icon: "\u{1F517}" };
-    case "referral": return { label: "IndicaÃ§Ã£o", icon: "\u{1F91D}" };
+    case "referral": return { label: "Indicação", icon: "\u{1F91D}" };
     case "whatsapp": return { label: "WhatsApp", icon: "\u{1F4AC}" };
     default: return { label: src ?? "Outro", icon: "\u{1F30E}" };
   }
@@ -240,13 +240,13 @@ function formatTextWithLinks(text: string) {
 function renderMessageContent(text: string) {
   if (!text) return null;
 
-  // â”€â”€ Detecta mensagem de Ã¡udio do operador: [AUDIO:url] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Detecta mensagem de áudio do operador: [AUDIO:url] ──────────────────────
   const audioTagMatch = text.trim().match(/^\[AUDIO:(https?:\/\/[^\]]+)\]$/);
   if (audioTagMatch) {
     const audioUrl = audioTagMatch[1];
     return (
       <div className="flex flex-col gap-1.5 my-1">
-        <span className="text-[10px] font-semibold opacity-70">ðŸŽ™ï¸ Mensagem de voz</span>
+        <span className="text-[10px] font-semibold opacity-70">🎙️ Mensagem de voz</span>
         <audio
           controls
           src={audioUrl}
@@ -262,7 +262,7 @@ function renderMessageContent(text: string) {
   let lastIndex = 0;
   let match;
 
-  // URL base do backend Railway â€” resolve URLs relativas /uploads/
+  // URL base do backend Railway — resolve URLs relativas /uploads/
   const BACKEND = (import.meta.env.VITE_BACKEND_URL || "https://fagnertecfag-production.up.railway.app").replace(/\/$/, "");
 
   while ((match = anexoRegex.exec(text)) !== null) {
@@ -270,7 +270,7 @@ function renderMessageContent(text: string) {
       parts.push(<span key={lastIndex}>{formatTextWithLinks(text.substring(lastIndex, match.index))}</span>);
     }
     let url = match[1].trim();
-    // Corrige URL relativa para apontar para o backend Railway (nÃ£o para o Vercel)
+    // Corrige URL relativa para apontar para o backend Railway (não para o Vercel)
     if (url.startsWith("/uploads/")) {
       url = `${BACKEND}${url}`;
     }
@@ -288,7 +288,7 @@ function renderMessageContent(text: string) {
       parts.push(
         <div key={`anexo-${match.index}`} className="block">
           <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 mt-2 mb-2 px-3 py-2 bg-zinc-100 text-zinc-700 rounded-lg text-xs font-semibold hover:bg-zinc-200 border border-zinc-200 shadow-sm transition-all hover:-translate-y-0.5">
-            ðŸ“Ž Abrir Anexo (PDF/Outros)
+            📎 Abrir Anexo (PDF/Outros)
           </a>
         </div>
       );
@@ -309,9 +309,9 @@ function scoreColor(score: number): string {
   return "from-emerald-500 to-teal-500";
 }
 
-// â€”â€”â€” Main Component â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+// ——— Main Component —————————————————————————————————————————————————
 
-// â€”â€”â€” Notification popup type â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+// ——— Notification popup type ——————————————————————————————————————————
 interface NotifPopup {
   id: string;
   visitorName: string;
@@ -319,7 +319,7 @@ interface NotifPopup {
   chatId: string;
 }
 
-// â€”â€”â€” Sound helper (Web Audio API â€” sem arquivo externo) â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+// ——— Sound helper (Web Audio API — sem arquivo externo) ——————————————
 function playNotificationSound() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -337,7 +337,7 @@ function playNotificationSound() {
     osc1.start(ctx.currentTime);
     osc1.stop(ctx.currentTime + 0.6);
 
-    // Tom harmÃ´nico para dar corpo
+    // Tom harmônico para dar corpo
     const osc2 = ctx.createOscillator();
     osc2.type = "sine";
     osc2.frequency.setValueAtTime(1320, ctx.currentTime);
@@ -350,11 +350,11 @@ function playNotificationSound() {
     osc2.start(ctx.currentTime);
     osc2.stop(ctx.currentTime + 0.4);
   } catch {
-    // AudioContext not supported â€” ignore silently
+    // AudioContext not supported — ignore silently
   }
 }
 
-// â€”â€”â€” Funnel Config Types â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+// ——— Funnel Config Types ————————————————————————————————————————————
 interface FunnelOperator {
   id: string; // RD CRM user ID or name
   name: string;
@@ -392,7 +392,7 @@ function loadSettings(): LiveChatSettings {
 
 function saveSettings(s: LiveChatSettings) {
   localStorage.setItem("livechat_settings", JSON.stringify(s));
-  // Sincroniza com o servidor para que o backend possa usar os operadores em rodÃ­zio
+  // Sincroniza com o servidor para que o backend possa usar os operadores em rodízio
   fetch("/api/livechat/funnel-settings", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -414,7 +414,7 @@ function LiveChat() {
   const [allVisitors, setAllVisitors] = useState<Visitor[]>([]);
   const [pipelineData, setPipelineData] = useState<Record<string, Visitor[]>>({});
   const [attentionOpen, setAttentionOpen] = useState(false);
-  const [attentionReason, setAttentionReason] = useState("Falta de informaÃ§Ã£o");
+  const [attentionReason, setAttentionReason] = useState("Falta de informação");
   const [attentionObs, setAttentionObs] = useState("");
   const [visitorChats, setVisitorChats] = useState<Chat[]>([]);
   const [pastNegotiations, setPastNegotiations] = useState<any[]>([]);
@@ -422,19 +422,19 @@ function LiveChat() {
   const [searchQuery, setSearchQuery] = useState("");
   const [closeReasonOpen, setCloseReasonOpen] = useState<string | null>(null); // chatId
   const [closeReasonSaving, setCloseReasonSaving] = useState(false);
-  // â€”â€”â€” NotificaÃ§Ãµes â€”â€”â€”
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({}); // chatId â†’ count
+  // ——— Notificações ———
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({}); // chatId → count
   const [notifPopups, setNotifPopups] = useState<NotifPopup[]>([]);
-  // â€”â€”â€” EdiÃ§Ã£o de tÃ­tulo do chat â€”â€”â€”
+  // ——— Edição de título do chat ———
   const [editingTitleChatId, setEditingTitleChatId] = useState<string | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
-  // â€”â€”â€” Analytics prÃ©-chat (#8) â€”â€”â€”
+  // ——— Analytics pré-chat (#8) ———
   const [preChatAnalytics, setPreChatAnalytics] = useState<{ topPages: PreChatPage[]; conversionRates: ConversionRate[] } | null>(null);
   const [preChatLoading, setPreChatLoading] = useState(false);
-  // â€”â€”â€” Timeline modal (#10) â€”â€”â€”
+  // ——— Timeline modal (#10) ———
   const [timelineLoading, setTimelineLoading] = useState(false);
-  // â€”â€”â€” Modal de histÃ³rico: aba ativa â€”â€”â€”
+  // ——— Modal de histórico: aba ativa ———
   const [historyActiveTab, setHistoryActiveTab] = useState<'pageviews' | 'timeline' | 'briefing'>('pageviews');
   const selectedChatRef = useRef<Chat | null>(null);
   const activeTabRef = useRef<string>("chats");
@@ -442,38 +442,38 @@ function LiveChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // â€”â€”â€” Refresh animation â€”â€”â€”
+  // ——— Refresh animation ———
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // â€”â€”â€” Date Filter â€”â€”â€”
+  // ——— Date Filter ———
   const [filterOpen, setFilterOpen] = useState(false);
   const [dateFrom, setDateFrom] = useState<string>(""); // De: YYYY-MM-DD
-  const [dateTo, setDateTo] = useState<string>("");     // AtÃ©: YYYY-MM-DD
+  const [dateTo, setDateTo] = useState<string>("");     // Até: YYYY-MM-DD
   const [dateFilterActive, setDateFilterActive] = useState(false);
 
-  // â€”â€”â€” Settings Modal â€”â€”â€”
+  // ——— Settings Modal ———
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [liveSettings, setLiveSettings] = useState<LiveChatSettings>(loadSettings);
   const [activeFunnel, setActiveFunnel] = useState<"pos_venda" | "pecas" | "maquinas">("pos_venda");
   const [newOperatorName, setNewOperatorName] = useState("");
-  // Fix 6: usuÃ¡rios reais do RD CRM para dropdown de operadores
+  // Fix 6: usuários reais do RD CRM para dropdown de operadores
   const [rdUsers, setRdUsers] = useState<{ id: string; name: string; email?: string }[]>([]);
   const [rdUsersLoading, setRdUsersLoading] = useState(false);
-  // UsuÃ¡rio logado (para exibir nome correto ao assumir atendimento)
+  // Usuário logado (para exibir nome correto ao assumir atendimento)
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string; username: string } | null>(null);
 
-  // â€”â€”â€” Ãudio do Operador â€”â€”â€”
+  // ——— Áudio do Operador ———
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
-  // Preview de Ã¡udio: blob local gravado, aguardando aÃ§Ã£o do operador (descartar ou enviar)
+  // Preview de áudio: blob local gravado, aguardando ação do operador (descartar ou enviar)
   const [pendingAudioBlob, setPendingAudioBlob] = useState<{ blob: Blob; url: string; ext: string } | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
 
-  // â€”â€”â€” Drag & Drop (Kanban CRM) â€”â€”â€”
+  // ——— Drag & Drop (Kanban CRM) ———
   const [draggingVisitorId, setDraggingVisitorId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const draggingFromStage = useRef<string | null>(null);
@@ -482,7 +482,7 @@ function LiveChat() {
   useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
-  // Fix 6: Buscar usuÃ¡rios do RD CRM quando Settings abre
+  // Fix 6: Buscar usuários do RD CRM quando Settings abre
   useEffect(() => {
     if (!settingsOpen) return;
     setRdUsersLoading(true);
@@ -493,7 +493,7 @@ function LiveChat() {
       .finally(() => setRdUsersLoading(false));
   }, [settingsOpen]);
 
-  // Buscar dados do usuÃ¡rio logado ao montar o componente
+  // Buscar dados do usuário logado ao montar o componente
   useEffect(() => {
     fetch("/api/me", { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
@@ -505,9 +505,9 @@ function LiveChat() {
   const dismissPopup = (id: string) =>
     setNotifPopups((prev) => prev.filter((n) => n.id !== id));
 
-  // Mostra popup e agenda auto-dismiss apÃ³s 6s
+  // Mostra popup e agenda auto-dismiss após 6s
   const showPopup = (popup: NotifPopup) => {
-    setNotifPopups((prev) => [popup, ...prev].slice(0, 4)); // max 4 simultÃ¢neos
+    setNotifPopups((prev) => [popup, ...prev].slice(0, 4)); // max 4 simultâneos
     setTimeout(() => dismissPopup(popup.id), 6000);
   };
 
@@ -522,7 +522,7 @@ function LiveChat() {
     }
   };
 
-  // #10 â€” Carregar timeline unificada do visitante
+  // #10 — Carregar timeline unificada do visitante
   const loadVisitorTimeline = async (visitorId: string) => {
     setTimelineLoading(true);
     try {
@@ -536,7 +536,7 @@ function LiveChat() {
     }
   };
 
-  // #8 â€” Carregar analytics prÃ©-chat
+  // #8 — Carregar analytics pré-chat
   const loadPreChatAnalytics = async () => {
     if (preChatAnalytics || preChatLoading) return;
     setPreChatLoading(true);
@@ -547,7 +547,7 @@ function LiveChat() {
     finally { setPreChatLoading(false); }
   };
 
-  // â€”â€”â€” Fetch initial data â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— Fetch initial data —————————————————————————————————————————————————
   const fetchData = useCallback(async () => {
     try {
       const [chatsRes, statsRes, allVisitorsRes, pipelineRes] = await Promise.all([
@@ -561,7 +561,7 @@ function LiveChat() {
       if (allVisitorsRes.ok) {
         const allV = await allVisitorsRes.json();
         setAllVisitors(allV);
-        // Visitors tab mostra todos os recentes, nÃ£o apenas "online" pelo flag
+        // Visitors tab mostra todos os recentes, não apenas "online" pelo flag
         setVisitors(allV);
       }
       if (pipelineRes.ok) setPipelineData(await pipelineRes.json());
@@ -575,15 +575,15 @@ function LiveChat() {
       setSelectedChat(chatToOpen);
       loadChatMessages(chatToOpen);
     } else {
-      toast({ description: "Chat nÃ£o encontrado nos registros atuais." });
+      toast({ description: "Chat não encontrado nos registros atuais." });
     }
   };
 
-  // â€”â€”â€” Drag & Drop: mover card entre colunas do Kanban â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— Drag & Drop: mover card entre colunas do Kanban ————————————————————
   const handleMoveCard = async (visitorId: string, toStage: string) => {
     if (!visitorId || !toStage) return;
 
-    // AtualizaÃ§Ã£o otimista: move o card no estado local imediatamente
+    // Atualização otimista: move o card no estado local imediatamente
     setPipelineData(prev => {
       const next = { ...prev };
       let movedVisitor: Visitor | undefined;
@@ -611,18 +611,18 @@ function LiveChat() {
         body: JSON.stringify({ stage: toStage }),
       });
       if (!res.ok) throw new Error("Resposta do servidor: " + res.status);
-      toast({ description: `ðŸ“„ Card movido para "${toStage.replace(/_/g, " ")}" âœ“` });
+      toast({ description: `📄 Card movido para "${toStage.replace(/_/g, " ")}" ✓` });
     } catch (err: any) {
       toast({ description: "Falha ao mover o card. Recarregando...", variant: "destructive" });
       fetchData(); // rollback: recarrega estado do servidor
     }
   };
 
-  // â€”â€”â€” WebSocket connection â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— WebSocket connection —————————————————————————————————————————————————
   useEffect(() => {
     fetchData();
 
-    // Vercel nÃ£o suporta proxy WebSocket â€” em produÃ§Ã£o, conectar diretamente ao Railway
+    // Vercel não suporta proxy WebSocket — em produção, conectar diretamente ao Railway
     const WS_BASE = import.meta.env.DEV
       ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`
       : "wss://fagnertecfag-production.up.railway.app";
@@ -679,17 +679,17 @@ function LiveChat() {
             break;
 
           case "RETURNING_HOT_LEAD": {
-            // #6 â€” Lead quente voltou ao site: toast especial com link de visita
+            // #6 — Lead quente voltou ao site: toast especial com link de visita
             const leadUrl = data.currentPageTitle || data.currentPage || "site";
             toast({
-              title: `ðŸ”¥ ${data.visitorName ?? 'Lead Quente'} voltou!`,
-              description: `${data.totalVisits} visitas | Engajamento: ${data.engagementScore} | ðŸŽ¯ Compra: ${data.purchaseIntentScore ?? 0} | PÃ¡gina: ${leadUrl}`,
+              title: `🔥 ${data.visitorName ?? 'Lead Quente'} voltou!`,
+              description: `${data.totalVisits} visitas | Engajamento: ${data.engagementScore} | 🎯 Compra: ${data.purchaseIntentScore ?? 0} | Página: ${leadUrl}`,
             });
             break;
           }
 
           case "VISITOR_BRIEFING_UPDATED": {
-            // #7 â€” Atualiza o briefing da IA no estado do visitor
+            // #7 — Atualiza o briefing da IA no estado do visitor
             setAllVisitors(prev => prev.map(v =>
               v.id === data.visitorId ? { ...v, aiBriefing: data.briefing } : v
             ));
@@ -710,16 +710,16 @@ function LiveChat() {
             const isOnChatsTab = activeTabRef.current === "chats";
             const isVisitorMsg = data.sender === "visitor";
 
-            // Se Ã© mensagem do visitante â†’ notificaÃ§Ã£o
+            // Se é mensagem do visitante → notificação
             if (isVisitorMsg) {
-              // Incrementa contador de nÃ£o lidas SEMPRE (some ao abrir o chat)
+              // Incrementa contador de não lidas SEMPRE (some ao abrir o chat)
               if (!isChatOpen || !isOnChatsTab) {
                 setUnreadCounts((prev) => ({
                   ...prev,
                   [data.chatId]: (prev[data.chatId] ?? 0) + 1,
                 }));
               }
-              // Som e popup SOMENTE quando o chat NÃƒO estÃ¡ visÃ­vel
+              // Som e popup SOMENTE quando o chat NÃO está visível
               if (!isChatOpen || !isOnChatsTab) {
                 playNotificationSound();
                 const visitorName = data.visitorName ||
@@ -751,7 +751,7 @@ function LiveChat() {
           }
           case "NEEDS_HUMAN":
             toast({
-              title: "âš ï¸ Fagner precisa de ajuda!",
+              title: "⚠️ Fagner precisa de ajuda!",
               description: data.message,
               variant: "destructive",
             });
@@ -790,7 +790,7 @@ function LiveChat() {
             }
             break;
           case "VISITOR_POS_VENDA_UPDATED": {
-            // Atualiza dados de pÃ³s venda no estado local
+            // Atualiza dados de pós venda no estado local
             const mapping: any = {
               posVendaNome: data.posVendaData?.nome,
               posVendaTelefone: data.posVendaData?.telefone,
@@ -805,7 +805,7 @@ function LiveChat() {
               setSelectedVisitor(prev => prev ? { ...prev, ...mapping } : prev);
             }
             
-            // Atualiza tambÃ©m no pipeline e chats para refletir o nome em tempo real
+            // Atualiza também no pipeline e chats para refletir o nome em tempo real
             setPipelineData(prev => {
               const next = { ...prev };
               for (const stage of Object.keys(next)) {
@@ -827,7 +827,7 @@ function LiveChat() {
             break;
           }
           case "VISITOR_PECAS_UPDATED": {
-            // Atualiza dados de peÃ§as no estado local
+            // Atualiza dados de peças no estado local
             const pecasMapping: any = {
               posVendaNome:     data.pecasData?.nome,
               posVendaTelefone: data.pecasData?.telefone,
@@ -866,7 +866,7 @@ function LiveChat() {
               posVendaEmail:      data.maquinasData?.email,
               posVendaCnpjCpf:    data.maquinasData?.cnpjCpf,
               name:               data.maquinasData?.nome,
-              // Campos especÃ­ficos MÃ¡quinas
+              // Campos específicos Máquinas
               maqProdutoFabricado: data.maquinasData?.produtoFabricado,
               maqVolumeProducao:   data.maquinasData?.volumeProducao,
               maqQualificacaoSDR:  data.maquinasData?.qualificacaoSDR,
@@ -907,7 +907,7 @@ function LiveChat() {
                 setSelectedVisitor(prev =>
                   prev && prev.id === affectedId ? { ...prev, ...updatedVisitor } : prev
                 );
-                // Atualiza tambÃ©m nas listas gerais
+                // Atualiza também nas listas gerais
                 setAllVisitors(prev =>
                   prev.map(v => v.id === affectedId ? { ...v, ...updatedVisitor } : v)
                 );
@@ -921,7 +921,7 @@ function LiveChat() {
                   return next;
                 });
               }
-            } catch { /* ignora erros de fetch â€” nÃ£o crÃ­tico */ }
+            } catch { /* ignora erros de fetch — não crítico */ }
             break;
           }
         }
@@ -933,7 +933,7 @@ function LiveChat() {
     };
 
     ws.onclose = () => {
-      // Reconectar apÃ³s 3 segundos
+      // Reconectar após 3 segundos
       setTimeout(() => {
         if (wsRef.current?.readyState !== WebSocket.OPEN) {
           const WS_BASE2 = import.meta.env.DEV
@@ -980,12 +980,12 @@ function LiveChat() {
       .catch(() => setPastNegotiations([]));
   }, [selectedVisitor]);
 
-  // â€”â€”â€” Load chat messages â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— Load chat messages —————————————————————————————————————————————————
   const loadChatMessages = async (chat: Chat) => {
     setSelectedChat(chat);
-    // Limpa nÃ£o lidas ao abrir o chat
+    // Limpa não lidas ao abrir o chat
     setUnreadCounts((prev) => { const n = { ...prev }; delete n[chat.id]; return n; });
-    // Cancela ediÃ§Ã£o de tÃ­tulo se abrir outro chat
+    // Cancela edição de título se abrir outro chat
     setEditingTitleChatId(null);
     try {
       const res = await fetch(`/api/livechat/chats/${chat.id}/messages`, { credentials: "include" });
@@ -993,7 +993,7 @@ function LiveChat() {
     } catch {}
   };
 
-  // â€”â€”â€” Renomear tÃ­tulo do chat â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— Renomear título do chat ——————————————————————————————————————————————
   const startEditTitle = (chat: Chat, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingTitleChatId(chat.id);
@@ -1020,17 +1020,17 @@ function LiveChat() {
         if (selectedChat?.id === chat.id) {
           setSelectedChat(prev => prev ? { ...prev, visitorName: newTitle } : prev);
         }
-        toast({ description: `TÃ­tulo atualizado: "${newTitle}"` });
+        toast({ description: `Título atualizado: "${newTitle}"` });
       }
     } catch {
-      toast({ description: "Erro ao salvar tÃ­tulo", variant: "destructive" });
+      toast({ description: "Erro ao salvar título", variant: "destructive" });
     } finally {
       setSavingTitle(false);
       setEditingTitleChatId(null);
     }
   };
 
-  // â€”â€”â€” Agent send message (human takeover) â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— Agent send message (human takeover) —————————————————————————————————
   const handleAgentSend = () => {
     if (!agentInput.trim() || !selectedChat || !wsRef.current) return;
     wsRef.current.send(JSON.stringify({
@@ -1039,12 +1039,12 @@ function LiveChat() {
       userId: currentUser?.id ?? "admin",
       content: agentInput.trim(),
     }));
-    // NÃ£o adicionamos otimisticamente: o servidor faz broadcastToAgents(CHAT_MESSAGE)
-    // que o handler WS da linha ~641 jÃ¡ adiciona ao estado. Adicionar aqui causava duplicata.
+    // Não adicionamos otimisticamente: o servidor faz broadcastToAgents(CHAT_MESSAGE)
+    // que o handler WS da linha ~641 já adiciona ao estado. Adicionar aqui causava duplicata.
     setAgentInput("");
   };
 
-  // â”€â”€â”€ Audio recording â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Audio recording ───────────────────────────────────────────────────
   const BACKEND = (import.meta.env.VITE_BACKEND_URL || "https://fagnertecfag-production.up.railway.app").replace(/\/$/, "");
 
   const startRecording = async () => {
@@ -1069,14 +1069,14 @@ function LiveChat() {
       };
 
       mr.onstop = async () => {
-        // Para todas as tracks de Ã¡udio
+        // Para todas as tracks de áudio
         stream.getTracks().forEach((t) => t.stop());
         recordingStreamRef.current = null;
 
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         if (audioBlob.size === 0) return;
 
-        // â”€â”€ Preview antes de enviar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Preview antes de enviar ──────────────────────────────────────────
         // Cria URL local para o operador ouvir e decidir se envia ou descarta
         const ext = mimeType.includes("ogg") ? "ogg" : mimeType.includes("mp4") ? "mp4" : "webm";
         const previewUrl = URL.createObjectURL(audioBlob);
@@ -1090,7 +1090,7 @@ function LiveChat() {
         setRecordingSeconds((s) => s + 1);
       }, 1000);
     } catch (err: any) {
-      toast({ description: `NÃ£o foi possÃ­vel acessar o microfone: ${err.message}`, variant: "destructive" });
+      toast({ description: `Não foi possível acessar o microfone: ${err.message}`, variant: "destructive" });
     }
   };
 
@@ -1123,7 +1123,7 @@ function LiveChat() {
         credentials: "include",
         body: fd,
       });
-      if (!uploadRes.ok) throw new Error("Falha no upload de Ã¡udio");
+      if (!uploadRes.ok) throw new Error("Falha no upload de áudio");
       const { url } = await uploadRes.json();
       const audioContent = `[AUDIO:${url}]`;
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -1136,9 +1136,9 @@ function LiveChat() {
       }
       URL.revokeObjectURL(previewUrl);
       setPendingAudioBlob(null);
-      toast({ description: "ðŸŽ¤ Ãudio enviado!" });
+      toast({ description: "🎤 Áudio enviado!" });
     } catch (err: any) {
-      toast({ description: `Erro ao enviar Ã¡udio: ${err.message}`, variant: "destructive" });
+      toast({ description: `Erro ao enviar áudio: ${err.message}`, variant: "destructive" });
     } finally {
       setIsSendingAudio(false);
     }
@@ -1147,7 +1147,7 @@ function LiveChat() {
   const formatRecordingTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 
-  // â€”â€”â€” Take over chat â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— Take over chat —————————————————————————————————————————————————
   const handleTakeOver = async (chatId: string) => {
     const operatorName = currentUser?.name ?? currentUser?.username ?? "Atendente";
     const userId = currentUser?.id ?? "admin";
@@ -1162,24 +1162,24 @@ function LiveChat() {
       });
     } catch {}
     setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, status: "human_active" } : c));
-    toast({ title: "Chat assumido", description: `VocÃª (${operatorName}) agora estÃ¡ respondendo este chat.` });
+    toast({ title: "Chat assumido", description: `Você (${operatorName}) agora está respondendo este chat.` });
   };
-  // â€”â€”â€” Return chat to AI (Fagner) â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— Return chat to AI (Fagner) —————————————————————————————————————
   const handleReturnToAI = (chatId: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "RETURN_TO_AI", chatId }));
     }
     setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, status: "ai_active", agentId: undefined } : c));
-    toast({ title: "Fagner reativado", description: "O Fagner voltarÃ¡ a responder quando o cliente mandar mensagem." });
+    toast({ title: "Fagner reativado", description: "O Fagner voltará a responder quando o cliente mandar mensagem." });
   };
 
-  // â€”â€”â€” Close chat â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— Close chat —————————————————————————————————————————————————
   const handleCloseChat = async (chatId: string) => {
-    // Notifica o visitante via WS (se disponÃ­vel)
+    // Notifica o visitante via WS (se disponível)
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "CLOSE_CHAT", chatId }));
     }
-    // REST garante que o BD Ã© atualizado mesmo se WS estiver offline
+    // REST garante que o BD é atualizado mesmo se WS estiver offline
     try {
       await fetch(`/api/livechat/chats/${chatId}/close`, { method: "POST", credentials: "include" });
     } catch {}
@@ -1191,7 +1191,7 @@ function LiveChat() {
     }
   };
 
-  // â€”â€”â€” Attention Flag â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— Attention Flag —————————————————————————————————————————————————
   const handleFlagAttention = () => {
     if (!selectedChat || !wsRef.current) return;
     
@@ -1204,17 +1204,17 @@ function LiveChat() {
       attentionObs: attentionObs,
     }));
 
-    toast({ title: "ðŸš¨ AtenÃ§Ã£o Registrada", description: "O chat foi enviado para a aba de revisÃ£o de atenÃ§Ã£o." });
+    toast({ title: "🚨 Atenção Registrada", description: "O chat foi enviado para a aba de revisão de atenção." });
     
     setChats(prev => prev.map(c => c.id === selectedChat.id ? { ...c, needsHuman: "attention", mood: `${attentionReason}: ${attentionObs}` } : c));
     setAttentionOpen(false);
     setAttentionObs("");
   };
 
-  // â€”â€”â€” Derived data â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— Derived data —————————————————————————————————————————————————
   const sq = searchQuery.toLowerCase().trim();
 
-  // Date filter helper â€” suporta range De/AtÃ©
+  // Date filter helper — suporta range De/Até
   const passesDateFilter = (dateStr?: string) => {
     if (!dateFilterActive || (!dateFrom && !dateTo) || !dateStr) return true;
     const d = new Date(dateStr);
@@ -1249,7 +1249,7 @@ function LiveChat() {
     )
   );
 
-  // â€”â€”â€” TABS â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+  // ——— TABS —————————————————————————————————————————————————————————————
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
   const mainTabs = [
     { id: "chats" as const, label: "Chats", icon: MessageCircle, count: activeChats.length, unread: totalUnread },
@@ -1258,8 +1258,8 @@ function LiveChat() {
   ];
   const secondaryTabs = [
     { id: "arquivados" as const, label: "Arquivados", icon: Layers, count: archivedChats.length, unread: 0 },
-    { id: "atencao" as const, label: "AtenÃ§Ã£o", icon: AlertTriangle, count: attentionChats.length, unread: 0 },
-    { id: "stats" as const, label: "EstatÃ­sticas", icon: BarChart3, count: undefined as number | undefined, unread: 0 },
+    { id: "atencao" as const, label: "Atenção", icon: AlertTriangle, count: attentionChats.length, unread: 0 },
+    { id: "stats" as const, label: "Estatísticas", icon: BarChart3, count: undefined as number | undefined, unread: 0 },
   ];
   const tabs = [...mainTabs, ...secondaryTabs];
 
@@ -1270,7 +1270,7 @@ function LiveChat() {
   return (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(0 0% 97%) 0%, hsl(0 5% 95%) 100%)" }}>
 
-      {/* â€”â€”â€” POPUP NOTIFICATIONS â€”â€”â€” */}
+      {/* ——— POPUP NOTIFICATIONS ——— */}
       <div
         aria-live="polite"
         className="fixed bottom-6 left-6 z-50 flex flex-col gap-3 pointer-events-none"
@@ -1301,7 +1301,7 @@ function LiveChat() {
               />
 
               <div className="flex-1 px-4 py-3">
-                {/* CabeÃ§alho: remetente + hora */}
+                {/* Cabeçalho: remetente + hora */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2.5">
                     {/* Avatar */}
@@ -1314,7 +1314,7 @@ function LiveChat() {
                     <div>
                       <p className="text-[12px] font-bold text-zinc-900 leading-tight">{n.visitorName}</p>
                       <p className="text-[10px] text-red-500 font-semibold tracking-wide uppercase leading-tight">
-                        ðŸ’¬ Nova mensagem
+                        💬 Nova mensagem
                       </p>
                     </div>
                   </div>
@@ -1341,7 +1341,7 @@ function LiveChat() {
                   </p>
                 </div>
 
-                {/* BotÃ£o de aÃ§Ã£o */}
+                {/* Botão de ação */}
                 <button
                   onClick={() => {
                     dismissPopup(n.id);
@@ -1355,7 +1355,7 @@ function LiveChat() {
                     boxShadow: "0 4px 14px rgba(220,38,38,0.35)",
                   }}
                 >
-                  Abrir conversa â†’
+                  Abrir conversa →
                 </button>
               </div>
             </div>
@@ -1363,7 +1363,7 @@ function LiveChat() {
         ))}
       </div>
 
-      {/* â€”â€”â€” COMPACT HEADER â€”â€”â€” */}
+      {/* ——— COMPACT HEADER ——— */}
       <div className="flex-shrink-0 px-6 pt-5 pb-3">
         {/* Row 1: Title + Stats + Refresh */}
         <div className="flex items-center justify-between mb-3">
@@ -1413,7 +1413,7 @@ function LiveChat() {
                 setTimeout(() => window.location.reload(), 600);
               }}
               className="h-8 gap-1.5 text-xs border-zinc-200 hover:border-red-300 hover:bg-red-50/50 transition-all"
-              title="Atualizar pÃ¡gina"
+              title="Atualizar página"
             >
               <RefreshCw className={`w-3.5 h-3.5 transition-transform duration-500 ${isRefreshing ? "animate-spin" : ""}`} />
               Atualizar
@@ -1433,7 +1433,7 @@ function LiveChat() {
             >
               <Filter className="w-3.5 h-3.5" />
               {dateFilterActive
-                ? `ðŸ“… ${dateFrom}${dateTo && dateTo !== dateFrom ? ' â†’ ' + dateTo : ''}`
+                ? `📅 ${dateFrom}${dateTo && dateTo !== dateFrom ? ' → ' + dateTo : ''}`
                 : "Filtro"}
               {dateFilterActive && (
                 <span
@@ -1448,7 +1448,7 @@ function LiveChat() {
             {/* Settings Gear */}
             <button
               onClick={() => setSettingsOpen(true)}
-              title="ConfiguraÃ§Ãµes do Live Chat"
+              title="Configurações do Live Chat"
               className="h-8 w-8 flex items-center justify-center rounded-lg border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 transition-all group"
             >
               <Settings className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 transition-colors group-hover:rotate-45" style={{ transition: "transform 0.3s ease" }} />
@@ -1477,7 +1477,7 @@ function LiveChat() {
                     isActive ? "bg-white/25 text-white" : "bg-zinc-200/80 text-zinc-600"
                   }`}>{tab.count}</span>
                 )}
-                {/* Badge de nÃ£o lidas â€” pulsante, vermelho vivo */}
+                {/* Badge de não lidas — pulsante, vermelho vivo */}
                 {tab.unread > 0 && (
                   <span
                     className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[9px] font-black text-white leading-none shadow-lg"
@@ -1494,7 +1494,7 @@ function LiveChat() {
             );
           })}
 
-          {/* â”€â”€ Search Bar (center, hidden on arquivados/atencao/stats) â”€â”€ */}
+          {/* ── Search Bar (center, hidden on arquivados/atencao/stats) ── */}
           {["chats", "visitors", "crm"].includes(activeTab) ? (
             <div className="flex-1 flex items-center justify-center px-2">
               <div className="relative w-full max-w-xs">
@@ -1545,13 +1545,13 @@ function LiveChat() {
         </div>
       </div>
 
-      {/* â€”â€”â€” TAB CONTENT (flex-1, overflow-hidden) â€”â€”â€” */}
+      {/* ——— TAB CONTENT (flex-1, overflow-hidden) ——— */}
       <div className="flex-1 overflow-hidden px-6 pb-5">
 
-        {/* â€”â€”â€” Tabs: Chats, Arquivados, AtenÃ§Ã£o â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” */}
+        {/* ——— Tabs: Chats, Arquivados, Atenção ———————————————————————————————— */}
         {(activeTab === "chats" || activeTab === "arquivados" || activeTab === "atencao") && (() => {
           const currentList = activeTab === "chats" ? activeChats : activeTab === "arquivados" ? archivedChats : attentionChats;
-          const currentTitle = activeTab === "chats" ? "Conversas" : activeTab === "arquivados" ? "Arquivados" : "Em AtenÃ§Ã£o";
+          const currentTitle = activeTab === "chats" ? "Conversas" : activeTab === "arquivados" ? "Arquivados" : "Em Atenção";
           
           return (
           <div className="h-full flex gap-4 animate-tab-enter">
@@ -1604,7 +1604,7 @@ function LiveChat() {
                               {(chat.visitorName || "V")[0].toUpperCase()}
                             </div>
                             <div className="min-w-0 flex-1">
-                              {/* TÃ­tulo editÃ¡vel ao clicar */}
+                              {/* Título editável ao clicar */}
                               {editingTitleChatId === chat.id ? (
                                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                   <input
@@ -1639,7 +1639,7 @@ function LiveChat() {
                                   </p>
                                   <button
                                     onClick={e => startEditTitle(chat, e)}
-                                    title="Editar tÃ­tulo"
+                                    title="Editar título"
                                     className="opacity-0 group-hover/title:opacity-100 transition-opacity flex-shrink-0 w-4 h-4 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
                                   >
                                     <Pencil className="w-2.5 h-2.5" />
@@ -1652,7 +1652,7 @@ function LiveChat() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            {/* Badge de nÃ£o-lidas por chat */}
+                            {/* Badge de não-lidas por chat */}
                             {(unreadCounts[chat.id] ?? 0) > 0 && (
                               <span
                                 className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[9px] font-black text-white leading-none"
@@ -1676,7 +1676,7 @@ function LiveChat() {
                           <div className="mt-1.5">
                             <div className="flex justify-between items-center mb-0.5">
                               <span className="text-[9px] text-zinc-400">
-                                {chat.engagementScore >= 70 ? 'ðŸ”¥ Quente' : chat.engagementScore >= 40 ? 'ðŸŒ¡ï¸ Morno' : 'ðŸ§Š Frio'}
+                                {chat.engagementScore >= 70 ? '🔥 Quente' : chat.engagementScore >= 40 ? '🌡️ Morno' : '🧊 Frio'}
                               </span>
                               <span className="text-[9px] font-bold text-zinc-500">{chat.engagementScore}/100</span>
                             </div>
@@ -1692,19 +1692,19 @@ function LiveChat() {
                         {/* Melhoria 2: Badge de produto VTEX detectado */}
                         {chat.vtexProduct && (
                           <div className="flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-blue-50 border border-blue-100">
-                            <span className="text-[9px]">ðŸ›’</span>
+                            <span className="text-[9px]">🛒</span>
                             <span className="text-[9px] text-blue-700 font-semibold truncate max-w-[160px]">{chat.vtexProduct}</span>
                           </div>
                         )}
 
-                        {/* Na aba AtenÃ§Ã£o, mostrar motivo do flag */}
+                        {/* Na aba Atenção, mostrar motivo do flag */}
                         {activeTab === "atencao" && chat.mood && (
                           <div className="flex items-start gap-1 mt-1 px-2 py-1 rounded-md bg-orange-50 border border-orange-100">
-                            <span className="text-[10px]">ðŸš¨</span>
+                            <span className="text-[10px]">🚨</span>
                             <span className="text-[10px] text-orange-700 font-medium line-clamp-2">{chat.mood}</span>
                           </div>
                         )}
-                        {/* Nas outras abas exceto AtenÃ§Ã£o e Arquivados, mostrar badge de urgÃªncia */}
+                        {/* Nas outras abas exceto Atenção e Arquivados, mostrar badge de urgência */}
                         {activeTab !== "atencao" && activeTab !== "arquivados" && isUrgent && (
                           <div className="flex items-center gap-1 mt-1 px-2 py-1 rounded-md bg-red-50 border border-red-100">
                             <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
@@ -1729,7 +1729,7 @@ function LiveChat() {
                         {(selectedChat.visitorName || "V")[0].toUpperCase()}
                       </div>
                       <div>
-                        {/* TÃ­tulo editÃ¡vel no header */}
+                        {/* Título editável no header */}
                         {editingTitleChatId === selectedChat.id ? (
                           <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
                             <input
@@ -1747,7 +1747,7 @@ function LiveChat() {
                               onClick={() => saveChatTitle(selectedChat)}
                               disabled={savingTitle}
                               className="w-6 h-6 flex items-center justify-center rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
-                              title="Salvar tÃ­tulo"
+                              title="Salvar título"
                             >
                               <Check className="w-3.5 h-3.5" />
                             </button>
@@ -1766,7 +1766,7 @@ function LiveChat() {
                             </h3>
                             <button
                               onClick={e => startEditTitle(selectedChat, e)}
-                              title="Editar tÃ­tulo do chat"
+                              title="Editar título do chat"
                               className="opacity-0 group-hover/header-title:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
                             >
                               <Pencil className="w-3 h-3" />
@@ -1783,7 +1783,7 @@ function LiveChat() {
                       </div>
                     </div>
                     <div className="flex gap-2 relative">
-                      {/* BotÃµes de aÃ§Ã£o: ocultos na aba AtenÃ§Ã£o e Arquivados */}
+                      {/* Botões de ação: ocultos na aba Atenção e Arquivados */}
                       {activeTab !== "atencao" && activeTab !== "arquivados" && (
                         <>
                           {selectedChat.status === "ai_active" ? (
@@ -1808,7 +1808,7 @@ function LiveChat() {
                             </Button>
                           ) : null}
 
-                          {/* BotÃ£o Ver no CRM */}
+                          {/* Botão Ver no CRM */}
                           <Button
                             size="sm"
                             variant="outline"
@@ -1823,33 +1823,33 @@ function LiveChat() {
                             Ver no CRM
                           </Button>
 
-                          {/* BotÃ£o de AtenÃ§Ã£o */}
+                          {/* Botão de Atenção */}
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => setAttentionOpen(!attentionOpen)}
                             className="h-8 text-xs gap-1.5 border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300 relative"
                           >
-                            ðŸš¨ AtenÃ§Ã£o
+                            🚨 Atenção
                           </Button>
 
-                          {/* Dropdown de AtenÃ§Ã£o manual */}
+                          {/* Dropdown de Atenção manual */}
                           {attentionOpen && (
                             <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-zinc-200 p-4 z-50">
-                              <h4 className="text-sm font-bold text-zinc-800 mb-3">Marcar para AtenÃ§Ã£o</h4>
+                              <h4 className="text-sm font-bold text-zinc-800 mb-3">Marcar para Atenção</h4>
                               <select
                                 className="w-full text-sm p-2 border border-zinc-200 rounded-lg mb-3"
                                 value={attentionReason}
                                 onChange={(e) => setAttentionReason(e.target.value)}
                               >
-                                <option value="Falta de informaÃ§Ã£o">Falta de informaÃ§Ã£o</option>
-                                <option value="NÃ£o respondeu">NÃ£o respondeu</option>
-                                <option value="NÃ£o entendeu o cliente">NÃ£o entendeu o cliente</option>
+                                <option value="Falta de informação">Falta de informação</option>
+                                <option value="Não respondeu">Não respondeu</option>
+                                <option value="Não entendeu o cliente">Não entendeu o cliente</option>
                                 <option value="Parou de responder">Parou de responder</option>
-                                <option value="Outro problema tÃ©cnico">Outro problema tÃ©cnico</option>
+                                <option value="Outro problema técnico">Outro problema técnico</option>
                               </select>
                               <Textarea
-                                placeholder="ObservaÃ§Ã£o (opcional)"
+                                placeholder="Observação (opcional)"
                                 className="text-sm min-h-[60px] mb-3"
                                 value={attentionObs}
                                 onChange={(e) => setAttentionObs(e.target.value)}
@@ -1872,21 +1872,21 @@ function LiveChat() {
                         </>
                       )}
 
-                      {/* Badge somente leitura â€” aba AtenÃ§Ã£o */}
+                      {/* Badge somente leitura — aba Atenção */}
                       {activeTab === "atencao" && (
                         <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
-                          ðŸ‘ VisualizaÃ§Ã£o â€” somente leitura
+                          👁 Visualização — somente leitura
                         </span>
                       )}
 
-                      {/* Badge somente leitura â€” aba Arquivados + botÃ£o Motivo */}
+                      {/* Badge somente leitura — aba Arquivados + botão Motivo */}
                       {activeTab === "arquivados" && (() => {
                         const CLOSE_REASONS = [
-                          { value: "sem_resposta", label: "NÃ£o respondeu mais", color: "#6b7280" },
+                          { value: "sem_resposta", label: "Não respondeu mais", color: "#6b7280" },
                           { value: "venda_fechada", label: "Venda fechada", color: "#16a34a" },
                           { value: "venda_cancelada", label: "Venda cancelada", color: "#dc2626" },
-                          { value: "atendimento_concluido", label: "Atendimento concluÃ­do", color: "#2563eb" },
-                          { value: "problema_tecnico", label: "Problema tÃ©cnico", color: "#d97706" },
+                          { value: "atendimento_concluido", label: "Atendimento concluído", color: "#2563eb" },
+                          { value: "problema_tecnico", label: "Problema técnico", color: "#d97706" },
                           { value: "outro", label: "Outro", color: "#7c3aed" },
                         ];
                         const currentReason = (selectedChat as any).closeReason;
@@ -1894,11 +1894,11 @@ function LiveChat() {
                         return (
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-50 text-zinc-500 border border-zinc-200">
-                              ðŸ—„ï¸ Conversa arquivada
+                              🗄️ Conversa arquivada
                             </span>
                             {reasonObj ? (
                               <span className="px-3 py-1.5 rounded-lg text-xs font-semibold border" style={{ background: `${reasonObj.color}15`, color: reasonObj.color, borderColor: `${reasonObj.color}40` }}>
-                                ðŸ“ {reasonObj.label}
+                                📝 {reasonObj.label}
                               </span>
                             ) : null}
                             <div className="relative">
@@ -1952,10 +1952,10 @@ function LiveChat() {
 
                   {/* Messages area */}
                   <div className="flex-1 overflow-y-auto p-5 space-y-3" style={{ background: "linear-gradient(180deg, hsl(0 0% 98.5%) 0%, hsl(0 0% 97%) 100%)" }}>
-                    {/* Card de motivo â€” visÃ­vel apenas na aba AtenÃ§Ã£o */}
+                    {/* Card de motivo — visível apenas na aba Atenção */}
                     {activeTab === "atencao" && selectedChat.mood && (
                       <div className="mb-4 p-4 rounded-xl bg-orange-50 border border-orange-200 flex gap-3">
-                        <span className="text-2xl">ðŸš¨</span>
+                        <span className="text-2xl">🚨</span>
                         <div>
                           <p className="text-sm font-bold text-orange-800 mb-0.5">Motivo do Flag</p>
                           <p className="text-sm text-orange-700">{selectedChat.mood}</p>
@@ -2052,7 +2052,7 @@ function LiveChat() {
                       <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-zinc-50 border border-zinc-100">
                         <Layers className="w-4 h-4 text-zinc-400" />
                         <p className="text-[11px] text-zinc-500 font-medium">
-                          Conversa encerrada â€” hist\u00F3rico somente para leitura.
+                          Conversa encerrada — hist\u00F3rico somente para leitura.
                         </p>
                       </div>
                     ) : selectedChat.status === "human_active" ? (
@@ -2062,7 +2062,7 @@ function LiveChat() {
                           <Textarea
                             value={agentInput}
                             onChange={(e) => setAgentInput(e.target.value)}
-                            placeholder={isRecording ? "ðŸŽ™ï¸ Gravando... clique em â¹ para parar e enviar" : "Escreva sua mensagem..."}
+                            placeholder={isRecording ? "🎙️ Gravando... clique em ⏹ para parar e enviar" : "Escreva sua mensagem..."}
                             disabled={isRecording || isSendingAudio}
                             className="resize-none min-h-[44px] max-h-[100px] text-sm rounded-xl border-zinc-200 focus:border-red-300 focus:ring-red-200 disabled:opacity-60"
                             rows={1}
@@ -2070,7 +2070,7 @@ function LiveChat() {
                               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAgentSend(); }
                             }}
                           />
-                          {/* BotÃ£o Enviar texto */}
+                          {/* Botão Enviar texto */}
                           <Button
                             onClick={handleAgentSend}
                             disabled={!agentInput.trim() || isRecording || isSendingAudio}
@@ -2081,10 +2081,10 @@ function LiveChat() {
                           </Button>
                         </div>
 
-                        {/* Linha de Ã¡udio */}
+                        {/* Linha de áudio */}
                         <div className="flex flex-col gap-2">
 
-                          {/* â”€ Preview pÃ³s-gravaÃ§Ã£o: player + descartar/enviar â”€ */}
+                          {/* ─ Preview pós-gravação: player + descartar/enviar ─ */}
                           {pendingAudioBlob && !isSendingAudio && (
                             <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
                               style={{ background: "rgba(127,29,29,0.08)", border: "1px solid rgba(220,38,38,0.2)" }}>
@@ -2104,7 +2104,7 @@ function LiveChat() {
                               {/* Enviar */}
                               <button
                                 onClick={sendPendingAudio}
-                                title="Enviar Ã¡udio"
+                                title="Enviar áudio"
                                 className="flex items-center justify-center w-8 h-8 rounded-xl text-white transition-all"
                                 style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
                               >
@@ -2117,16 +2117,16 @@ function LiveChat() {
                             <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-500"
                               style={{ background: "rgba(0,0,0,0.04)" }}>
                               <div className="w-3 h-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
-                              <span>Enviando Ã¡udio...</span>
+                              <span>Enviando áudio...</span>
                             </div>
                           )}
 
-                          {/* â”€ BotÃ£o Mic / Stop (sÃ³ mostra se nÃ£o hÃ¡ preview pendente) â”€ */}
+                          {/* ─ Botão Mic / Stop (só mostra se não há preview pendente) ─ */}
                           {!pendingAudioBlob && !isSendingAudio && (
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={isRecording ? stopRecording : startRecording}
-                                title={isRecording ? "Parar gravaÃ§Ã£o" : "Gravar mensagem de voz"}
+                                title={isRecording ? "Parar gravação" : "Gravar mensagem de voz"}
                                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all select-none"
                                 style={isRecording ? {
                                   background: "linear-gradient(135deg, #7f1d1d, #dc2626)",
@@ -2147,13 +2147,13 @@ function LiveChat() {
                                 ) : (
                                   <>
                                     <Mic className="w-3.5 h-3.5" />
-                                    <span>Ãudio</span>
+                                    <span>Áudio</span>
                                   </>
                                 )}
                               </button>
                               {isRecording && (
                                 <span className="text-[10px] text-red-500 font-medium animate-pulse">
-                                  â— Gravando â€” clique em â¹ para parar
+                                  ● Gravando — clique em ⏹ para parar
                                 </span>
                               )}
                             </div>
@@ -2164,7 +2164,7 @@ function LiveChat() {
                       <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-emerald-50/60 border border-emerald-100">
                         <Bot className="w-4 h-4 text-emerald-500" />
                         <p className="text-[11px] text-emerald-700 font-medium">
-                          Fagner estÃ¡ conduzindo este atendimento. Clique em "Assumir" para intervir.
+                          Fagner está conduzindo este atendimento. Clique em "Assumir" para intervir.
                         </p>
                       </div>
                     )}
@@ -2183,7 +2183,7 @@ function LiveChat() {
           </div>
         )})()}
 
-        {/* â€”â€”â€” Tab: Visitantes â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” */}
+        {/* ——— Tab: Visitantes ———————————————————————————————————————— */}
         {activeTab === "visitors" && (
           <div className="h-full flex flex-col bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden animate-tab-enter">
             {/* Header */}
@@ -2201,7 +2201,7 @@ function LiveChat() {
                 <div className="flex flex-col items-center justify-center h-full text-zinc-400">
                   <Eye className="w-12 h-12 mb-3 opacity-20" />
                   <p className="text-sm font-medium">{sq ? "Nenhum resultado encontrado" : "Nenhum visitante online"}</p>
-                  <p className="text-[11px]">{sq ? "Tente outro termo de busca" : "Os visitantes aparecerÃ£o aqui em tempo real"}</p>
+                  <p className="text-[11px]">{sq ? "Tente outro termo de busca" : "Os visitantes aparecerão aqui em tempo real"}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -2227,14 +2227,14 @@ function LiveChat() {
                             </div>
                             <div>
                               <p className="text-sm font-semibold text-zinc-800">
-                                {v.name || "NÃƒO IDENTIFICADO"}
+                                {v.name || "NÃO IDENTIFICADO"}
                               </p>
                               <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
                                 <span className="flex items-center gap-0.5">
                                   <MapPin className="w-3 h-3" />
-                                  {v.city ? `${v.city}${v.country ? `, ${v.country}` : ""}` : "LocalizaÃ§Ã£o desconhecida"}
+                                  {v.city ? `${v.city}${v.country ? `, ${v.country}` : ""}` : "Localização desconhecida"}
                                 </span>
-                                <span className="text-zinc-200">Â·</span>
+                                <span className="text-zinc-200">·</span>
                                 <span className="flex items-center gap-0.5">
                                   <Hash className="w-3 h-3" /> {v.totalVisits} vis
                                 </span>
@@ -2253,7 +2253,7 @@ function LiveChat() {
                             <p className="text-[11px] text-zinc-600 truncate font-medium">
                               {v.currentPage && v.currentPage !== '/' && v.currentPage !== v.currentPageTitle 
                                 ? v.currentPage 
-                                : v.currentPageTitle || v.currentPage || "PÃ¡gina inativa"}
+                                : v.currentPageTitle || v.currentPage || "Página inativa"}
                             </p>
                           </div>
                         )}
@@ -2318,7 +2318,7 @@ function LiveChat() {
                     const src = sourceLabel(v.source);
                     const displayUrl = v.currentPage && v.currentPage !== '/' && v.currentPage !== v.currentPageTitle 
                         ? v.currentPage 
-                        : v.currentPageTitle || v.currentPage || "PÃ¡gina inativa";
+                        : v.currentPageTitle || v.currentPage || "Página inativa";
 
                     return (
                       <div
@@ -2336,14 +2336,14 @@ function LiveChat() {
                             </div>
                             <div>
                               <p className="text-sm font-semibold text-zinc-500">
-                                {v.name || "NÃƒO IDENTIFICADO"}
+                                {v.name || "NÃO IDENTIFICADO"}
                               </p>
                               <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
                                 <span className="flex items-center gap-0.5">
                                   <MapPin className="w-3 h-3" />
-                                  {v.city ? `${v.city}${v.country ? `, ${v.country}` : ""}` : "LocalizaÃ§Ã£o desconhecida"}
+                                  {v.city ? `${v.city}${v.country ? `, ${v.country}` : ""}` : "Localização desconhecida"}
                                 </span>
-                                <span className="text-zinc-200">Â·</span>
+                                <span className="text-zinc-200">·</span>
                                 <span className="flex items-center gap-0.5">
                                   <Hash className="w-3 h-3" /> {v.totalVisits} vis
                                 </span>
@@ -2377,7 +2377,7 @@ function LiveChat() {
                           <span className="text-[10px] text-zinc-300">{v.browser}</span>
                           <span className="text-[10px] text-zinc-400 font-medium flex items-center gap-0.5">
                             <Clock className="w-3 h-3" />
-                            Inativo hÃ¡ {timeAgo(v.lastSeenAt)}
+                            Inativo há {timeAgo(v.lastSeenAt)}
                           </span>
                         </div>
                       </div>
@@ -2389,7 +2389,7 @@ function LiveChat() {
           </div>
         )}
 
-        {/* â€”â€”â€” MODAL: Customer Glance (novo modal de visitante) â€”â€”â€” */}
+        {/* ——— MODAL: Customer Glance (novo modal de visitante) ——— */}
         {historyModal && (
           <CustomerModal
             visitor={historyModal.visitor}
@@ -2409,7 +2409,7 @@ function LiveChat() {
         )}
 
 
-        {/* â€”â€”â€” Tab: CRM Kanban â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” */}
+        {/* ——— Tab: CRM Kanban ————————————————————————————————————————————————— */}
         {activeTab === "crm" && (
           <div className="h-full flex flex-col animate-tab-enter">
             {/* Kanban columns */}
@@ -2417,9 +2417,9 @@ function LiveChat() {
               {[
                 { stage: "novo_atendimento", label: "Novo Atendimento", color: "#22c55e", bgLight: "rgba(34,197,94,0.06)", borderColor: "rgba(34,197,94,0.3)" },
                 { stage: "em_atendimento", label: "Em Atendimento", color: "#3b82f6", bgLight: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.3)" },
-                { stage: "maquinas", label: "MÃ¡quinas", color: "#ea580c", bgLight: "rgba(234,88,12,0.06)", borderColor: "rgba(234,88,12,0.3)" },
-                { stage: "pecas", label: "PeÃ§as", color: "#d97706", bgLight: "rgba(217,119,6,0.06)", borderColor: "rgba(217,119,6,0.3)" },
-                { stage: "pos_venda", label: "PÃ³s Venda", color: "#8b5cf6", bgLight: "rgba(139,92,246,0.06)", borderColor: "rgba(139,92,246,0.3)" },
+                { stage: "maquinas", label: "Máquinas", color: "#ea580c", bgLight: "rgba(234,88,12,0.06)", borderColor: "rgba(234,88,12,0.3)" },
+                { stage: "pecas", label: "Peças", color: "#d97706", bgLight: "rgba(217,119,6,0.06)", borderColor: "rgba(217,119,6,0.3)" },
+                { stage: "pos_venda", label: "Pós Venda", color: "#8b5cf6", bgLight: "rgba(139,92,246,0.06)", borderColor: "rgba(139,92,246,0.3)" },
                 { stage: "finalizado_com_venda", label: "Vendido", color: "#f59e0b", bgLight: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.3)" },
                 { stage: "sem_resposta", label: "Sem Resposta", color: "#71717a", bgLight: "rgba(113,113,122,0.06)", borderColor: "rgba(113,113,122,0.3)" },
                 { stage: "outros", label: "Outros", color: "#64748b", bgLight: "rgba(100,116,139,0.06)", borderColor: "rgba(100,116,139,0.3)" },
@@ -2571,13 +2571,13 @@ function LiveChat() {
                                   return null;
                                 })()}
                               </div>
-                               {/* PÃ³s Venda badge */}
+                               {/* Pós Venda badge */}
 
                                {(v as any).posVendaNome && (
 
                                  <div className="flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-purple-50 border border-purple-100">
 
-                                   <span className="text-[8px]">ðŸŽ«</span>
+                                   <span className="text-[8px]">🎫</span>
 
                                    <span className="text-[8px] text-purple-700 font-semibold truncate">{(v as any).posVendaNome}</span>
 
@@ -2600,7 +2600,7 @@ function LiveChat() {
               <div className="flex-shrink-0 mt-3 bg-white rounded-2xl border border-zinc-200/60 shadow-lg overflow-hidden animate-pop-in">
                 <div className="flex" style={{ maxHeight: "280px" }}>
 
-                  {/* Col 1: Identidade + MÃ©tricas */}
+                  {/* Col 1: Identidade + Métricas */}
                   <div className="w-[260px] flex-shrink-0 p-4 flex flex-col gap-3 border-r border-zinc-100">
                     {/* Avatar + Nome */}
                     <div className="flex items-center gap-3">
@@ -2626,14 +2626,14 @@ function LiveChat() {
 
                     {/* Info linha */}
                     <p className="text-[10px] text-zinc-400 leading-relaxed">
-                      {[selectedVisitor.country, selectedVisitor.browser, `${sourceLabel(selectedVisitor.source).icon} ${sourceLabel(selectedVisitor.source).label}`].filter(Boolean).join(" â€¢ ")}
+                      {[selectedVisitor.country, selectedVisitor.browser, `${sourceLabel(selectedVisitor.source).icon} ${sourceLabel(selectedVisitor.source).label}`].filter(Boolean).join(" • ")}
                     </p>
 
-                    {/* MÃ©tricas 4 colunas */}
+                    {/* Métricas 4 colunas */}
                     <div className="grid grid-cols-4 gap-1">
                       {[
                         { label: "Visitas", value: selectedVisitor.totalVisits },
-                        { label: "PÃ¡ginas", value: selectedVisitor.totalPages },
+                        { label: "Páginas", value: selectedVisitor.totalPages },
                         { label: "Chats", value: selectedVisitor.totalChats },
                         { label: "Score", value: selectedVisitor.engagementScore },
                       ].map((m) => (
@@ -2665,12 +2665,12 @@ function LiveChat() {
                         <span className="text-zinc-600 font-medium">{new Date(selectedVisitor.firstSeenAt).toLocaleDateString("pt-BR")}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-zinc-400">Ãšltima atividade</span>
+                        <span className="text-zinc-400">Última atividade</span>
                         <span className="text-zinc-600 font-medium">{timeAgo(selectedVisitor.lastSeenAt)}</span>
                       </div>
                     </div>
 
-                    {/* PÃ¡gina atual */}
+                    {/* Página atual */}
                     {selectedVisitor.currentPage && (
                       <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-50 border border-zinc-100">
                         <ExternalLink className="w-3 h-3 text-zinc-400 flex-shrink-0" />
@@ -2682,7 +2682,7 @@ function LiveChat() {
                       onClick={() => { openHistoryModal(selectedVisitor); setActiveTab("visitors"); }}
                       className="mt-auto text-[10px] font-semibold text-red-600 hover:text-red-700 border border-red-100 hover:border-red-200 hover:bg-red-50 transition-colors py-1.5 w-full text-center rounded-lg"
                     >
-                      ðŸ—ºï¸ HistÃ³rico de NavegaÃ§Ã£o
+                      🗺️ Histórico de Navegação
                     </button>
 <button
                       onClick={() => setSelectedVisitor(null)}
@@ -2695,7 +2695,7 @@ function LiveChat() {
                   {/* Col 2: Chat Atual (Conversas Ativas) */}
                   <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden bg-white">
                     <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2 flex-shrink-0">
-                      {"\u{1F4AC}"} Conversas da SessÃ£o
+                      {"\u{1F4AC}"} Conversas da Sessão
                     </p>
                     <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
                       {visitorChats.length === 0 ? (
@@ -2717,23 +2717,23 @@ function LiveChat() {
                               </p>
                               <span className="text-[9px] text-red-500/70 font-medium">{timeAgo(c.startedAt)}</span>
                             </div>
-                            <span className="text-[10px] text-red-600 font-bold ml-1 flex-shrink-0">â†’</span >
+                            <span className="text-[10px] text-red-600 font-bold ml-1 flex-shrink-0">→</span >
                           </div>
                         ))
                       )}
                     </div>
                   </div>
 
-                  {/* Col 3: HistÃ³rico de NegociaÃ§Ãµes (Outros Cards) */}
+                  {/* Col 3: Histórico de Negociações (Outros Cards) */}
                   <div className="w-[200px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden bg-zinc-50/30">
                     <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-2 flex-shrink-0">
-                      {"\u{1F4C2}"} NegociaÃ§Ãµes Anteriores
+                      {"\u{1F4C2}"} Negociações Anteriores
                     </p>
                     <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
                       {pastNegotiations.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
                           <Layers className="w-6 h-6 mb-1 opacity-40" />
-                          <p className="text-[10px] text-center">Nenhum histÃ³rico extra</p>
+                          <p className="text-[10px] text-center">Nenhum histórico extra</p>
                         </div>
                       ) : (
                         pastNegotiations.map((pn: any) => (
@@ -2744,7 +2744,7 @@ function LiveChat() {
                           >
                             <div className="flex-1 min-w-0">
                               <p className="truncate text-[10px] font-medium text-zinc-600 group-hover:text-zinc-900 transition-colors">
-                                {new Date(pn.lastSeenAt).toLocaleDateString("pt-BR", { day: '2-digit', month: 'short' })} â€¢ {pn.pipelineStage ? pn.pipelineStage.replace(/_/g," ") : ""}
+                                {new Date(pn.lastSeenAt).toLocaleDateString("pt-BR", { day: '2-digit', month: 'short' })} • {pn.pipelineStage ? pn.pipelineStage.replace(/_/g," ") : ""}
                               </p>
                             </div>
                             <span className="text-[8px] bg-zinc-100 text-zinc-400 px-1 py-0.5 rounded flex-shrink-0">Card</span>
@@ -2754,19 +2754,19 @@ function LiveChat() {
                     </div>
                   </div>
 
-                  {/* Col: Sobre o Cliente + dados por fluxo (scroll Ãºnico) */}
+                  {/* Col: Sobre o Cliente + dados por fluxo (scroll único) */}
                   <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden" style={{ background: "rgba(139,92,246,0.03)" }}>
                     <p className="text-[10px] font-bold uppercase tracking-wider mb-3 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
-                      ðŸ‘¤ Sobre o cliente
+                      👤 Sobre o cliente
                     </p>
-                    {/* scroll Ãºnico para todos os campos */}
+                    {/* scroll único para todos os campos */}
                     <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
                       {/* Campos base universais */}
                       {[
-                        { label: "Nome do comprador", value: selectedVisitor.posVendaNome, icon: "ðŸ‘¤" },
-                        { label: "Telefone (WhatsApp)", value: selectedVisitor.posVendaTelefone, icon: "ðŸ“±" },
-                        { label: "E-mail de suporte", value: selectedVisitor.posVendaEmail, icon: "âœ‰ï¸" },
-                        { label: "CPF / CNPJ", value: selectedVisitor.posVendaCnpjCpf, icon: "ðŸªª" },
+                        { label: "Nome do comprador", value: selectedVisitor.posVendaNome, icon: "👤" },
+                        { label: "Telefone (WhatsApp)", value: selectedVisitor.posVendaTelefone, icon: "📱" },
+                        { label: "E-mail de suporte", value: selectedVisitor.posVendaEmail, icon: "✉️" },
+                        { label: "CPF / CNPJ", value: selectedVisitor.posVendaCnpjCpf, icon: "🪪" },
                       ].map(f => (
                         <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
                           <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
@@ -2776,7 +2776,7 @@ function LiveChat() {
                         </div>
                       ))}
 
-                      {/* PÃ³s Venda â€” campos especÃ­ficos */}
+                      {/* Pós Venda — campos específicos */}
                       {(selectedVisitor.pipelineStage === 'pos_venda' || selectedVisitor.posVendaProblema || selectedVisitor.posVendaNotaPedido) && (
                         <>
                           <div className="pt-1 pb-0.5">
@@ -2785,8 +2785,8 @@ function LiveChat() {
                             </p>
                           </div>
                           {[
-                            { label: 'Problema relatado', value: selectedVisitor.posVendaProblema, icon: 'âš™ï¸' },
-                            { label: 'Nota do pedido', value: selectedVisitor.posVendaNotaPedido, icon: 'ðŸ“„' },
+                            { label: 'Problema relatado', value: selectedVisitor.posVendaProblema, icon: '⚙️' },
+                            { label: 'Nota do pedido', value: selectedVisitor.posVendaNotaPedido, icon: '📄' },
                           ].map(f => (
                             <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
                               <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
@@ -2803,12 +2803,12 @@ function LiveChat() {
                         <>
                           <div className="pt-1 pb-0.5">
                             <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#8b5cf6' }}>
-                              ðŸ”§ Pecas
+                              🔧 Pecas
                             </p>
                           </div>
                           {[
-                            { label: 'Peca desejada', value: selectedVisitor.pecaDesejada, icon: 'ðŸ”§' },
-                            { label: 'E cliente Tecfag?', value: selectedVisitor.pecasECliente, icon: 'âœ…' },
+                            { label: 'Peca desejada', value: selectedVisitor.pecaDesejada, icon: '🔧' },
+                            { label: 'E cliente Tecfag?', value: selectedVisitor.pecasECliente, icon: '✅' },
                           ].map(f => (
                             <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
                               <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
@@ -2824,13 +2824,13 @@ function LiveChat() {
                       {(selectedVisitor.pipelineStage === 'maquinas' || selectedVisitor.maqProdutoFabricado) && (
                         <>
                           <div className="pt-1 pb-0.5">
-                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#ea580c' }}>âš©ï¸ MÃ¡quinas</p>
+                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#ea580c' }}>⚩️ Máquinas</p>
                           </div>
                           {[
-                            { label: 'Produto fabricado', value: selectedVisitor.maqProdutoFabricado, icon: 'ðŸ­' },
-                            { label: 'Volume de produÃ§Ã£o', value: selectedVisitor.maqVolumeProducao, icon: 'ðŸ“Š' },
-                            { label: 'QualificaÃ§Ã£o SDR', value: selectedVisitor.maqQualificacaoSDR, icon: 'â­' },
-                            { label: 'Cliente novo?', value: selectedVisitor.maqClienteNovo, icon: 'ðŸ†•' },
+                            { label: 'Produto fabricado', value: selectedVisitor.maqProdutoFabricado, icon: '🏭' },
+                            { label: 'Volume de produção', value: selectedVisitor.maqVolumeProducao, icon: '📊' },
+                            { label: 'Qualificação SDR', value: selectedVisitor.maqQualificacaoSDR, icon: '⭐' },
+                            { label: 'Cliente novo?', value: selectedVisitor.maqClienteNovo, icon: '🆕' },
                           ].map(f => (
                             <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-orange-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
                               <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: '#ea580c' }}>{f.icon} {f.label}</p>
@@ -2852,7 +2852,7 @@ function LiveChat() {
                         [...selectedVisitor.notes].reverse().map((n, i) => {
                           // Extrai qualquer URL do RD Station da nota (com ou sem prefixo "Link: ")
                           const rdLinkMatch = n.content.match(/https:\/\/(?:app\.rdstation\.com\.br\/(?:crm|sales)|crm\.rdstation\.com\/app)\/[\w\-\/]+/);
-                          // Remove a URL bruta do texto do card â€” vai virar botÃ£o dedicado
+                          // Remove a URL bruta do texto do card — vai virar botão dedicado
                           const cleanContent = n.content
                             .replace(/Link:\s*https:\/\/[^\s]+/g, "")
                             .replace(/https:\/\/(?:app\.rdstation\.com\.br|crm\.rdstation\.com)\/[^\s]+/g, "")
@@ -2884,7 +2884,7 @@ function LiveChat() {
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full text-zinc-300 py-4">
                           <Bot className="w-8 h-8 mb-2 opacity-30" />
-                          <p className="text-[10px] text-center max-w-[160px]">O Fagner gerarÃ¡ notas automaticamente ao encerrar uma conversa.</p>
+                          <p className="text-[10px] text-center max-w-[160px]">O Fagner gerará notas automaticamente ao encerrar uma conversa.</p>
                         </div>
                       )}
                     </div>
@@ -2896,11 +2896,11 @@ function LiveChat() {
           </div>
         )}
 
-        {/* â”€â”€â”€ Tab: EstatÃ­sticas (Melhoria 4) */}
+        {/* ─── Tab: Estatísticas (Melhoria 4) */}
         {activeTab === "stats" && <StatsTab dateFrom={dateFilterActive ? dateFrom : undefined} dateTo={dateFilterActive ? dateTo : undefined} />}
       </div>
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• FILTER MODAL â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ══════════════ FILTER MODAL ══════════════ */}
       {filterOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
@@ -2917,7 +2917,7 @@ function LiveChat() {
             >
               <div className="flex items-center gap-2.5">
                 <Filter className="w-4 h-4 text-white" />
-                <h2 className="text-sm font-bold text-white">Filtro por PerÃ­odo</h2>
+                <h2 className="text-sm font-bold text-white">Filtro por Período</h2>
               </div>
               <button onClick={() => setFilterOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all">
                 <X className="w-3.5 h-3.5" />
@@ -2926,7 +2926,7 @@ function LiveChat() {
 
             <div className="p-5 space-y-4">
               <p className="text-xs text-zinc-500 leading-relaxed">
-                Selecione um perÃ­odo para filtrar <strong>todas as abas</strong> do Live Chat â€” Chats, Visitantes, CRM e EstatÃ­sticas.
+                Selecione um período para filtrar <strong>todas as abas</strong> do Live Chat — Chats, Visitantes, CRM e Estatísticas.
               </p>
 
               <div className="grid grid-cols-2 gap-3">
@@ -2946,7 +2946,7 @@ function LiveChat() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-red-500" />
-                    AtÃ©
+                    Até
                   </label>
                   <input
                     type="date"
@@ -2964,8 +2964,8 @@ function LiveChat() {
                   <Filter className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
                   <p className="text-xs text-red-700">
                     Filtro ativo: <strong>
-                      {dateFrom ? new Date(dateFrom + "T00:00:00").toLocaleDateString("pt-BR") : 'inÃ­cio'}
-                      {' â†’ '}
+                      {dateFrom ? new Date(dateFrom + "T00:00:00").toLocaleDateString("pt-BR") : 'início'}
+                      {' → '}
                       {dateTo ? new Date(dateTo + "T00:00:00").toLocaleDateString("pt-BR") : 'hoje'}
                     </strong>
                   </p>
@@ -2986,9 +2986,9 @@ function LiveChat() {
                     if (!dateFrom && !dateTo) { toast({ description: "Selecione pelo menos uma data.", variant: "destructive" }); return; }
                     setDateFilterActive(true);
                     setFilterOpen(false);
-                    const fromStr = dateFrom ? new Date(dateFrom + "T00:00:00").toLocaleDateString("pt-BR") : 'inÃ­cio';
+                    const fromStr = dateFrom ? new Date(dateFrom + "T00:00:00").toLocaleDateString("pt-BR") : 'início';
                     const toStr = dateTo ? new Date(dateTo + "T00:00:00").toLocaleDateString("pt-BR") : 'hoje';
-                    toast({ title: "ðŸ“… Filtro aplicado", description: `PerÃ­odo: ${fromStr} â†’ ${toStr}` });
+                    toast({ title: "📅 Filtro aplicado", description: `Período: ${fromStr} → ${toStr}` });
                   }}
                   className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 flex items-center justify-center gap-1.5"
                   style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
@@ -3001,7 +3001,7 @@ function LiveChat() {
         </div>
       )}
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• SETTINGS MODAL â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ══════════════ SETTINGS MODAL ══════════════ */}
       {settingsOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
@@ -3030,8 +3030,8 @@ function LiveChat() {
                   <Settings className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-white tracking-tight">ConfiguraÃ§Ãµes do Live Chat</h2>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Gerencie operadores e regras de distribuiÃ§Ã£o por funil</p>
+                  <h2 className="text-base font-bold text-white tracking-tight">Configurações do Live Chat</h2>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Gerencie operadores e regras de distribuição por funil</p>
                 </div>
               </div>
               <button
@@ -3051,9 +3051,9 @@ function LiveChat() {
               >
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-3 mb-3">Funis</p>
                 {([
-                  { key: "pos_venda" as const, label: "PÃ³s Venda", icon: "ðŸŽ«", accent: "#8b5cf6" },
-                  { key: "maquinas" as const, label: "MÃ¡quinas", icon: "ðŸ­", accent: "#ea580c" },
-                  { key: "pecas" as const, label: "PeÃ§as", icon: "âš™ï¸", accent: "#f59e0b" },
+                  { key: "pos_venda" as const, label: "Pós Venda", icon: "🎫", accent: "#8b5cf6" },
+                  { key: "maquinas" as const, label: "Máquinas", icon: "🏭", accent: "#ea580c" },
+                  { key: "pecas" as const, label: "Peças", icon: "⚙️", accent: "#f59e0b" },
                 ]).map((f) => {
                   const isActive = activeFunnel === f.key;
                   const opCount = liveSettings.funnels[f.key].operators.length;
@@ -3093,21 +3093,21 @@ function LiveChat() {
 
                 <div className="flex-1" />
 
-                {/* Status note â€” sÃ³ aparece se PeÃ§as realmente nÃ£o tiver operadores configurados */}
+                {/* Status note — só aparece se Peças realmente não tiver operadores configurados */}
                 {liveSettings.funnels.pecas.operators.length === 0 ? (
                   <div
                     className="p-3 rounded-xl text-[9px] leading-relaxed"
                     style={{ background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.15)", color: "#fb923c" }}
                   >
-                    <strong>PeÃ§as</strong> aguarda habilitaÃ§Ã£o.<br />
-                    <span style={{ color: "#6ee7b7" }}><strong>PÃ³s Venda</strong> e <strong>MÃ¡quinas</strong></span> estÃ£o operacionais.
+                    <strong>Peças</strong> aguarda habilitação.<br />
+                    <span style={{ color: "#6ee7b7" }}><strong>Pós Venda</strong> e <strong>Máquinas</strong></span> estão operacionais.
                   </div>
                 ) : (
                   <div
                     className="p-3 rounded-xl text-[9px] leading-relaxed"
                     style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.15)", color: "#4ade80" }}
                   >
-                    <strong>PÃ³s Venda</strong>, <strong>MÃ¡quinas</strong> e <strong>PeÃ§as</strong> estÃ£o operacionais.
+                    <strong>Pós Venda</strong>, <strong>Máquinas</strong> e <strong>Peças</strong> estão operacionais.
                   </div>
                 )}
               </div>
@@ -3115,9 +3115,9 @@ function LiveChat() {
               {/* Main Config Area */}
               <div className="flex-1 overflow-y-auto p-7">
                 {([
-                  { key: "pos_venda" as const, label: "PÃ³s Venda", icon: "ðŸŽ«", color: "#8b5cf6", active: liveSettings.funnels.pos_venda.operators.length > 0 },
-                  { key: "maquinas" as const, label: "MÃ¡quinas", icon: "ðŸ­", color: "#ea580c", active: liveSettings.funnels.maquinas.operators.length > 0 },
-                  { key: "pecas" as const, label: "PeÃ§as", icon: "âš™ï¸", color: "#f59e0b", active: liveSettings.funnels.pecas.operators.length > 0 },
+                  { key: "pos_venda" as const, label: "Pós Venda", icon: "🎫", color: "#8b5cf6", active: liveSettings.funnels.pos_venda.operators.length > 0 },
+                  { key: "maquinas" as const, label: "Máquinas", icon: "🏭", color: "#ea580c", active: liveSettings.funnels.maquinas.operators.length > 0 },
+                  { key: "pecas" as const, label: "Peças", icon: "⚙️", color: "#f59e0b", active: liveSettings.funnels.pecas.operators.length > 0 },
                 ]).filter(f => f.key === activeFunnel).map((f) => {
                   const cfg = liveSettings.funnels[f.key];
 
@@ -3167,7 +3167,7 @@ function LiveChat() {
                                 : { background: "rgba(255,255,255,0.05)", color: "#64748b", border: "1px solid rgba(255,255,255,0.08)" }
                               }
                             >
-                              {f.active ? "â— Ativo" : "â—‹ Aguardando"}
+                              {f.active ? "● Ativo" : "○ Aguardando"}
                             </span>
                             <span className="text-[9px] text-slate-500">
                               {cfg.operators.length} operador{cfg.operators.length !== 1 ? "es" : ""} cadastrado{cfg.operators.length !== 1 ? "s" : ""}
@@ -3180,7 +3180,7 @@ function LiveChat() {
                       <div className="space-y-3">
                         <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Modo de Atendimento</label>
                         <div className="grid grid-cols-2 gap-3">
-                          {/* Operador Ãšnico */}
+                          {/* Operador Único */}
                           <button
                             onClick={() => updateFunnel({ mode: "single" })}
                             className="flex flex-col items-center gap-2 py-4 px-3 rounded-xl transition-all text-left"
@@ -3194,11 +3194,11 @@ function LiveChat() {
                           >
                             <UserCheck className={`w-6 h-6 ${cfg.mode === "single" ? "text-violet-400" : "text-slate-600"}`} />
                             <div className="text-center">
-                              <p className={`text-xs font-bold ${cfg.mode === "single" ? "text-violet-300" : "text-slate-500"}`}>Operador Ãšnico</p>
+                              <p className={`text-xs font-bold ${cfg.mode === "single" ? "text-violet-300" : "text-slate-500"}`}>Operador Único</p>
                               <p className="text-[9px] text-slate-600 mt-0.5 leading-tight">Sempre o mesmo atendente recebe os chats</p>
                             </div>
                           </button>
-                          {/* RodÃ­zio */}
+                          {/* Rodízio */}
                           <button
                             onClick={() => updateFunnel({ mode: "rotation" })}
                             className="flex flex-col items-center gap-2 py-4 px-3 rounded-xl transition-all text-left"
@@ -3212,8 +3212,8 @@ function LiveChat() {
                           >
                             <RotateCcw className={`w-6 h-6 ${cfg.mode === "rotation" ? "text-orange-400" : "text-slate-600"}`} />
                             <div className="text-center">
-                              <p className={`text-xs font-bold ${cfg.mode === "rotation" ? "text-orange-300" : "text-slate-500"}`}>RodÃ­zio</p>
-                              <p className="text-[9px] text-slate-600 mt-0.5 leading-tight">Distribui chats em rotaÃ§Ã£o entre os atendentes</p>
+                              <p className={`text-xs font-bold ${cfg.mode === "rotation" ? "text-orange-300" : "text-slate-500"}`}>Rodízio</p>
+                              <p className="text-[9px] text-slate-600 mt-0.5 leading-tight">Distribui chats em rotação entre os atendentes</p>
                             </div>
                           </button>
                         </div>
@@ -3265,7 +3265,7 @@ function LiveChat() {
                                       : { background: "rgba(255,255,255,0.05)", color: "#64748b" }
                                     }
                                   >
-                                    {cfg.currentIndex % cfg.operators.length === idx ? "PrÃ³ximo" : `${idx + 1}Âº`}
+                                    {cfg.currentIndex % cfg.operators.length === idx ? "Próximo" : `${idx + 1}º`}
                                   </span>
                                 )}
                                 <button
@@ -3287,7 +3287,7 @@ function LiveChat() {
                           {rdUsersLoading ? (
                             <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-500">
                               <div className="w-3 h-3 border border-slate-500 border-t-transparent rounded-full animate-spin" />
-                              Buscando usuÃ¡rios do RD CRM...
+                              Buscando usuários do RD CRM...
                             </div>
                           ) : rdUsers.length > 0 ? (
                             <div className="flex gap-2">
@@ -3307,7 +3307,7 @@ function LiveChat() {
                                   .filter(u => !cfg.operators.some(op => op.id === u.id || op.name === u.name))
                                   .map(u => (
                                     <option key={u.id} value={u.name} style={{ background: "#1e293b" }}>
-                                      {u.name}{u.email ? ` â€” ${u.email}` : ''}
+                                      {u.name}{u.email ? ` — ${u.email}` : ''}
                                     </option>
                                   ))}
                               </select>
@@ -3323,7 +3323,7 @@ function LiveChat() {
                           ) : (
                             <div className="space-y-2">
                               <p className="text-[10px] text-slate-600">
-                                RD CRM nÃ£o configurado. Adicione manualmente:
+                                RD CRM não configurado. Adicione manualmente:
                               </p>
                               <div className="flex gap-2">
                                 <input
@@ -3362,10 +3362,10 @@ function LiveChat() {
                         >
                           <RotateCcw className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-xs font-bold text-orange-300 mb-0.5">RodÃ­zio ativo</p>
+                            <p className="text-xs font-bold text-orange-300 mb-0.5">Rodízio ativo</p>
                             <p className="text-[10px] text-orange-400/70 leading-relaxed">
-                              DistribuiÃ§Ã£o sequencial entre {cfg.operators.length} operador{cfg.operators.length !== 1 ? "es" : ""}.
-                              PrÃ³ximo: <strong className="text-orange-300">{cfg.operators[cfg.currentIndex % cfg.operators.length]?.name}</strong>
+                              Distribuição sequencial entre {cfg.operators.length} operador{cfg.operators.length !== 1 ? "es" : ""}.
+                              Próximo: <strong className="text-orange-300">{cfg.operators[cfg.currentIndex % cfg.operators.length]?.name}</strong>
                             </p>
                           </div>
                         </div>
@@ -3378,7 +3378,7 @@ function LiveChat() {
                         >
                           <UserCheck className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
                           <p className="text-[10px] text-blue-400/80 leading-relaxed">
-                            <strong className="text-blue-300">Dica:</strong> No modo Operador Ãšnico, apenas o primeiro da lista recebe chats. Ative o RodÃ­zio para distribuir automaticamente.
+                            <strong className="text-blue-300">Dica:</strong> No modo Operador Único, apenas o primeiro da lista recebe chats. Ative o Rodízio para distribuir automaticamente.
                           </p>
                         </div>
                       )}
@@ -3409,7 +3409,7 @@ function LiveChat() {
   );
 }
 
-// â”€â”€â”€ StatsTab Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── StatsTab Component ─────────────────────────────────────────────────────────
 function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -3433,7 +3433,7 @@ function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) 
       <div className="h-full flex items-center justify-center bg-white rounded-2xl border border-zinc-200/60">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs text-zinc-400">Carregando estatÃ­sticas...</span>
+          <span className="text-xs text-zinc-400">Carregando estatísticas...</span>
         </div>
       </div>
     );
@@ -3442,16 +3442,16 @@ function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) 
   if (!data) {
     return (
       <div className="h-full flex items-center justify-center bg-white rounded-2xl border border-zinc-200/60">
-        <p className="text-sm text-zinc-400">Nenhum dado disponÃ­vel ainda.</p>
+        <p className="text-sm text-zinc-400">Nenhum dado disponível ainda.</p>
       </div>
     );
   }
 
   const totalLeads = (data.hotLeads ?? 0) + (data.warmLeads ?? 0) + (data.coldLeads ?? 0);
   const leadTemp = totalLeads > 0 ? [
-    { label: 'ðŸ”¥ Quentes', value: data.hotLeads, color: 'from-red-500 to-orange-500', pct: Math.round((data.hotLeads / totalLeads) * 100) },
-    { label: 'ðŸŒ¡ï¸ Mornos',  value: data.warmLeads, color: 'from-yellow-400 to-amber-500', pct: Math.round((data.warmLeads / totalLeads) * 100) },
-    { label: 'ðŸ§Š Frios',   value: data.coldLeads, color: 'from-teal-400 to-emerald-500', pct: Math.round((data.coldLeads / totalLeads) * 100) },
+    { label: '🔥 Quentes', value: data.hotLeads, color: 'from-red-500 to-orange-500', pct: Math.round((data.hotLeads / totalLeads) * 100) },
+    { label: '🌡️ Mornos',  value: data.warmLeads, color: 'from-yellow-400 to-amber-500', pct: Math.round((data.warmLeads / totalLeads) * 100) },
+    { label: '🧊 Frios',   value: data.coldLeads, color: 'from-teal-400 to-emerald-500', pct: Math.round((data.coldLeads / totalLeads) * 100) },
   ] : [];
 
   const conversionRate = data.totalChats > 0 ? Math.round((data.closedWithSale / data.totalChats) * 100) : 0;
@@ -3474,7 +3474,7 @@ function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) 
           </div>
           <div className="text-center mb-4">
             <p className="text-4xl font-black text-zinc-800">{data.avgEngagementScore}<span className="text-lg text-zinc-400">/100</span></p>
-            <p className="text-[11px] text-zinc-400 mt-1">Engajamento mÃ©dio geral</p>
+            <p className="text-[11px] text-zinc-400 mt-1">Engajamento médio geral</p>
           </div>
           {leadTemp.map(item => (
             <div key={item.label} className="mb-3">
@@ -3489,24 +3489,24 @@ function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) 
           ))}
         </div>
 
-        {/* Card 2: VTEX e IntenÃ§Ã£o Comercial */}
+        {/* Card 2: VTEX e Intenção Comercial */}
         <div className="bg-white rounded-2xl border border-zinc-200/60 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#1d4ed8,#60a5fa)' }}>
               <Search className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-zinc-800">IntenÃ§Ã£o Comercial</h3>
-              <p className="text-[10px] text-zinc-400">Buscas de produto no catÃ¡logo VTEX</p>
+              <h3 className="text-sm font-bold text-zinc-800">Intenção Comercial</h3>
+              <p className="text-[10px] text-zinc-400">Buscas de produto no catálogo VTEX</p>
             </div>
           </div>
           <div className="space-y-3 mb-4">
             <div className="flex justify-between items-center p-3 rounded-xl bg-blue-50 border border-blue-100">
-              <span className="text-sm font-semibold text-blue-800">ðŸ›’ Chats com produto VTEX</span>
+              <span className="text-sm font-semibold text-blue-800">🛒 Chats com produto VTEX</span>
               <span className="text-xl font-black text-blue-700">{data.vtexHits}</span>
             </div>
             <div className="flex justify-between items-center p-3 rounded-xl bg-zinc-50 border border-zinc-100">
-              <span className="text-sm text-zinc-600">Taxa de intenÃ§Ã£o</span>
+              <span className="text-sm text-zinc-600">Taxa de intenção</span>
               <span className="text-sm font-bold text-zinc-800">{vtexRate}%</span>
             </div>
           </div>
@@ -3525,34 +3525,34 @@ function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) 
           )}
         </div>
 
-        {/* Card 3: ConversÃ£o e RuÃ­do */}
+        {/* Card 3: Conversão e Ruído */}
         <div className="bg-white rounded-2xl border border-zinc-200/60 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#059669,#34d399)' }}>
               <Activity className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-zinc-800">ConversÃ£o e EficiÃªncia</h3>
-              <p className="text-[10px] text-zinc-400">Resultados e filtro de ruÃ­do</p>
+              <h3 className="text-sm font-bold text-zinc-800">Conversão e Eficiência</h3>
+              <p className="text-[10px] text-zinc-400">Resultados e filtro de ruído</p>
             </div>
           </div>
           <div className="space-y-2.5">
             <div className="flex justify-between items-center p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-              <span className="text-sm font-semibold text-emerald-800">âœ… Fecharam venda</span>
+              <span className="text-sm font-semibold text-emerald-800">✅ Fecharam venda</span>
               <span className="text-xl font-black text-emerald-700">{data.closedWithSale}</span>
             </div>
             <div className="flex justify-between items-center p-3 rounded-xl bg-zinc-50 border border-zinc-100">
-              <span className="text-sm text-zinc-600">Taxa de conversÃ£o</span>
+              <span className="text-sm text-zinc-600">Taxa de conversão</span>
               <span className="text-sm font-bold text-zinc-800">{conversionRate}%</span>
             </div>
             <div className="flex justify-between items-center p-3 rounded-xl bg-zinc-50 border border-zinc-100">
-              <span className="text-sm text-zinc-600">âŒ Sem venda</span>
+              <span className="text-sm text-zinc-600">❌ Sem venda</span>
               <span className="text-sm font-bold text-zinc-800">{data.closedWithoutSale}</span>
             </div>
             <div className="h-px bg-zinc-100 my-2" />
             <div className="flex justify-between items-center p-3 rounded-xl bg-yellow-50 border border-yellow-100">
               <div>
-                <span className="text-sm font-semibold text-yellow-800">ðŸ›¡ï¸ RuÃ­dos filtrados</span>
+                <span className="text-sm font-semibold text-yellow-800">🛡️ Ruídos filtrados</span>
                 <p className="text-[9px] text-yellow-600">Respondidos sem consumir tokens Gemini</p>
               </div>
               <span className="text-xl font-black text-yellow-700">{data.noiseTotal}</span>
@@ -3564,7 +3564,7 @@ function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) 
           </div>
         </div>
 
-        {/* Card 4 â€” #8 Analytics PrÃ©-Chat */}
+        {/* Card 4 — #8 Analytics Pré-Chat */}
         <PreChatAnalyticsCard />
 
       </div>
@@ -3572,7 +3572,7 @@ function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) 
   );
 }
 
-// â”€â”€â”€ PreChatAnalyticsCard (melhoria #8) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PreChatAnalyticsCard (melhoria #8) ─────────────────────────────────────
 function PreChatAnalyticsCard() {
   const [data, setData] = useState<{ topPages: { url: string; pageTitle: string | null; count: number }[]; conversionRates: any[] } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -3594,8 +3594,8 @@ function PreChatAnalyticsCard() {
           <MousePointer className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1">
-          <h3 className="text-sm font-bold text-zinc-800">PÃ¡ginas PrÃ©-Chat</h3>
-          <p className="text-[10px] text-zinc-400">URLs mais visitadas antes do 1Âº chat</p>
+          <h3 className="text-sm font-bold text-zinc-800">Páginas Pré-Chat</h3>
+          <p className="text-[10px] text-zinc-400">URLs mais visitadas antes do 1º chat</p>
         </div>
         {!loaded && (
           <button onClick={load} className="text-[10px] text-violet-600 font-semibold hover:underline">Carregar</button>

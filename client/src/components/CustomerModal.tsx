@@ -235,7 +235,7 @@ export function CustomerModal({
 
       {/* Modal */}
       <div
-        className={`relative w-full max-w-4xl bg-background rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col transition-all duration-300 ${isClosing ? "opacity-0 scale-95" : "animate-scale-in"}`}
+        className={`relative w-full max-w-4xl bg-background rounded-2xl shadow-2xl max-h-[90vh] flex flex-col transition-all duration-300 min-h-0 ${isClosing ? "opacity-0 scale-95" : "animate-scale-in"}`}
       >
         {/* ── Header ───────────────────────────────────────────────────── */}
         <div className="relative bg-gradient-to-br from-brand to-brand-dark px-8 pt-6 pb-8 animate-fade-in">
@@ -324,7 +324,7 @@ export function CustomerModal({
         </div>
 
         {/* ── Tabs ─────────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-hidden mt-4 animate-slide-up" style={{ animationDelay: "350ms" }}>
+        <div className="flex-1 overflow-hidden mt-4 animate-slide-up min-h-0" style={{ animationDelay: "350ms" }}>
           <Tabs
             value={activeTab}
             onValueChange={(v) => {
@@ -333,7 +333,7 @@ export function CustomerModal({
                 onLoadTimeline(visitor.id);
               }
             }}
-            className="flex flex-col h-full"
+            className="flex flex-col h-full min-h-0"
           >
             <div className="px-8">
               <TabsList className="w-full bg-muted/50 p-1 rounded-lg">
@@ -358,7 +358,7 @@ export function CustomerModal({
               </TabsList>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-8 pb-6 mt-4">
+            <div className="flex-1 overflow-y-auto px-8 pb-6 mt-4 min-h-0">
 
               {/* ── Tab: Cliente ─────────────────────────────────────── */}
               <TabsContent value="cliente" className="mt-0 space-y-4">
