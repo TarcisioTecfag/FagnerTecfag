@@ -774,7 +774,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     await lcStorage.createMessage({ chatId: chat.id, sender: "ai", content: rawReply });
                     broadcastToAgents({ type: "CHAT_MESSAGE", chatId: chat.id, visitorId: currentVisitorId, sender: "ai", content: rawReply, timestamp: new Date().toISOString() });
                     // 2. Envia mensagem limpa e amigável ao visitante
-                    const cleanErrMsg = aiResponse.visitorReply ?? "Tive uma dificuldade técnica. Tente novamente! 😊";
+                    const cleanErrMsg = aiResponse.visitorReply ?? "Hm, acho que não entendi.";
                     await lcStorage.createMessage({ chatId: chat.id, sender: "ai", content: cleanErrMsg });
                     sendToVisitor(currentVisitorId, { type: "CHAT_REPLY", chatId: chat.id, sender: "ai", content: cleanErrMsg, timestamp: new Date().toISOString() });
                     

@@ -1299,7 +1299,7 @@ export async function processVisitorMessage(
     const errorTag = `[SYSTEM_ERROR: ${err?.message ?? "erro desconhecido"}]`;
     return {
       reply: errorTag,
-      visitorReply: "Tive uma dificuldade técnica. Tente enviar sua mensagem novamente! 😊",
+      visitorReply: "Hm, acho que não entendi.",
       needsHuman: false,
       tokens: 0,
       isError: true,
