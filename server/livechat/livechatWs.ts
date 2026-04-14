@@ -1958,8 +1958,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             } catch {}
 
             // Envia todos os visitantes recentes (não só online) para popular o painel
+            // Sem limite de 200 — o site pode ter milhares de acessos
             const [visitors, chats, stats] = await Promise.all([
-              lcStorage.listAllVisitors(200),
+              lcStorage.listAllVisitors(),
               lcStorage.listChats(undefined, 100),
               lcStorage.getStats(),
             ]);

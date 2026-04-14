@@ -171,16 +171,16 @@ export const lcStorage = {
 
   async listOnlineVisitors(): Promise<LcVisitor[]> {
     // Primary: isOnline flag. Also include visitors seen in the last 3 minutes as fallback.
+    // NOTA: sem limite artificial — o site recebe milhares de acessos diários.
     const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
     return db.select().from(lcVisitors)
       .where(
         sql`"isOnline" = 'true' OR "lastSeenAt" >= ${cutoff}`
       )
-      .orderBy(desc(lcVisitors.lastSeenAt))
-      .limit(200);
+      .orderBy(desc(lcVisitors.lastSeenAt));
   },
 
-  async listAllVisitors(limit = 100): Promise<LcVisitor[]> {
+  async listAllVisitors(limit = 5000): Promise<LcVisitor[]> {
     const rows = await db.select().from(lcVisitors)
       .orderBy(desc(lcVisitors.lastSeenAt))
       .limit(limit);
@@ -235,7 +235,7 @@ export const lcStorage = {
     return this.getVisitorById(id);
   },
 
-  async listVisitorsByPipeline(stage: string, limit = 200): Promise<LcVisitor[]> {
+  async listVisitorsByPipeline(stage: string, limit = 5000): Promise<LcVisitor[]> {
     return db.select().from(lcVisitors)
       .where(eq(lcVisitors.pipelineStage, stage))
       .orderBy(desc(lcVisitors.lastSeenAt))
