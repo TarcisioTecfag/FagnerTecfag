@@ -641,16 +641,34 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                 sendToVisitor(piqVisitorId, { type: "TYPING_STOP" });
 
-                const aiReply: string = aiResponse?.reply ?? "Vou buscar as informações sobre esse produto para você! 😊";
+                const aiReply: string = aiResponse?.reply ?? "Vou buscar as informações sobre esse produto para você!";
 
+                // Fragmenta a resposta em balões separados (divide por \n\n)
+                // para que cada parágrafo apareça como mensagem independente no widget
+                const fragments = aiReply
+                  .split(/\n\n+/)
+                  .map((f) => f.trim())
+                  .filter((f) => f.length > 0);
+
+                // Salva o reply completo no banco (histórico unificado)
                 await lcStorage.createMessage({ chatId: piqChatId, sender: "ai", content: aiReply });
-                sendToVisitor(piqVisitorId, {
-                  type: "CHAT_REPLY",
-                  chatId: piqChatId,
-                  sender: "ai",
-                  content: aiReply,
-                  timestamp: new Date().toISOString(),
-                });
+
+                // Envia cada fragmento para o visitante com delay progressivo (400ms entre eles)
+                for (let i = 0; i < fragments.length; i++) {
+                  const frag = fragments[i];
+                  const delay = i * 420;
+                  setTimeout(() => {
+                    sendToVisitor(piqVisitorId, {
+                      type: "CHAT_REPLY",
+                      chatId: piqChatId,
+                      sender: "ai",
+                      content: frag,
+                      timestamp: new Date().toISOString(),
+                    });
+                  }, delay);
+                }
+
+                // Notifica o painel dos agentes com a mensagem completa
                 broadcastToAgents({
                   type: "CHAT_MESSAGE",
                   chatId: piqChatId,
@@ -660,7 +678,11 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   timestamp: new Date().toISOString(),
                 });
 
-                startFollowUpTimers(piqVisitorId, piqChatId);
+                // Inicia follow-up após todos os fragments terem sido enviados
+                setTimeout(() => {
+                  startFollowUpTimers(piqVisitorId, piqChatId);
+                }, fragments.length * 420 + 200);
+
               } catch (err: any) {
                 console.error(`[ProductInquiry] ❌ Erro ao processar produto:`, err.message);
                 sendToVisitor(piqVisitorId, { type: "TYPING_STOP" });
