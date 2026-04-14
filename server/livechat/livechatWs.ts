@@ -394,14 +394,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                       agentLabel = activeChat.agentId;
                     }
                   }
-                  const systemMsg = `${agentLabel} está respondendo este chat`;
-                  console.log(`[LiveChat] RECONNECT — visitante ${visitorId} reconectou com chat human_active. Reenviando AGENT_JOINED com nome "${agentLabel}".`);
-                  ws.send(JSON.stringify({
-                    type: 'AGENT_JOINED',
-                    operatorName: agentLabel,
-                    message: systemMsg,
-                    chatId: activeChat.id,
-                  }));
+                  console.log(`[LiveChat] RECONNECT — visitante ${visitorId} reconectou com chat human_active. Operador: "${agentLabel}".`);
+                  // Não enviamos um AGENT_JOINED extra aqui: o loop abaixo já reenvia
+                  // a system message salva no histórico (que contém o nome correto do operador).
                 }
 
                 // 2. Reenviar mensagens recentes para sincronizar histórico
@@ -410,6 +405,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 const lastMsgs = recentMsgs
                   .filter((m: any) => m.sender === 'ai' || m.sender === 'agent' || m.sender === 'system')
                   .slice(-10);
+                // Regex para detectar mensagens internas (logs, erros, audio) que NÃO devem ir ao visitante
+                const INTERNAL_MSG_REGEX = /^\[[A-Z0-9_]+[:\]]/;
                 for (const msg of lastMsgs) {
                   if (msg.sender === 'system') {
                     ws.send(JSON.stringify({
@@ -418,11 +415,15 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                       chatId: activeChat.id,
                     }));
                   } else {
+                    const content: string = msg.content || '';
+                    // Filtra mensagens internas: [SYSTEM_ERROR:...], [AUDIO:...], [CNPJ_RESULT:...] etc.
+                    // Logs e áudios serão re-enviados ao admin via broadcastToAgents, não ao visitante
+                    if (INTERNAL_MSG_REGEX.test(content.trim())) continue;
                     ws.send(JSON.stringify({
                       type: 'CHAT_REPLY',
                       chatId: activeChat.id,
                       sender: msg.sender,
-                      content: msg.content,
+                      content,
                       timestamp: msg.sentAt ?? new Date().toISOString(),
                       fromHistory: true,
                     }));
