@@ -407,6 +407,80 @@ app.post("/api/chat-upload", (req, res, next) => {
 });
 
 
+// ─── Livechat: Upload de Áudio do Operador ───────────────────────────────────
+// POST /api/livechat/audio-upload
+// Somente operadores autenticados podem enviar áudios (requireAuth).
+// Aceita audio/webm, audio/ogg, audio/mp4 — até 15MB.
+// Salva no banco chat_uploads como base64 (sobrevive a restarts Railway).
+const audioUpload = multer({
+  storage: multerStorage,
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB — aprox. 30min de áudio webm/opus
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav"];
+    if (allowed.some(t => file.mimetype.startsWith("audio/"))) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Tipo de arquivo não permitido: ${file.mimetype}`));
+    }
+  },
+});
+
+app.post("/api/livechat/audio-upload", requireAuth, (req, res, next) => {
+  const handler = audioUpload.single("audio");
+  handler(req, res, (err: any) => {
+    if (err) {
+      if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({ message: "Áudio excedeu 15MB." });
+      }
+      return res.status(400).json({ message: err.message || "Falha ao processar áudio." });
+    }
+    next();
+  });
+}, async (req: Request, res: Response) => {
+  if (!req.file) return res.status(400).json({ message: "Nenhum arquivo de áudio enviado." });
+
+  const filename = req.file.filename;
+  const filePath = `/uploads/${filename}`;
+
+  // Salva no banco como base64 (mesma tabela chat_uploads — reutiliza /uploads/:filename)
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chat_uploads (
+        id TEXT PRIMARY KEY,
+        filename TEXT NOT NULL,
+        "filePath" TEXT NOT NULL,
+        "mimeType" TEXT NOT NULL,
+        "fileData" TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const fileBuffer = fs.readFileSync(path.join(UPLOADS_DIR, filename));
+    const fileDataBase64 = fileBuffer.toString("base64");
+    await pool.query(
+      `INSERT INTO chat_uploads (id, filename, "filePath", "mimeType", "fileData") VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
+      [filename, filename, filePath, req.file.mimetype, fileDataBase64]
+    );
+    console.log(`[AudioUpload] Áudio salvo no banco: ${filename} (${Math.round(fileBuffer.length / 1024)}KB)`);
+    // Remove do disco após salvar no banco (Railway tem disco efêmero)
+    fs.unlink(path.join(UPLOADS_DIR, filename), () => {});
+  } catch (dbErr: any) {
+    console.warn(`[AudioUpload] Falha ao salvar no banco:`, dbErr.message);
+  }
+
+  // Monta URL absoluta do backend Railway
+  let backendUrl: string;
+  if (process.env.BACKEND_URL) {
+    backendUrl = process.env.BACKEND_URL.replace(/\/$/, "");
+  } else if (process.env.RAILWAY_STATIC_URL) {
+    backendUrl = `https://${process.env.RAILWAY_STATIC_URL}`.replace(/\/$/, "");
+  } else {
+    backendUrl = "http://localhost:5000";
+  }
+
+  return res.status(201).json({ url: `${backendUrl}${filePath}`, mimeType: req.file!.mimetype });
+});
+
+
 // ─── Auth routes ─────────────────────────────────────────────────────────────
 
 // POST /api/login

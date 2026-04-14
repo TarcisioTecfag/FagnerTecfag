@@ -49,6 +49,9 @@ import {
   Pencil,
   Check,
   Code,
+  Mic,
+  MicOff,
+  Square,
 } from "lucide-react";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -199,6 +202,24 @@ function formatTextWithLinks(text: string) {
 
 function renderMessageContent(text: string) {
   if (!text) return null;
+
+  // ── Detecta mensagem de áudio do operador: [AUDIO:url] ──────────────────────
+  const audioTagMatch = text.trim().match(/^\[AUDIO:(https?:\/\/[^\]]+)\]$/);
+  if (audioTagMatch) {
+    const audioUrl = audioTagMatch[1];
+    return (
+      <div className="flex flex-col gap-1.5 my-1">
+        <span className="text-[10px] font-semibold opacity-70">🎙️ Mensagem de voz</span>
+        <audio
+          controls
+          src={audioUrl}
+          className="rounded-lg"
+          style={{ minWidth: 200, maxWidth: 280 }}
+        />
+      </div>
+    );
+  }
+
   const anexoRegex = /\[Anexo_Cliente:\s*(.+?)\]/g;
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -396,6 +417,15 @@ function LiveChat() {
   const [rdUsersLoading, setRdUsersLoading] = useState(false);
   // Usuário logado (para exibir nome correto ao assumir atendimento)
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string; username: string } | null>(null);
+
+  // ——— Áudio do Operador ———
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isSendingAudio, setIsSendingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
 
   // ——— Drag & Drop (Kanban CRM) ———
   const [draggingVisitorId, setDraggingVisitorId] = useState<string | null>(null);
@@ -920,6 +950,106 @@ function LiveChat() {
     }]);
     setAgentInput("");
   };
+
+  // ─── Audio recording ───────────────────────────────────────────────────
+  const BACKEND = (import.meta.env.VITE_BACKEND_URL || "https://fagnertecfag-production.up.railway.app").replace(/\/$/, "");
+
+  const startRecording = async () => {
+    if (!selectedChat || selectedChat.status !== "human_active") return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      // Tenta webm/opus (Chrome/Edge), cai para ogg (Firefox) ou mp4 (Safari)
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
+        ? "audio/ogg;codecs=opus"
+        : "audio/mp4";
+
+      const mr = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mr;
+
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mr.onstop = async () => {
+        // Para todas as tracks de áudio
+        stream.getTracks().forEach((t) => t.stop());
+        recordingStreamRef.current = null;
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        if (audioBlob.size === 0) return;
+
+        setIsSendingAudio(true);
+        try {
+          const ext = mimeType.includes("ogg") ? "ogg" : mimeType.includes("mp4") ? "mp4" : "webm";
+          const fd = new FormData();
+          fd.append("audio", audioBlob, `audio-${Date.now()}.${ext}`);
+
+          const uploadRes = await fetch(`${BACKEND}/api/livechat/audio-upload`, {
+            method: "POST",
+            credentials: "include",
+            body: fd,
+          });
+
+          if (!uploadRes.ok) throw new Error("Falha no upload de áudio");
+          const { url } = await uploadRes.json();
+
+          // Envia via WS como mensagem com marcador [AUDIO:url]
+          const audioContent = `[AUDIO:${url}]`;
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              type: "AGENT_MESSAGE",
+              chatId: selectedChat.id,
+              userId: currentUser?.id ?? "admin",
+              content: audioContent,
+            }));
+          }
+          // Adiciona mensagem local
+          setChatMessages((prev) => [...prev, {
+            id: Date.now().toString(),
+            chatId: selectedChat.id,
+            sender: "agent",
+            content: audioContent,
+            read: "true",
+            sentAt: new Date().toISOString(),
+          }]);
+          toast({ description: "🎤 Áudio enviado com sucesso!" });
+        } catch (err: any) {
+          toast({ description: `Erro ao enviar áudio: ${err.message}`, variant: "destructive" });
+        } finally {
+          setIsSendingAudio(false);
+        }
+      };
+
+      mr.start(100); // coleta chunks a cada 100ms
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((s) => s + 1);
+      }, 1000);
+    } catch (err: any) {
+      toast({ description: `Não foi possível acessar o microfone: ${err.message}`, variant: "destructive" });
+    }
+  };
+
+  const stopRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (mediaRecorderRef.current?.state !== "inactive") {
+      mediaRecorderRef.current?.stop();
+    }
+    setIsRecording(false);
+    setRecordingSeconds(0);
+  };
+
+  const formatRecordingTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
 
   // ——— Take over chat —————————————————————————————————————————————————
   const handleTakeOver = async (chatId: string) => {
@@ -1830,24 +1960,76 @@ function LiveChat() {
                         </p>
                       </div>
                     ) : selectedChat.status === "human_active" ? (
-                      <div className="flex gap-2">
-                        <Textarea
-                          value={agentInput}
-                          onChange={(e) => setAgentInput(e.target.value)}
-                          placeholder="Escreva sua mensagem..."
-                          className="resize-none min-h-[44px] max-h-[100px] text-sm rounded-xl border-zinc-200 focus:border-red-300 focus:ring-red-200"
-                          rows={1}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAgentSend(); }
-                          }}
-                        />
-                        <Button
-                          onClick={handleAgentSend}
-                          className="self-end h-[44px] w-[44px] rounded-xl p-0"
-                          style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
-                        >
-                          <Send className="w-4 h-4" />
-                        </Button>
+                      <div className="space-y-2">
+                        {/* Linha de input de texto */}
+                        <div className="flex gap-2">
+                          <Textarea
+                            value={agentInput}
+                            onChange={(e) => setAgentInput(e.target.value)}
+                            placeholder={isRecording ? "🎙️ Gravando... clique em ⏹ para parar e enviar" : "Escreva sua mensagem..."}
+                            disabled={isRecording || isSendingAudio}
+                            className="resize-none min-h-[44px] max-h-[100px] text-sm rounded-xl border-zinc-200 focus:border-red-300 focus:ring-red-200 disabled:opacity-60"
+                            rows={1}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAgentSend(); }
+                            }}
+                          />
+                          {/* Botão Enviar texto */}
+                          <Button
+                            onClick={handleAgentSend}
+                            disabled={!agentInput.trim() || isRecording || isSendingAudio}
+                            className="self-end h-[44px] w-[44px] rounded-xl p-0 disabled:opacity-40"
+                            style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
+                          >
+                            <Send className="w-4 h-4" />
+                          </Button>
+                        </div>
+
+                        {/* Linha de áudio */}
+                        <div className="flex items-center gap-2">
+                          {/* Botão Mic / Stop */}
+                          {!isSendingAudio ? (
+                            <button
+                              onClick={isRecording ? stopRecording : startRecording}
+                              title={isRecording ? "Parar e enviar áudio" : "Gravar mensagem de voz"}
+                              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all select-none"
+                              style={isRecording ? {
+                                background: "linear-gradient(135deg, #7f1d1d, #dc2626)",
+                                color: "#fff",
+                                boxShadow: "0 0 0 3px rgba(220,38,38,0.25)",
+                                animation: "pulse 1.2s infinite",
+                              } : {
+                                background: "rgba(0,0,0,0.05)",
+                                color: "#555",
+                                border: "1px solid rgba(0,0,0,0.08)",
+                              }}
+                            >
+                              {isRecording ? (
+                                <>
+                                  <Square className="w-3.5 h-3.5" />
+                                  <span>{formatRecordingTime(recordingSeconds)}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Mic className="w-3.5 h-3.5" />
+                                  <span>Áudio</span>
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-500"
+                              style={{ background: "rgba(0,0,0,0.04)" }}>
+                              <div className="w-3 h-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
+                              <span>Enviando áudio...</span>
+                            </div>
+                          )}
+
+                          {isRecording && (
+                            <span className="text-[10px] text-red-500 font-medium animate-pulse">
+                              ● Gravando — clique em ⏹ para parar e enviar
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-emerald-50/60 border border-emerald-100">
