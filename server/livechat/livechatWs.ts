@@ -765,6 +765,27 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   }
 
                   rawReply = aiResponse.reply;
+
+                  // ── Erro de IA (Gemini timeout, rede, etc.) ─────────────────────────
+                  // Separa o log técnico (para admin, "Log Oculto") da mensagem limpa (para o cliente)
+                  if (aiResponse.isError) {
+                    sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
+                    // 1. Salva o log técnico [SYSTEM_ERROR: ...] no banco (admin vê como "Log Oculto")
+                    await lcStorage.createMessage({ chatId: chat.id, sender: "ai", content: rawReply });
+                    broadcastToAgents({ type: "CHAT_MESSAGE", chatId: chat.id, visitorId: currentVisitorId, sender: "ai", content: rawReply, timestamp: new Date().toISOString() });
+                    // 2. Envia mensagem limpa e amigável ao visitante
+                    const cleanErrMsg = aiResponse.visitorReply ?? "Tive uma dificuldade técnica. Tente novamente! 😊";
+                    await lcStorage.createMessage({ chatId: chat.id, sender: "ai", content: cleanErrMsg });
+                    sendToVisitor(currentVisitorId, { type: "CHAT_REPLY", chatId: chat.id, sender: "ai", content: cleanErrMsg, timestamp: new Date().toISOString() });
+                    
+                    // Só inicia follow-up se não estiver em estágio final
+                    const chatStatus = await lcStorage.getChatById(chat.id);
+                    if (chatStatus?.status !== "closed") {
+                      startFollowUpTimers(currentVisitorId, chat.id);
+                    }
+                    break;
+                  }
+
                   const cnpjCheckMatch = rawReply.match(/\[CNPJ_CHECK:([^\]]+)\]/);
 
                   // ⚠️ GUARD: bloqueia [CNPJ_CHECK] quando:
@@ -2136,8 +2157,19 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             await lcStorage.setVisitorOffline(visitorId);
 
             // Se havia chat ativo, iniciar timers de follow-up
+            // MAS apenas se o atendimento NÃO estiver em estágio finalizado.
+            // Evita enviar "Opa, você ainda está aí?" para clientes cuja conversa já foi encerrada.
             const activeChat = await lcStorage.getActiveChatByVisitor(visitorId);
-            if (activeChat) startFollowUpTimers(visitorId, activeChat.id);
+            if (activeChat) {
+              const CONCLUDED_STAGES = ['pos_venda', 'maquinas', 'pecas', 'outros', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta', 'vendido'];
+              const visitorForCheck = await lcStorage.getVisitorById(visitorId);
+              const isConcluded = CONCLUDED_STAGES.includes(visitorForCheck?.pipelineStage ?? '');
+              if (!isConcluded) {
+                startFollowUpTimers(visitorId, activeChat.id);
+              } else {
+                console.log(`[LiveChat] Follow-up bloqueado ao desconectar — estágio protegido: ${visitorForCheck?.pipelineStage}`);
+              }
+            }
 
             broadcastToAgents({ type: "VISITOR_OFFLINE", visitorId });
           }

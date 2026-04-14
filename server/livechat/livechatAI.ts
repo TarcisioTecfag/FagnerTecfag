@@ -841,6 +841,7 @@ export interface LiveChatAIResponse {
   needsHuman: boolean;
   tokens: number;
   isError?: boolean;
+  visitorReply?: string; // Mensagem limpa para o cliente (usada quando isError=true)
 }
 
 export async function processVisitorMessage(
@@ -1294,12 +1295,14 @@ export async function processVisitorMessage(
     // O histórico permanece como estava antes desta chamada — a próxima
     // mensagem do usuário será adicionada normalmente e o Gemini será tentado de novo
 
-    const fallbackReply = `Hm, acho que não entendi. [FALHA DE REDE: ${err?.message ?? "erro desconhecido"}]`;
+    // Gera um log técnico (aparece como "Log Oculto" no admin) + mensagem limpa para o visitante
+    const errorTag = `[SYSTEM_ERROR: ${err?.message ?? "erro desconhecido"}]`;
     return {
-      reply: fallbackReply,
+      reply: errorTag,
+      visitorReply: "Tive uma dificuldade técnica. Tente enviar sua mensagem novamente! 😊",
       needsHuman: false,
       tokens: 0,
-      isError: false,
+      isError: true,
     };
   }
 }
