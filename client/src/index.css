@@ -30,6 +30,11 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
+
+  /* ── Brand tokens (CustomerModal / client-glance) ── */
+  --color-brand: hsl(0, 84%, 50%);
+  --color-brand-dark: hsl(0, 84%, 40%);
+  --color-brand-light: hsl(0, 84%, 95%);
 }
 
 :root {
@@ -234,6 +239,36 @@
   70%  { opacity: 1; transform: scale(1.02) translateY(-2px); }
   100% { opacity: 1; transform: scale(1)    translateY(0); }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   CUSTOMER MODAL ANIMATIONS (client-glance)
+═══════════════════════════════════════════════════════════════ */
+@keyframes cm-scale-in {
+  0%   { transform: scale(0.95); opacity: 0; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+@keyframes cm-fade-in {
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes cm-slide-up {
+  0%   { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes cm-slide-in-right {
+  0%   { transform: translateX(30px); opacity: 0; }
+  100% { transform: translateX(0);    opacity: 1; }
+}
+@keyframes cm-stagger-in {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+.animate-scale-in      { animation: cm-scale-in     0.3s ease-out both; }
+.animate-fade-in       { animation: cm-fade-in      0.4s ease-out both; }
+.animate-slide-up      { animation: cm-slide-up     0.5s ease-out both; }
+.animate-slide-in-right{ animation: cm-slide-in-right 0.4s ease-out both; }
+.animate-stagger-in    { animation: cm-stagger-in   0.3s ease-out both; }
 
 /* ═══════════════════════════════════════════════════════════════
    CUSTOM SCROLLBAR
