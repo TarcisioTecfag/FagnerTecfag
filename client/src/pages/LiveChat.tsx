@@ -422,6 +422,8 @@ function LiveChat() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
+  // Preview de áudio: blob local gravado, aguardando ação do operador (descartar ou enviar)
+  const [pendingAudioBlob, setPendingAudioBlob] = useState<{ blob: Blob; url: string; ext: string } | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -977,40 +979,11 @@ function LiveChat() {
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         if (audioBlob.size === 0) return;
 
-        setIsSendingAudio(true);
-        try {
-          const ext = mimeType.includes("ogg") ? "ogg" : mimeType.includes("mp4") ? "mp4" : "webm";
-          const fd = new FormData();
-          fd.append("audio", audioBlob, `audio-${Date.now()}.${ext}`);
-
-          const uploadRes = await fetch(`/api/livechat/audio-upload`, {
-            method: "POST",
-            credentials: "include",
-            body: fd,
-          });
-
-          if (!uploadRes.ok) throw new Error("Falha no upload de áudio");
-          const { url } = await uploadRes.json();
-
-          // Envia via WS como mensagem com marcador [AUDIO:url]
-          const audioContent = `[AUDIO:${url}]`;
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({
-              type: "AGENT_MESSAGE",
-              chatId: selectedChat.id,
-              userId: currentUser?.id ?? "admin",
-              content: audioContent,
-            }));
-          }
-          // Não adicionamos otimisticamente: o servidor faz broadcastToAgents(CHAT_MESSAGE)
-          // que o handler WS já adiciona. Adicionar aqui causaria duplicata.
-          toast({ description: "🎤 Áudio enviado!" });
-
-        } catch (err: any) {
-          toast({ description: `Erro ao enviar áudio: ${err.message}`, variant: "destructive" });
-        } finally {
-          setIsSendingAudio(false);
-        }
+        // ── Preview antes de enviar ──────────────────────────────────────────
+        // Cria URL local para o operador ouvir e decidir se envia ou descarta
+        const ext = mimeType.includes("ogg") ? "ogg" : mimeType.includes("mp4") ? "mp4" : "webm";
+        const previewUrl = URL.createObjectURL(audioBlob);
+        setPendingAudioBlob({ blob: audioBlob, url: previewUrl, ext });
       };
 
       mr.start(100); // coleta chunks a cada 100ms
@@ -1034,6 +1007,44 @@ function LiveChat() {
     }
     setIsRecording(false);
     setRecordingSeconds(0);
+  };
+
+  const discardPendingAudio = () => {
+    if (pendingAudioBlob) URL.revokeObjectURL(pendingAudioBlob.url);
+    setPendingAudioBlob(null);
+  };
+
+  const sendPendingAudio = async () => {
+    if (!pendingAudioBlob || !selectedChat) return;
+    const { blob, url: previewUrl, ext } = pendingAudioBlob;
+    setIsSendingAudio(true);
+    try {
+      const fd = new FormData();
+      fd.append("audio", blob, `audio-${Date.now()}.${ext}`);
+      const uploadRes = await fetch(`/api/livechat/audio-upload`, {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+      if (!uploadRes.ok) throw new Error("Falha no upload de áudio");
+      const { url } = await uploadRes.json();
+      const audioContent = `[AUDIO:${url}]`;
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: "AGENT_MESSAGE",
+          chatId: selectedChat.id,
+          userId: currentUser?.id ?? "admin",
+          content: audioContent,
+        }));
+      }
+      URL.revokeObjectURL(previewUrl);
+      setPendingAudioBlob(null);
+      toast({ description: "🎤 Áudio enviado!" });
+    } catch (err: any) {
+      toast({ description: `Erro ao enviar áudio: ${err.message}`, variant: "destructive" });
+    } finally {
+      setIsSendingAudio(false);
+    }
   };
 
   const formatRecordingTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -1974,37 +1985,38 @@ function LiveChat() {
                         </div>
 
                         {/* Linha de áudio */}
-                        <div className="flex items-center gap-2">
-                          {/* Botão Mic / Stop */}
-                          {!isSendingAudio ? (
-                            <button
-                              onClick={isRecording ? stopRecording : startRecording}
-                              title={isRecording ? "Parar e enviar áudio" : "Gravar mensagem de voz"}
-                              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all select-none"
-                              style={isRecording ? {
-                                background: "linear-gradient(135deg, #7f1d1d, #dc2626)",
-                                color: "#fff",
-                                boxShadow: "0 0 0 3px rgba(220,38,38,0.25)",
-                                animation: "pulse 1.2s infinite",
-                              } : {
-                                background: "rgba(0,0,0,0.05)",
-                                color: "#555",
-                                border: "1px solid rgba(0,0,0,0.08)",
-                              }}
-                            >
-                              {isRecording ? (
-                                <>
-                                  <Square className="w-3.5 h-3.5" />
-                                  <span>{formatRecordingTime(recordingSeconds)}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Mic className="w-3.5 h-3.5" />
-                                  <span>Áudio</span>
-                                </>
-                              )}
-                            </button>
-                          ) : (
+                        <div className="flex flex-col gap-2">
+
+                          {/* ─ Preview pós-gravação: player + descartar/enviar ─ */}
+                          {pendingAudioBlob && !isSendingAudio && (
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                              style={{ background: "rgba(127,29,29,0.08)", border: "1px solid rgba(220,38,38,0.2)" }}>
+                              <audio
+                                src={pendingAudioBlob.url}
+                                controls
+                                style={{ height: 28, minWidth: 160, maxWidth: 220 }}
+                              />
+                              {/* Descartar */}
+                              <button
+                                onClick={discardPendingAudio}
+                                title="Descartar e regravar"
+                                className="flex items-center justify-center w-8 h-8 rounded-lg text-zinc-500 hover:text-red-600 hover:bg-red-50 transition-all"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                              {/* Enviar */}
+                              <button
+                                onClick={sendPendingAudio}
+                                title="Enviar áudio"
+                                className="flex items-center justify-center w-8 h-8 rounded-xl text-white transition-all"
+                                style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
+                              >
+                                <Send className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+
+                          {isSendingAudio && (
                             <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-500"
                               style={{ background: "rgba(0,0,0,0.04)" }}>
                               <div className="w-3 h-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
@@ -2012,10 +2024,42 @@ function LiveChat() {
                             </div>
                           )}
 
-                          {isRecording && (
-                            <span className="text-[10px] text-red-500 font-medium animate-pulse">
-                              ● Gravando — clique em ⏹ para parar e enviar
-                            </span>
+                          {/* ─ Botão Mic / Stop (só mostra se não há preview pendente) ─ */}
+                          {!pendingAudioBlob && !isSendingAudio && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={isRecording ? stopRecording : startRecording}
+                                title={isRecording ? "Parar gravação" : "Gravar mensagem de voz"}
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all select-none"
+                                style={isRecording ? {
+                                  background: "linear-gradient(135deg, #7f1d1d, #dc2626)",
+                                  color: "#fff",
+                                  boxShadow: "0 0 0 3px rgba(220,38,38,0.25)",
+                                  animation: "pulse 1.2s infinite",
+                                } : {
+                                  background: "rgba(0,0,0,0.05)",
+                                  color: "#555",
+                                  border: "1px solid rgba(0,0,0,0.08)",
+                                }}
+                              >
+                                {isRecording ? (
+                                  <>
+                                    <Square className="w-3.5 h-3.5" />
+                                    <span>{formatRecordingTime(recordingSeconds)}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Mic className="w-3.5 h-3.5" />
+                                    <span>Áudio</span>
+                                  </>
+                                )}
+                              </button>
+                              {isRecording && (
+                                <span className="text-[10px] text-red-500 font-medium animate-pulse">
+                                  ● Gravando — clique em ⏹ para parar
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
