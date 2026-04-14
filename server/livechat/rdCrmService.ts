@@ -28,6 +28,9 @@ interface DealCfInfo { id: string; name: string; slug: string; type?: string; op
 let _dealCfCache: DealCfInfo[] | null = null;
 let _dealCfCacheLoadedAt = 0;
 
+// Cache de fontes do RD CRM: Map<nomeDaFonte, idNoRDCRM>
+let _sourcesCache: Map<string, string> | null = null;
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface CnpjData {
   nome: string;           // razão social
@@ -228,40 +231,221 @@ async function rdRequest<T = any>(
   return json.data as T;
 }
 
-// ─── Source / Campaign: busca por nome, cria se não existir ──────────────────
-async function getOrCreateSourceId(): Promise<string> {
-  if (_sourceId) return _sourceId;
-  const name = "Referência | tecfag.com.br";
+// ─── Source / Campaign: resolução dinâmica baseada na origem do visitante ─────
 
-  // PASSO 1: Busca listagem completa (sem filtro RDQL que pode falhar com 400/422)
+/**
+ * Carrega a lista completa de fontes do RD CRM uma única vez em memória
+ * (cache Map<nome, id>). Fontes pré-existentes no CRM são preservadas;
+ * novas fontes são criadas apenas como fallback de último recurso.
+ */
+async function loadSourcesCache(): Promise<Map<string, string>> {
+  if (_sourcesCache && _sourcesCache.size > 0) return _sourcesCache;
+
+  const map = new Map<string, string>();
   try {
-    const allData = await rdRequest<any>("GET", "/sources?page[size]=100");
-    // rdRequest já faz json.data, então allData é o array diretamente
+    const allData = await rdRequest<any>("GET", "/sources?page[size]=200");
     const list: any[] = Array.isArray(allData) ? allData : [];
-    console.log(`[RD CRM] GET /sources: ${list.length} fontes carregadas`);
-
-    const found = list.find((s: any) => s.name === name);
-    if (found) {
-      _sourceId = found.id;
-      console.log(`[RD CRM] ✅ Fonte encontrada: ${_sourceId} ("${name}")`);
-      return _sourceId!;
+    for (const s of list) {
+      if (s.name && s.id) map.set(s.name, s.id);
     }
-    console.log(`[RD CRM] Fonte "${name}" não encontrada nas ${list.length} fontes. Criando...`);
-  } catch (listErr: any) {
-    console.error("[RD CRM] ❌ Falha ao listar fontes:", listErr.message);
+    console.log(`[RD CRM] ✅ Fontes carregadas: ${map.size} opções disponíveis. Nomes: [${Array.from(map.keys()).join(' | ')}]`);
+  } catch (e: any) {
+    console.error('[RD CRM] ❌ Falha ao carregar fontes do CRM:', e.message);
+  }
+  _sourcesCache = map;
+  return map;
+}
+
+/**
+ * Retorna o ID da fonte pelo nome exato.
+ * Se a fonte não existir no CRM, tenta o fallback "Referência | tecfag.com.br".
+ * Como último recurso, cria a fonte solicitada (para não perder o dado).
+ */
+async function getSourceIdByName(sourceName: string): Promise<string> {
+  const cache = await loadSourcesCache();
+
+  // 1. Match exato
+  if (cache.has(sourceName)) {
+    const id = cache.get(sourceName)!;
+    console.log(`[RD CRM] ✅ Fonte resolvida: "${sourceName}" → ${id}`);
+    return id;
   }
 
-  // PASSO 2: Cria a fonte
+  // 2. Fallback para a fonte padrão
+  const fallbackName = "Referência | tecfag.com.br";
+  if (cache.has(fallbackName)) {
+    const id = cache.get(fallbackName)!;
+    console.warn(`[RD CRM] ⚠️ Fonte "${sourceName}" não encontrada no CRM. Usando fallback: "${fallbackName}" → ${id}`);
+    return id;
+  }
+
+  // 3. Último recurso: criar a fonte solicitada
+  console.warn(`[RD CRM] ⚠️ Nem "${sourceName}" nem o fallback existem. Criando fonte...`);
   try {
-    const created = await rdRequest<{ id: string }>("POST", "/sources", { name });
-    _sourceId = created.id;
-    console.log(`[RD CRM] ✅ Fonte criada: ${_sourceId} ("${name}")`);
-  } catch (createErr: any) {
-    console.error("[RD CRM] ❌ Falha ao criar fonte:", createErr.message);
-    // Sem cachear erro — próxima chamada tenta de novo
+    const nameToCreate = cache.size === 0 ? fallbackName : sourceName;
+    const created = await rdRequest<{ id: string }>("POST", "/sources", { name: nameToCreate });
+    if (created?.id) {
+      cache.set(nameToCreate, created.id);
+      console.log(`[RD CRM] ✅ Fonte criada: "${nameToCreate}" → ${created.id}`);
+      return created.id;
+    }
+  } catch (e: any) {
+    console.error('[RD CRM] ❌ Falha ao criar fonte:', e.message);
+  }
+  return '';
+}
+
+// ─── Nomes de fontes do RD CRM (devem corresponder EXATAMENTE às opções pré-definidas) ─
+const SOURCE_NAMES = {
+  BUSCA_PAGA_GOOGLE:    'Busca Paga | Google',
+  BUSCA_PAGA_GOOGLEADS: 'Busca Paga | googleads',
+  BUSCA_PAGA_META:      'Busca Paga | meta',
+  BUSCA_PAGA_META_LINK: 'Busca Paga | meta-SiteLink',
+  BUSCA_ORG_GOOGLE:     'Busca Orgânica | Google',
+  BUSCA_ORG_BING:       'Busca Orgânica | Bing',
+  BUSCA_ORG_YAHOO:      'Busca Orgânica | Yahoo',
+  OUTROS_BUSCADORES:    'Google e Outros Buscadores',
+  ORGANICO_TIKTOK:      'Orgânico | TikTok',
+  FORMULARIO_VTEX:      'Formulário Vtex',
+  EMAIL_MARKETING:      'E-mail Marketing',
+  PARCEIROS:            'Indicação por Parceiros',
+  CLIENTES:             'Indicação por Clientes',
+  FEIRAS_EVENTOS:       'Feiras e Eventos',
+  CONTATO_SITE:         'Contato pelo Site',
+  DESCONHECIDO:         'Desconhecido',
+  FALLBACK:             'Referência | tecfag.com.br',
+} as const;
+
+/**
+ * Resolve o nome da fonte do RD CRM com base nos parâmetros UTM e referrer
+ * do visitante, seguindo 16 regras de prioridade decrescente.
+ *
+ * @param utmSource   - Valor do parâmetro utm_source na URL de entrada
+ * @param utmMedium   - Valor do parâmetro utm_medium na URL de entrada
+ * @param utmCampaign - Valor do parâmetro utm_campaign na URL de entrada
+ * @param referrer    - URL de referrer do browser (document.referrer)
+ * @returns Nome exato da opção de fonte no RD Station CRM
+ */
+function resolveLeadSourceName(
+  utmSource?: string | null,
+  utmMedium?: string | null,
+  utmCampaign?: string | null,
+  referrer?: string | null
+): string {
+  const src  = (utmSource  ?? '').toLowerCase().trim();
+  const med  = (utmMedium  ?? '').toLowerCase().trim();
+  const camp = (utmCampaign ?? '').toLowerCase().trim();
+  const ref  = (referrer   ?? '').toLowerCase().trim();
+
+  console.log(`[RD CRM Fonte] Resolvendo origem — utmSource="${src}" utmMedium="${med}" utmCampaign="${camp}" referrer="${ref.slice(0, 60)}"`);
+
+  // ── Regra 1: Google Ads (CPC) ─────────────────────────────────────────────
+  // Identificado por utm_medium=cpc com utm_source=google,
+  // ou pela presença do parâmetro automático gclid (Google Click ID)
+  if ((src === 'google' && (med === 'cpc' || med === 'ppc')) ||
+      ref.includes('gclid=') || src === 'google_ads') {
+    return SOURCE_NAMES.BUSCA_PAGA_GOOGLE;
   }
 
-  return _sourceId ?? "";
+  // ── Regra 2: Google Ads via utm_source=googleads ──────────────────────────
+  if (src === 'googleads') {
+    return SOURCE_NAMES.BUSCA_PAGA_GOOGLEADS;
+  }
+
+  // ── Regra 3: Meta Ads (Facebook/Instagram) com SiteLink ───────────────────
+  // Verificar sitelink ANTES do match genérico de meta pago
+  if (src === 'meta' && camp.includes('sitelink')) {
+    return SOURCE_NAMES.BUSCA_PAGA_META_LINK;
+  }
+
+  // ── Regra 4: Meta Ads (Facebook/Instagram) CPC ou fbclid ─────────────────
+  const isMetaSource = src === 'facebook' || src === 'instagram' || src === 'meta';
+  const isMetaPaid   = med === 'cpc' || med === 'paid' || med === 'ppc';
+  const hasFbclid    = ref.includes('fbclid=') || src.includes('fbclid');
+  if ((isMetaSource && isMetaPaid) || hasFbclid) {
+    return SOURCE_NAMES.BUSCA_PAGA_META;
+  }
+
+  // ── Regra 5: Google Orgânico ──────────────────────────────────────────────
+  if ((src === 'google' && med === 'organic') ||
+      (src === 'google' && !med) ||
+      (ref.includes('google.com') && !src && med !== 'cpc')) {
+    return SOURCE_NAMES.BUSCA_ORG_GOOGLE;
+  }
+
+  // ── Regra 6: Bing Orgânico ────────────────────────────────────────────────
+  if (src === 'bing' ||
+      (ref.includes('bing.com') && !src)) {
+    return SOURCE_NAMES.BUSCA_ORG_BING;
+  }
+
+  // ── Regra 7: Yahoo Orgânico ───────────────────────────────────────────────
+  if (src === 'yahoo' ||
+      (ref.includes('yahoo.com') && !src)) {
+    return SOURCE_NAMES.BUSCA_ORG_YAHOO;
+  }
+
+  // ── Regra 8: Outros buscadores ────────────────────────────────────────────
+  const OTHER_SEARCH_ENGINES = ['duckduckgo.com', 'ecosia.org', 'baidu.com', 'ask.com', 'yandex.com', 'search.'];
+  if (!src && ref && OTHER_SEARCH_ENGINES.some(engine => ref.includes(engine))) {
+    return SOURCE_NAMES.OUTROS_BUSCADORES;
+  }
+
+  // ── Regra 9: TikTok Orgânico ─────────────────────────────────────────────
+  if (src === 'tiktok' ||
+      (ref.includes('tiktok.com') && !src)) {
+    return SOURCE_NAMES.ORGANICO_TIKTOK;
+  }
+
+  // ── Regra 10: Formulário VTEX ─────────────────────────────────────────────
+  // Identificado por referrer do domínio VTEX ou parâmetros de formulário VTEX
+  if (ref.includes('vtexcommercestable.com') ||
+      ref.includes('vtexcommercebeta.com') ||
+      ref.includes('checkout.vtex') ||
+      src === 'vtex' || src === 'vtex_form') {
+    return SOURCE_NAMES.FORMULARIO_VTEX;
+  }
+
+  // ── Regra 11: E-mail Marketing ────────────────────────────────────────────
+  if (src === 'newsletter' || med === 'email' ||
+      src === 'email' || med === 'mailing') {
+    return SOURCE_NAMES.EMAIL_MARKETING;
+  }
+
+  // ── Regra 12: Indicação por Parceiros ────────────────────────────────────
+  if (src === 'parceiro' || src === 'partner' ||
+      med === 'afiliado' || med === 'affiliate') {
+    return SOURCE_NAMES.PARCEIROS;
+  }
+
+  // ── Regra 13: Indicação por Clientes ─────────────────────────────────────
+  if (src === 'cliente' || src === 'customer' ||
+      med === 'referral' || src === 'indicacao') {
+    return SOURCE_NAMES.CLIENTES;
+  }
+
+  // ── Regra 14: Feiras e Eventos (QR Code / Material Impresso) ─────────────
+  if (src === 'qrcode' || src === 'qr_code' ||
+      camp.includes('feira') || camp.includes('evento') ||
+      src === 'evento' || src === 'feira' || med === 'impresso') {
+    return SOURCE_NAMES.FEIRAS_EVENTOS;
+  }
+
+  // ── Regra 15: Desconhecido — sem dados de origem identificáveis ───────────
+  // Nenhum UTM + nenhum referrer reconhecível = acesso direto ou dark traffic
+  if (!src && !ref) {
+    return SOURCE_NAMES.DESCONHECIDO;
+  }
+
+  // ── Regra 16: Contato pelo Site (fallback para tudo que restou) ───────────
+  // Ex: visitante que veio de um link interno, navegação direta ou fonte não mapeada
+  return SOURCE_NAMES.CONTATO_SITE;
+}
+
+// Mantém compatibilidade com código legado que chama getOrCreateSourceId()
+// Usa o fallback padrão quando não há contexto de visitante disponível.
+async function getOrCreateSourceId(): Promise<string> {
+  return getSourceIdByName(SOURCE_NAMES.FALLBACK);
 }
 
 async function getOrCreateCampaignId(): Promise<string> {
@@ -444,7 +628,7 @@ async function findOrCreateOrganization(
     : posVenda.nome;
 
   if (!nomeEmpresa?.trim()) {
-    console.error('[RD CRM] \u274c findOrCreateOrganization: nome vazio — empresa n\u00e3o criada');
+    console.error('[RD CRM] ❌ findOrCreateOrganization: nome vazio — empresa não criada');
     return null;
   }
 
@@ -499,7 +683,7 @@ async function findOrCreateOrganization(
     console.log(`[RD CRM] Criando empresa: ${JSON.stringify(createPayload)}`);
     const org = await rdRequest<{ id: string }>('POST', '/organizations', createPayload);
     if (!org?.id) {
-      console.error(`[RD CRM] \u274c POST /organizations retornou sem id: ${JSON.stringify(org)}`);
+      console.error(`[RD CRM] ❌ POST /organizations retornou sem id: ${JSON.stringify(org)}`);
       return null;
     }
     orgId = org.id;
@@ -527,7 +711,7 @@ async function findOrCreateOrganization(
           await updateOrgWithData(orgMatch.id, nomeEmpresa, doc, posVenda.cnpjData ?? null);
           return orgMatch.id;
         }
-        console.warn(`[RD CRM] \u26a0\ufe0f Empresa n\u00e3o localizada nos fallbacks.`);
+        console.warn(`[RD CRM] \u26a0\ufe0f Empresa não localizada nos fallbacks.`);
       } catch (e: any) { console.error(`[RD CRM] Fallback org falhou: ${e.message}`); }
     }
     return null;
@@ -657,7 +841,8 @@ async function upsertContact(posVenda: PosVendaData, organizationId?: string | n
 async function createDeal(
   posVenda: PosVendaData,
   contactId: string,
-  organizationId?: string | null
+  organizationId?: string | null,
+  resolvedSourceId?: string | null
 ): Promise<{ dealId: string; ownerId: string }> {
   // ── FIX 1: Título sem "Pós Venda", apenas FAGNER - NOME ──────────────────────
   const titulo = `FAGNER - ${posVenda.nome}`;
@@ -680,18 +865,16 @@ async function createDeal(
   const pipelineId = (process.env.RD_CRM_PIPELINE_OS_ID ?? "67c9f944c7fe880018b30ab1").trim();
   const stageId    = (process.env.RD_CRM_PIPELINE_OS_STAGE_ID ?? "").trim();
   // Prioridade: ownerId passado pelo chamador (rodízio do painel) > env var (fallback hardcoded)
-  const ownerId    = (posVenda.ownerId || process.env.RD_CRM_OWNER_POS_VENDA_ID || "").trim();
+  const ownerId    = ((posVenda as any).ownerId || process.env.RD_CRM_OWNER_POS_VENDA_ID || "").trim();
 
   if (!stageId) throw new Error("[RD CRM] RD_CRM_PIPELINE_OS_STAGE_ID não configurado");
   if (!ownerId) throw new Error("[RD CRM] Nenhum owner configurado para Pós Venda — configure operadores no painel ou defina RD_CRM_OWNER_POS_VENDA_ID");
 
-  console.log(`[RD CRM] Owner Pós Venda: ${ownerId} (fonte: ${posVenda.ownerId ? 'rodízio do painel' : 'env var fallback'})`);
+  console.log(`[RD CRM] Owner Pós Venda: ${ownerId} (fonte: ${(posVenda as any).ownerId ? 'rodízio do painel' : 'env var fallback'})`);
 
-  // Busca IDs de fonte e campanha (cria se não existir)
-  const [sourceId, campaignId] = await Promise.all([
-    getOrCreateSourceId(),
-    getOrCreateCampaignId(),
-  ]);
+  // Usa sourceId já resolvido pelo contexto do visitante, ou fallback padrão
+  const campaignId = await getOrCreateCampaignId();
+  const sourceId = resolvedSourceId ?? await getOrCreateSourceId();
 
   console.log(`[RD CRM] Criando deal "${titulo}": pipeline=${pipelineId} stage=${stageId}`);
 
@@ -815,6 +998,29 @@ export async function createPosVendaOS(
   const ownerId = (posVendaData.ownerId || process.env.RD_CRM_OWNER_POS_VENDA_ID || "").trim();
   console.log(`[RD CRM] Pós Venda owner: ${ownerId} (fonte: ${posVendaData.ownerId ? 'rodízio do painel' : 'env var fallback'})`);
 
+  // ── Resolução dinâmica do campo "Fonte" no RD CRM ─────────────────────────────────────
+  // Busca os dados UTM do visitante no banco para identificar o canal de aquisição
+  let resolvedSourceId: string | null = null;
+  try {
+    const [visitorUtm] = await db.select({
+      utmSource:   lcVisitors.utmSource,
+      utmMedium:   lcVisitors.utmMedium,
+      utmCampaign: lcVisitors.utmCampaign,
+      referrer:    lcVisitors.referrer,
+    }).from(lcVisitors).where(eq(lcVisitors.id, visitorId));
+
+    const sourceName = resolveLeadSourceName(
+      visitorUtm?.utmSource,
+      visitorUtm?.utmMedium,
+      visitorUtm?.utmCampaign,
+      visitorUtm?.referrer
+    );
+    console.log(`[RD CRM] Pós Venda — Fonte resolvida: "${sourceName}"`);
+    resolvedSourceId = await getSourceIdByName(sourceName);
+  } catch (srcErr: any) {
+    console.warn(`[RD CRM] Pós Venda: falha ao resolver fonte (usará fallback):`, srcErr.message);
+  }
+
   // 1. Empresa — SEMPRE cria (com CNPJ se disponível, com nome do cliente como fallback)
   // Não condiciona mais ao isCnpj/isCpf — toda negociação deve ter empresa vinculada
   let organizationId: string | null = null;
@@ -829,7 +1035,7 @@ export async function createPosVendaOS(
   const contactId = await upsertContact(posVendaData as PosVendaData, organizationId);
 
   // 3. Negociação — createDeal usa posVendaData.ownerId (rodízio) com fallback para env var
-  const { dealId, ownerId: resolvedOwner } = await createDeal(posVendaData as PosVendaData, contactId, organizationId);
+  const { dealId, ownerId: resolvedOwner } = await createDeal(posVendaData as PosVendaData, contactId, organizationId, resolvedSourceId);
 
   // 4. Anotação com relatório completo
   await createNote(dealId, relatorio);
@@ -923,7 +1129,8 @@ function resolveCfKey(cfs: DealCfInfo[], partialName: string, fallbackUuid: stri
 async function createMaquinasDeal(
   maqData: MaquinasData,
   contactId: string,
-  organizationId?: string | null
+  organizationId?: string | null,
+  resolvedSourceId?: string | null
 ): Promise<{ dealId: string; ownerId: string }> {
   const titulo = `FAGNER | ${maqData.nome}`;
 
@@ -956,7 +1163,8 @@ async function createMaquinasDeal(
     }
   }
 
-  const [sourceId, campaignId] = await Promise.all([getOrCreateSourceId(), getOrCreateCampaignId()]);
+  const campaignId = await getOrCreateCampaignId();
+  const sourceId = resolvedSourceId ?? await getOrCreateSourceId();
 
   console.log(`[RD CRM] Criando deal MÁQUINAS "${titulo}": pipeline=${pipelineId} stage=${stageId} owner=${ownerId}`);
 
@@ -1127,6 +1335,29 @@ export async function createMaquinasOS(
   // Resolve owner antes de criar a empresa (obrigatório do CRM)
   const ownerId = (maqData.ownerId || (process.env.RD_MAQUINAS_OWNER_ID ?? process.env.RD_CRM_OWNER_MAQUINAS_ID ?? '')).trim();
 
+  // ── Resolução dinâmica do campo "Fonte" no RD CRM ─────────────────────────
+  // Busca os dados UTM do visitante para identificar o canal de aquisição real
+  let resolvedSourceId: string | null = null;
+  try {
+    const [visitorUtm] = await db.select({
+      utmSource:   lcVisitors.utmSource,
+      utmMedium:   lcVisitors.utmMedium,
+      utmCampaign: lcVisitors.utmCampaign,
+      referrer:    lcVisitors.referrer,
+    }).from(lcVisitors).where(eq(lcVisitors.id, visitorId));
+
+    const sourceName = resolveLeadSourceName(
+      visitorUtm?.utmSource,
+      visitorUtm?.utmMedium,
+      visitorUtm?.utmCampaign,
+      visitorUtm?.referrer
+    );
+    console.log(`[RD CRM] MÁQUINAS — Fonte resolvida: "${sourceName}"`);
+    resolvedSourceId = await getSourceIdByName(sourceName);
+  } catch (srcErr: any) {
+    console.warn(`[RD CRM] MÁQUINAS: falha ao resolver fonte (usará fallback):`, srcErr.message);
+  }
+
   // FIX #2: empresa sempre criada — com CNPJ/CPF se disponível, com nome do cliente como fallback
   let organizationId: string | null = null;
   const docDigits = (maqData.cnpjCpf ?? "").replace(/\D/g, "");
@@ -1162,7 +1393,7 @@ export async function createMaquinasOS(
   const contactId = await upsertContact(maqData as any, organizationId);
 
   // 3. Negociação no funil MÁQUINAS 2.0
-  const { dealId, ownerId: resolvedOwner } = await createMaquinasDeal(maqData, contactId, organizationId);
+  const { dealId, ownerId: resolvedOwner } = await createMaquinasDeal(maqData, contactId, organizationId, resolvedSourceId);
 
   // 4. Anotação com relatório completo
   await createNote(dealId, relatorio);
@@ -1283,7 +1514,8 @@ async function getPecasPipelineIds(): Promise<{ pipelineId: string; stageId: str
 async function createPecasDeal(
   pecasData: PecasData,
   contactId: string,
-  organizationId?: string | null
+  organizationId?: string | null,
+  resolvedSourceId?: string | null
 ): Promise<{ dealId: string; ownerId: string }> {
   const titulo = `FAGNER | ${pecasData.nome}`;
 
@@ -1297,7 +1529,8 @@ async function createPecasDeal(
     console.warn('[RD CRM] Owner ID para peças não configurado — deal sem responsável definido');
   }
 
-  const [sourceId, campaignId] = await Promise.all([getOrCreateSourceId(), getOrCreateCampaignId()]);
+  const campaignId = await getOrCreateCampaignId();
+  const sourceId = resolvedSourceId ?? await getOrCreateSourceId();
 
   console.log(`[RD CRM] Criando deal PEÇAS "${titulo}": pipeline=${pipelineId} stage=${stageId} owner=${ownerId}`);
 
@@ -1369,6 +1602,28 @@ export async function createPecasOS(
   // Resolve owner antes de criar a empresa
   const ownerId = (pecasData.ownerId || (process.env.RD_PECAS_OWNER_ID ?? process.env.RD_CRM_OWNER_PECAS_ID ?? '')).trim();
 
+  // ── Resolução dinâmica do campo "Fonte" no RD CRM ─────────────────────────
+  let resolvedSourceId: string | null = null;
+  try {
+    const [visitorUtm] = await db.select({
+      utmSource:   lcVisitors.utmSource,
+      utmMedium:   lcVisitors.utmMedium,
+      utmCampaign: lcVisitors.utmCampaign,
+      referrer:    lcVisitors.referrer,
+    }).from(lcVisitors).where(eq(lcVisitors.id, visitorId));
+
+    const sourceName = resolveLeadSourceName(
+      visitorUtm?.utmSource,
+      visitorUtm?.utmMedium,
+      visitorUtm?.utmCampaign,
+      visitorUtm?.referrer
+    );
+    console.log(`[RD CRM] PEÇAS — Fonte resolvida: "${sourceName}"`);
+    resolvedSourceId = await getSourceIdByName(sourceName);
+  } catch (srcErr: any) {
+    console.warn(`[RD CRM] PEÇAS: falha ao resolver fonte (usará fallback):`, srcErr.message);
+  }
+
   let organizationId: string | null = null;
   const docDigits = (pecasData.cnpjCpf ?? "").replace(/\D/g, "");
 
@@ -1400,7 +1655,7 @@ export async function createPecasOS(
   const contactId = await upsertContact(pecasData as any, organizationId);
 
   // 3. Deal no funil PEÇAS 2.0
-  const { dealId, ownerId: resolvedOwner } = await createPecasDeal(pecasData, contactId, organizationId);
+  const { dealId, ownerId: resolvedOwner } = await createPecasDeal(pecasData, contactId, organizationId, resolvedSourceId);
 
   // 4. Anotação com relatório completo
   await createNote(dealId, relatorio);
