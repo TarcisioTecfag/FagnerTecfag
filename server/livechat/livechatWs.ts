@@ -383,9 +383,19 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                 // 1. Reenviar notificação de agente humano se chat estiver assumido
                 if (activeChat.status === 'human_active') {
-                  const agentLabel = activeChat.agentId ?? 'Atendente';
+                  // Resolve nome real do operador (agentId é UUID, não nome)
+                  let agentLabel = 'Atendente';
+                  if (activeChat.agentId) {
+                    try {
+                      const { storage: appStorage } = await import('../storage.js');
+                      const agentUser = await appStorage.getUserSafeById(activeChat.agentId);
+                      agentLabel = agentUser?.name || agentUser?.username || activeChat.agentId;
+                    } catch {
+                      agentLabel = activeChat.agentId;
+                    }
+                  }
                   const systemMsg = `${agentLabel} está respondendo este chat`;
-                  console.log(`[LiveChat] RECONNECT — visitante ${visitorId} reconectou com chat human_active. Reenviando AGENT_JOINED.`);
+                  console.log(`[LiveChat] RECONNECT — visitante ${visitorId} reconectou com chat human_active. Reenviando AGENT_JOINED com nome "${agentLabel}".`);
                   ws.send(JSON.stringify({
                     type: 'AGENT_JOINED',
                     operatorName: agentLabel,
@@ -2056,7 +2066,23 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             const chatToTake = await lcStorage.getChatById(data.chatId);
             if (!chatToTake) break;
 
-            const operatorName: string = (data.operatorName as string) || (data.userId as string) || "Atendente";
+            // Resolve nome do operador: prioriza o nome enviado pelo admin panel;
+            // se não vier (ou vier igual ao userId = UUID), busca no banco pelo userId
+            let operatorName: string = (data.operatorName as string) || "";
+            const opIsUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operatorName);
+            if (!operatorName || opIsUuid) {
+              const userId = data.userId as string | undefined;
+              if (userId) {
+                try {
+                  const agentUser = await import('../storage.js').then(m => m.storage.getUserSafeById(userId));
+                  operatorName = agentUser?.name || agentUser?.username || operatorName || "Atendente";
+                } catch {
+                  operatorName = operatorName || "Atendente";
+                }
+              } else {
+                operatorName = "Atendente";
+              }
+            }
 
             await lcStorage.updateChat(chatToTake.id, {
               status: "human_active",
