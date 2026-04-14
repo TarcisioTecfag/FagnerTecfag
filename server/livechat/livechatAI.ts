@@ -1401,6 +1401,15 @@ export async function generateProgressiveNote(chatId: string): Promise<string | 
           .replace(/\[MAQUINAS_DADOS:[\s\S]*?\]/gi, '')
           .replace(/\[PECAS_DADOS:[\s\S]*?\]/gi, '')
           .replace(/\[PRODUTO_IDENTIFICADO:[^\]]+\]/gi, '')
+          .replace(/\[SYSTEM_ERROR:[^\]]*\]/gi, '')
+          .replace(/\[LOG_OCULTO:[^\]]*\]/gi, '')
+          // Remove tags HTML de relatórios (br, strong, etc.) que confundem o modelo
+          .replace(/<br\s*\/?>/gi, ' ')
+          .replace(/<\/?(strong|em|b|i|p|div|span)[^>]*>/gi, ' ')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+          // Remove linhas de relatório estruturado (=====, -----, ▶, etc.)
+          .replace(/={5,}/g, '').replace(/-{5,}/g, '').replace(/^[▶─]+.*/gm, '')
+          .replace(/\s{2,}/g, ' ')
           .trim();
         return clean ? `${who}: ${clean}` : null;
       })
@@ -1423,6 +1432,7 @@ REGRAS CRÍTICAS:
 5. NUNCA use marcadores, bullets, títulos ou formatação especial.
 6. NUNCA escreva coisas genéricas como "cliente entrou em contato" — seja específico sobre o problema/necessidade.
 7. Se não há informação específica e relevante do cliente neste trecho, responda apenas: SKIP
+8. NUNCA repita o que o Fagner disse ou perguntou — apenas o que o CLIENTE respondeu.
 
 Bons exemplos de notas:
 - Cliente avisou que a Manual A03 não está selando corretamente.
@@ -1441,13 +1451,22 @@ Gere apenas a nota completa (com ponto final), sem introdução nem explicação
     const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ role: 'user', parts: [{ text: notePrompt }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 350 },
+      generationConfig: { temperature: 0.2, maxOutputTokens: 500 },
     };
     const data = await geminiRequest(url, payload);
-    const note = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
-    if (!note || note.toUpperCase() === 'SKIP' || note.toUpperCase().startsWith('SKIP')) return null;
-    console.log(`[LiveChat AI] Nota progressiva gerada para chat ${chatId}: "${note?.slice(0, 80)}"`);
-    return note;
+    const rawNote = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+    if (!rawNote || rawNote.toUpperCase() === 'SKIP' || rawNote.toUpperCase().startsWith('SKIP')) return null;
+
+    // Validação pós-nota: descarta notas suspeitas (truncadas ou genéricas)
+    const suspectPatterns = [/\bde \d+\s*$/, /\bde \d+\.$/, /[^.!?]$/]; // termina sem pontuação ou com "de 1"
+    const isSuspect = suspectPatterns.some(p => p.test(rawNote.trim()));
+    if (isSuspect && rawNote.trim().split(' ').length < 6) {
+      console.warn(`[LiveChat AI] Nota progressiva descartada (suspeita de truncamento): "${rawNote.slice(0, 60)}"`);
+      return null;
+    }
+
+    console.log(`[LiveChat AI] Nota progressiva gerada para chat ${chatId}: "${rawNote?.slice(0, 80)}"`);
+    return rawNote;
   } catch (err) {
     console.error('[LiveChat AI] Erro ao gerar nota progressiva:', err);
     return null;

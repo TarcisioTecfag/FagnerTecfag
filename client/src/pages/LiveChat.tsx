@@ -145,6 +145,7 @@ interface Stats {
   needsHuman: number;
   totalChatsToday: number;
   totalVisitorsToday: number;
+  totalVisitorsAll: number;
 }
 
 interface Pageview {
@@ -1253,7 +1254,7 @@ function LiveChat() {
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
   const mainTabs = [
     { id: "chats" as const, label: "Chats", icon: MessageCircle, count: activeChats.length, unread: totalUnread },
-    { id: "visitors" as const, label: "Visitantes", icon: Eye, count: visitors.length, unread: 0 },
+    { id: "visitors" as const, label: "Visitantes", icon: Eye, count: stats?.totalVisitorsAll ?? visitors.length, unread: 0 },
     { id: "crm" as const, label: "CRM", icon: Users, count: undefined as number | undefined, unread: 0 },
   ];
   const secondaryTabs = [
@@ -1388,7 +1389,7 @@ function LiveChat() {
                 { icon: MessageCircle, value: stats.activeChats, label: "Ativos", color: "#3b82f6", bg: "rgba(59,130,246,0.08)" },
                 { icon: AlertTriangle, value: stats.needsHuman, label: "Ajuda", color: "#ef4444", bg: stats.needsHuman > 0 ? "rgba(239,68,68,0.12)" : "rgba(239,68,68,0.05)" },
                 { icon: TrendingUp, value: stats.totalChatsToday, label: "Chats", color: "#a855f7", bg: "rgba(168,85,247,0.08)" },
-                { icon: Users, value: stats.totalVisitorsToday, label: "Visit.", color: "#f59e0b", bg: "rgba(245,158,11,0.08)" },
+                { icon: Users, value: stats.totalVisitorsToday, label: "Hoje", color: "#f59e0b", bg: "rgba(245,158,11,0.08)" },
               ].map((s, i) => (
                 <div
                   key={i}
@@ -2246,16 +2247,21 @@ function LiveChat() {
                           </span>
                         </div>
 
-                        {/* Current page */}
+                        {/* Current page — clicável para abrir modal do visitante */}
                         {(v.currentPageTitle || v.currentPage) && (
-                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100 mb-2 group-hover:bg-red-50/30 group-hover:border-red-100/50 transition-colors">
-                            <ExternalLink className="w-3 h-3 text-zinc-400 flex-shrink-0" />
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openHistoryModal(v); }}
+                            title="Abrir modal do visitante"
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100 mb-2 group-hover:bg-red-50/30 group-hover:border-red-100/50 transition-colors w-full text-left hover:bg-red-50/50 hover:border-red-200/60 cursor-pointer"
+                          >
+                            <ExternalLink className="w-3 h-3 text-red-400 flex-shrink-0" />
                             <p className="text-[11px] text-zinc-600 truncate font-medium">
                               {v.currentPage && v.currentPage !== '/' && v.currentPage !== v.currentPageTitle 
                                 ? v.currentPage 
                                 : v.currentPageTitle || v.currentPage || "Página inativa"}
                             </p>
-                          </div>
+                          </button>
                         )}
 
                         {/* Metrics row */}
@@ -2355,12 +2361,18 @@ function LiveChat() {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100 mb-2">
-                          <ExternalLink className="w-3 h-3 text-zinc-300 flex-shrink-0" />
+                        {/* Página atual — clicável para abrir modal do visitante */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openHistoryModal(v); }}
+                          title="Abrir modal do visitante"
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-50 border border-zinc-100 mb-2 w-full text-left hover:bg-red-50/40 hover:border-red-200/60 cursor-pointer transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3 text-red-400 flex-shrink-0" />
                           <p className="text-[11px] text-zinc-500 truncate font-medium" title={v.currentPage || ""}>
                             {displayUrl}
                           </p>
-                        </div>
+                        </button>
 
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3 text-[10px] text-zinc-400">
@@ -2670,12 +2682,17 @@ function LiveChat() {
                       </div>
                     </div>
 
-                    {/* Página atual */}
+                    {/* Página atual — clicável para abrir modal */}
                     {selectedVisitor.currentPage && (
-                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-50 border border-zinc-100">
-                        <ExternalLink className="w-3 h-3 text-zinc-400 flex-shrink-0" />
+                      <button
+                        type="button"
+                        onClick={() => openHistoryModal(selectedVisitor)}
+                        title="Abrir modal do visitante"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-50 border border-zinc-100 w-full text-left hover:bg-red-50/40 hover:border-red-200/60 cursor-pointer transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3 text-red-400 flex-shrink-0" />
                         <span className="text-[10px] text-zinc-600 truncate">{selectedVisitor.currentPageTitle || selectedVisitor.currentPage}</span>
-                      </div>
+                      </button>
                     )}
 
                                         <button

@@ -476,7 +476,7 @@ export const lcStorage = {
       .where(eq(lcPageviews.id, id));
   },
 
-  async listPageviewsByVisitor(visitorId: string, limit = 50): Promise<LcPageview[]> {
+  async listPageviewsByVisitor(visitorId: string, limit = 1000): Promise<LcPageview[]> {
     return db.select().from(lcPageviews)
       .where(eq(lcPageviews.visitorId, visitorId))
       .orderBy(desc(lcPageviews.visitedAt))
@@ -592,7 +592,7 @@ export const lcStorage = {
       .orderBy(desc(lcChats.startedAt));
   },
 
-  async listChatsByVisitor(visitorId: string, limit = 50): Promise<LcChat[]> {
+  async listChatsByVisitor(visitorId: string, limit = 200): Promise<LcChat[]> {
     return db.select().from(lcChats)
       .where(eq(lcChats.visitorId, visitorId))
       .orderBy(desc(lcChats.startedAt))
@@ -696,6 +696,7 @@ export const lcStorage = {
     needsHuman: number;
     totalChatsToday: number;
     totalVisitorsToday: number;
+    totalVisitorsAll: number;
   }> {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -704,6 +705,7 @@ export const lcStorage = {
     const [needs]  = await db.select({ c: sql<number>`count(*)` }).from(lcChats).where(and(eq(lcChats.needsHuman, "true"), sql`status != 'closed'`));
     const [chatsToday] = await db.select({ c: sql<number>`count(*)` }).from(lcChats).where(sql`"startedAt"::date = ${today}::date`);
     const [visitorsToday] = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors).where(sql`"firstSeenAt"::date = ${today}::date`);
+    const [visitorsAll]   = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors);
 
     return {
       onlineVisitors: Number(online?.c ?? 0),
@@ -711,6 +713,7 @@ export const lcStorage = {
       needsHuman: Number(needs?.c ?? 0),
       totalChatsToday: Number(chatsToday?.c ?? 0),
       totalVisitorsToday: Number(visitorsToday?.c ?? 0),
+      totalVisitorsAll: Number(visitorsAll?.c ?? 0),
     };
   },
 
