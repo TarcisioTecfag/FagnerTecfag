@@ -937,17 +937,11 @@ function LiveChat() {
     wsRef.current.send(JSON.stringify({
       type: "AGENT_MESSAGE",
       chatId: selectedChat.id,
-      userId: "admin",
+      userId: currentUser?.id ?? "admin",
       content: agentInput.trim(),
     }));
-    setChatMessages((prev) => [...prev, {
-      id: Date.now().toString(),
-      chatId: selectedChat.id,
-      sender: "agent",
-      content: agentInput.trim(),
-      read: "true",
-      sentAt: new Date().toISOString(),
-    }]);
+    // Não adicionamos otimisticamente: o servidor faz broadcastToAgents(CHAT_MESSAGE)
+    // que o handler WS da linha ~641 já adiciona ao estado. Adicionar aqui causava duplicata.
     setAgentInput("");
   };
 
@@ -1008,16 +1002,10 @@ function LiveChat() {
               content: audioContent,
             }));
           }
-          // Adiciona mensagem local
-          setChatMessages((prev) => [...prev, {
-            id: Date.now().toString(),
-            chatId: selectedChat.id,
-            sender: "agent",
-            content: audioContent,
-            read: "true",
-            sentAt: new Date().toISOString(),
-          }]);
-          toast({ description: "🎤 Áudio enviado com sucesso!" });
+          // Não adicionamos otimisticamente: o servidor faz broadcastToAgents(CHAT_MESSAGE)
+          // que o handler WS já adiciona. Adicionar aqui causaria duplicata.
+          toast({ description: "🎤 Áudio enviado!" });
+
         } catch (err: any) {
           toast({ description: `Erro ao enviar áudio: ${err.message}`, variant: "destructive" });
         } finally {
