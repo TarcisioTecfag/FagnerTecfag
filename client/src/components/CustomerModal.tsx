@@ -532,19 +532,33 @@ export function CustomerModal({
 
                   <div className="space-y-1">
                     {timeline.map((evt, i) => {
-                      const TYPE_META: Record<string, { icon: React.ElementType; label: string }> = {
-                        session_start: { icon: Globe,             label: "Sessão iniciada" },
-                        pageview:      { icon: FileText,          label: "Página visitada" },
-                        chat_start:    { icon: MessageSquare,     label: "Chat iniciado" },
-                        chat_closed:   { icon: Activity,          label: "Chat encerrado" },
-                        note_added:    { icon: FileText,          label: "Nota adicionada" },
-                        returned:      { icon: MousePointerClick, label: "Retornou ao site" },
+                      const TYPE_META: Record<string, { icon: React.ElementType; label: string; color: string }> = {
+                        session_start: { icon: Globe,             label: "Sessão iniciada",      color: "bg-brand-light text-brand" },
+                        pageview:      { icon: FileText,          label: "Página visitada",       color: "bg-brand-light text-brand" },
+                        chat_start:    { icon: MessageSquare,     label: "Chat iniciado",         color: "bg-blue-50 text-blue-600" },
+                        chat_closed:   { icon: Activity,          label: "Chat encerrado",        color: "bg-zinc-100 text-zinc-500" },
+                        note_added:    { icon: FileText,          label: "Nota adicionada",       color: "bg-amber-50 text-amber-600" },
+                        returned:      { icon: MousePointerClick, label: "Retornou ao site",      color: "bg-purple-50 text-purple-600" },
+                        click_event:   { icon: MousePointerClick, label: "Clique registrado",     color: "bg-emerald-50 text-emerald-600" },
                       };
-                      const meta = TYPE_META[evt.type] ?? { icon: Activity, label: evt.type };
+                      const meta = TYPE_META[evt.type] ?? { icon: Activity, label: evt.type, color: "bg-muted text-muted-foreground" };
                       const Icon = meta.icon;
                       const urlPath = evt.meta?.url
                         ? (evt.meta.url as string).replace(/^https?:\/\/[^/]+/, "").slice(0, 55)
                         : null;
+
+                      // Para pageview: usa o tipo como label principal e o título como secundário (se informativo)
+                      const GENERIC_TITLES = ["tecfag", "tecfag - maquinas de embalagem", "home", "inicio", "página inicial"];
+                      const pageTitle = evt.label && !GENERIC_TITLES.includes(evt.label.toLowerCase().trim()) ? evt.label : null;
+
+                      // Label principal: para pageview/session_start usa TYPE_META, para outros usa evt.label
+                      const displayLabel = evt.type === "pageview" || evt.type === "session_start"
+                        ? meta.label
+                        : (evt.label || meta.label);
+
+                      // Para click_event: mostra o elemento e o ID
+                      const clickElement = evt.meta?.elementText || evt.meta?.elementId || null;
+                      const clickType = evt.meta?.clickType as string | null;
 
                       const QUICK_INTENT: Record<string, string> = {
                         checkout_compra: "🛒", orcamento_contato: "📋",
@@ -556,20 +570,43 @@ export function CustomerModal({
                         ? (QUICK_INTENT[evt.meta.intentTag as string] ?? null)
                         : null;
 
+                      // Badge especial para cliques CTA
+                      const CTA_LABELS: Record<string, { label: string; color: string }> = {
+                        whatsapp:   { label: "WhatsApp", color: "bg-green-100 text-green-700" },
+                        chat_open:  { label: "Abriu Chat IA", color: "bg-blue-100 text-blue-700" },
+                        cta_button: { label: "Botão CTA", color: "bg-amber-100 text-amber-700" },
+                        phone:      { label: "Telefone", color: "bg-purple-100 text-purple-700" },
+                      };
+                      const ctaMeta = clickType ? CTA_LABELS[clickType] : null;
+
                       return (
                         <div
                           key={i}
                           className="flex items-start gap-4 px-4 py-3 rounded-xl hover:bg-muted/50 transition-all cursor-default animate-stagger-in relative"
                           style={{ animationDelay: `${i * 60}ms` }}
                         >
-                          <div className="w-[22px] h-[22px] rounded-full bg-brand-light text-brand flex items-center justify-center flex-shrink-0 z-10 ring-2 ring-background">
+                          <div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center flex-shrink-0 z-10 ring-2 ring-background ${meta.color}`}>
                             <Icon className="w-3 h-3" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-medium text-foreground truncate">{evt.label}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-sm font-medium text-foreground truncate">{displayLabel}</p>
                               {intentEmoji && <span className="text-[11px]">{intentEmoji}</span>}
+                              {ctaMeta && (
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${ctaMeta.color}`}>
+                                  {ctaMeta.label}
+                                </span>
+                              )}
                             </div>
+                            {/* Título da página (só se não-genérico) */}
+                            {pageTitle && (
+                              <p className="text-[11px] text-foreground/70 truncate">{pageTitle}</p>
+                            )}
+                            {/* Elemento clicado (para click_event) */}
+                            {clickElement && (
+                              <p className="text-[10px] text-emerald-600 font-mono truncate">↗ {clickElement}</p>
+                            )}
+                            {/* URL path */}
                             {urlPath && urlPath !== "/" && (
                               <p className="text-[10px] text-muted-foreground font-mono truncate">{urlPath}</p>
                             )}

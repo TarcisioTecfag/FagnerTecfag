@@ -549,6 +549,25 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             break;
           }
 
+          // ── VISITOR: Clique em CTA (WhatsApp, Fagner, Telefone, etc.) ─────
+          case "CLICK_EVENT": {
+            if (!visitorId) break;
+            await lcStorage.recordClickEvent({
+              visitorId,
+              url: data.url ?? '',
+              elementId: data.elementId,
+              elementText: data.elementText,
+              clickType: data.clickType ?? 'custom',
+            });
+            // CTA de WhatsApp / Chat: aumenta purchase intent
+            if (data.clickType === 'whatsapp' || data.clickType === 'chat_open') {
+              await lcStorage.incrementPurchaseIntentScore(visitorId, 10);
+            } else if (data.clickType === 'phone' || data.clickType === 'cta_button') {
+              await lcStorage.incrementPurchaseIntentScore(visitorId, 5);
+            }
+            break;
+          }
+
           // ── VISITOR: Scroll/time update ───────────────────────────
           case "HEARTBEAT": {
             if (!visitorId) break;

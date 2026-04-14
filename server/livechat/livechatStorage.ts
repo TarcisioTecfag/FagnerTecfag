@@ -1031,9 +1031,59 @@ export const lcStorage = {
       }
     }
 
+    // Eventos: clicks CTA
+    try {
+      const clicks = await db.execute(
+        sql.raw(`SELECT * FROM lc_click_events WHERE "visitorId" = '${visitorId}' ORDER BY "clickedAt" ASC LIMIT 200`)
+      ) as any;
+      const clickRows = Array.isArray(clicks) ? clicks : (clicks?.rows ?? []);
+      for (const ck of clickRows) {
+        const CTA_LABELS: Record<string, string> = {
+          whatsapp:  '📱 Clicou no WhatsApp',
+          chat_open: '💬 Abriu o Chat IA',
+          cta_button:'🎯 Clicou em CTA',
+          phone:     '📞 Clicou em Telefone',
+        };
+        const label = ck.clickType ? (CTA_LABELS[ck.clickType] ?? `🖱️ Clique: ${ck.elementText || ck.elementId || ck.clickType}`) : `🖱️ Clique registrado`;
+        events.push({
+          type: 'click_event',
+          timestamp: ck.clickedAt,
+          label,
+          meta: {
+            url: ck.url,
+            elementId: ck.elementId,
+            elementText: ck.elementText,
+            clickType: ck.clickType,
+          },
+        });
+      }
+    } catch (_) { /* tabela ainda não existe, ignora silenciosamente */ }
+
     // Ordenar cronologicamente
     events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     return events;
+  },
+
+  // ── Click Event Tracking ─────────────────────────────────────────────────
+
+  async recordClickEvent(params: {
+    visitorId: string;
+    url: string;
+    elementId?: string;
+    elementText?: string;
+    clickType: string; // 'whatsapp' | 'chat_open' | 'cta_button' | 'phone' | 'custom'
+  }): Promise<void> {
+    await db.execute(sql.raw(`
+      INSERT INTO lc_click_events ("visitorId", url, "elementId", "elementText", "clickType", "clickedAt")
+      VALUES (
+        '${params.visitorId.replace(/'/g, "''")}',
+        '${(params.url ?? '').replace(/'/g, "''")}',
+        '${(params.elementId ?? '').replace(/'/g, "''")}',
+        '${(params.elementText ?? '').slice(0, 120).replace(/'/g, "''")}',
+        '${params.clickType.replace(/'/g, "''")}',
+        NOW()
+      )
+    `));
   },
 
 };
@@ -1120,7 +1170,22 @@ export async function ensureLiveChatSchema(): Promise<void> {
     ['lc_visitors', '"purchaseIntentScore" INTEGER NOT NULL DEFAULT 0'],
     ['lc_visitors', '"aiBriefing" JSONB'],
     ['lc_pageviews', '"intentTag" TEXT'],
+    ['lc_pageviews', '"timeSpent" INTEGER'],
+    ['lc_pageviews', '"scrollDepth" INTEGER'],
   ];
+
+  // Cria tabela de click events se não existir
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS lc_click_events (
+      id SERIAL PRIMARY KEY,
+      "visitorId" TEXT NOT NULL,
+      url TEXT,
+      "elementId" TEXT,
+      "elementText" TEXT,
+      "clickType" TEXT NOT NULL DEFAULT 'custom',
+      "clickedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `));
 
   let applied = 0;
   let skipped = 0;

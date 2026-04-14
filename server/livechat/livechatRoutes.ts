@@ -81,6 +81,24 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json(pageviews);
   });
 
+  // -- Click Event Tracking (publico - chamado pelo widget/site) ---------------
+  router.post('/public/click', async (req: Request, res: Response) => {
+    try {
+      const { visitorId, url, elementId, elementText, clickType } = req.body;
+      if (!visitorId || !clickType) {
+        return res.status(400).json({ error: 'visitorId e clickType sao obrigatorios' });
+      }
+      const VALID_TYPES = ['whatsapp', 'chat_open', 'cta_button', 'phone', 'custom'];
+      const safeType = VALID_TYPES.includes(clickType) ? clickType : 'custom';
+      await lcStorage.recordClickEvent({ visitorId, url: url ?? '', elementId, elementText, clickType: safeType });
+      return res.json({ ok: true });
+    } catch (err: any) {
+      console.error('[Click Track]', err?.message);
+      return res.status(500).json({ error: 'Erro ao registrar clique' });
+    }
+  });
+
+
   // â”€â”€ Chats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   router.get("/chats", requireAuth, async (req: Request, res: Response) => {
     const status = req.query.status as string | undefined;
