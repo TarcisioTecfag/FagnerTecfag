@@ -34,6 +34,15 @@ export async function checkFollowUps(activeSessions: ContactSession[]): Promise<
     // Sessão pausada: aguarda cliente responder (reativação via webhook)
     if (session.isPaused) continue;
 
+    // ── SAFEGUARD: se já foi atribuído operador, o atendimento foi transferido.
+    // Marca como pausado para evitar follow-up indesejado caso isCompleted
+    // não tenha sido setado (ex: Gemini usou frase de encerramento diferente do padrão).
+    if (session.assignedOperator) {
+      session.isPaused = true;
+      console.log(`[FollowUp] Sessão ${session.contactId} pausada — operador já atribuído (${session.assignedOperator}), follow-up bloqueado.`);
+      continue;
+    }
+
     // ≥ 10 min após follow-up → pausa a sessão
     if (
       session.followUpCount >= 1 &&

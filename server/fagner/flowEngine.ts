@@ -8,10 +8,28 @@ import { getNextOperator } from "./rdCrmService.js";
 // ─── Marcador de finalização ──────────────────────────────────────────────────
 
 export const COMPLETION_MARKERS = [
+  // Marcadores da frase padrão de finalização
   "vou te conectar com",
   "obrigado por entrar em contato com a tecfag",
   "já registrei todas as informações",
   "pode enviar seu currículo diretamente para dho@tecfag.com.br",
+  // Variações que o Gemini pode improvisar ao encerrar o atendimento
+  "nossa equipe comercial entrará em contato",
+  "nossa equipe entrará em contato",
+  "um de nossos consultores irá te contatar",
+  "um de nossos consultores vai te contatar",
+  "vou passar seu contato para",
+  "já encaminhei suas informações",
+  "registrei sua solicitação",
+  "em breve nossa equipe",
+  "vou encaminhar seu contato",
+  "sua solicitação foi registrada",
+  "nossa equipe vai entrar em contato",
+  "alguém da equipe entrará em contato",
+  "vou te chamar no whatsapp",
+  "vou te chamar pelo whatsapp",
+  "vou preparar a proposta",
+  "preparo a proposta",
 ];
 
 export function detectCompletion(text: string): boolean {
@@ -22,16 +40,47 @@ export function detectCompletion(text: string): boolean {
 // ─── Detecção de fluxo baseada em keywords ────────────────────────────────────
 
 const FLOW_KEYWORDS: Record<string, { flow: FlowType; sub: SubFlowType }> = {
-  // Fluxo 1 — Peças / Máquinas / Personnalite
+  // Fluxo 1 — Peças (reposição/consumíveis)
   peça: { flow: 1, sub: "PECAS" },
   peças: { flow: 1, sub: "PECAS" },
   "peça de reposição": { flow: 1, sub: "PECAS" },
   consumível: { flow: 1, sub: "PECAS" },
+  consumiveis: { flow: 1, sub: "PECAS" },
+  // Fluxo 1 — Máquinas (intenção de compra/equipamento)
   máquina: { flow: 1, sub: "MAQUINAS" },
+  maquina: { flow: 1, sub: "MAQUINAS" },
   equipamento: { flow: 1, sub: "MAQUINAS" },
-  orçamento: { flow: 1, sub: "PECAS" },
-  cotar: { flow: 1, sub: "PECAS" },
-  comprar: { flow: 1, sub: "PECAS" },
+  seladora: { flow: 1, sub: "MAQUINAS" },
+  embaladora: { flow: 1, sub: "MAQUINAS" },
+  fardadora: { flow: 1, sub: "MAQUINAS" },
+  envasadora: { flow: 1, sub: "MAQUINAS" },
+  etiquetadora: { flow: 1, sub: "MAQUINAS" },
+  fechadora: { flow: 1, sub: "MAQUINAS" },
+  // Fluxo 1 — Intenção comercial explícita → MAQUINAS
+  // (cliente quer proposta, vendedor, orçamento ou envio pelo WhatsApp)
+  vendedor: { flow: 1, sub: "MAQUINAS" },
+  "falar com vendedor": { flow: 1, sub: "MAQUINAS" },
+  "falar com um vendedor": { flow: 1, sub: "MAQUINAS" },
+  "falar com o vendedor": { flow: 1, sub: "MAQUINAS" },
+  "proposta comercial": { flow: 1, sub: "MAQUINAS" },
+  "quero uma proposta": { flow: 1, sub: "MAQUINAS" },
+  "me manda proposta": { flow: 1, sub: "MAQUINAS" },
+  "manda proposta": { flow: 1, sub: "MAQUINAS" },
+  orçamento: { flow: 1, sub: "MAQUINAS" },
+  orcamento: { flow: 1, sub: "MAQUINAS" },
+  "quero um orçamento": { flow: 1, sub: "MAQUINAS" },
+  "fazer um orçamento": { flow: 1, sub: "MAQUINAS" },
+  "quero comprar": { flow: 1, sub: "MAQUINAS" },
+  "quero adquirir": { flow: 1, sub: "MAQUINAS" },
+  "fechar pedido": { flow: 1, sub: "MAQUINAS" },
+  // Intenção de canal (WhatsApp) com intenção comercial
+  "no whatsapp": { flow: 1, sub: "MAQUINAS" },
+  "pelo whatsapp": { flow: 1, sub: "MAQUINAS" },
+  "via whatsapp": { flow: 1, sub: "MAQUINAS" },
+  "manda no whats": { flow: 1, sub: "MAQUINAS" },
+  "envia no whats": { flow: 1, sub: "MAQUINAS" },
+  "por whats": { flow: 1, sub: "MAQUINAS" },
+  // Fluxo 1 — Personnalite
   personnalite: { flow: 1, sub: "PERSONNALITE" },
   "linha personnalite": { flow: 1, sub: "PERSONNALITE" },
   // Fluxo 2 — Financeiro
@@ -63,9 +112,9 @@ const FLOW_KEYWORDS: Record<string, { flow: FlowType; sub: SubFlowType }> = {
   currículo: { flow: 5, sub: "5B_CURRICULO" },
   curriculo: { flow: 5, sub: "5B_CURRICULO" },
   curriculum: { flow: 5, sub: "5B_CURRICULO" },
-  "falar com": { flow: 5, sub: "5A_CLIENTE" },
-  "preciso falar": { flow: 5, sub: "5A_CLIENTE" },
+  // NOTA: "falar com" removido de 5A — se contém intenção comercial acima, MAQUINAS tem prioridade
   "já sou cliente": { flow: 5, sub: "5A_CLIENTE" },
+  "sou cliente": { flow: 5, sub: "5A_CLIENTE" },
 };
 
 /**
