@@ -2443,8 +2443,8 @@ function LiveChat() {
                 )}
                 {/* #4 — Engagement + Purchase Intent duals scores */}
                 <span className="text-zinc-500">⚡ Eng: <strong className={`${historyModal.visitor.engagementScore >= 60 ? 'text-red-600' : historyModal.visitor.engagementScore >= 30 ? 'text-amber-600' : 'text-zinc-700'}`}>{historyModal.visitor.engagementScore}</strong></span>
-                {(historyModal.visitor.purchaseIntentScore ?? 0) > 0 && (
-                  <span className="text-zinc-500">🎯 Compra: <strong className={`${(historyModal.visitor.purchaseIntentScore ?? 0) >= 60 ? 'text-emerald-600' : (historyModal.visitor.purchaseIntentScore ?? 0) >= 30 ? 'text-amber-600' : 'text-zinc-700'}`}>{historyModal.visitor.purchaseIntentScore}</strong></span>
+                {historyModal.visitor.purchaseIntentScore != null && (
+                  <span className="text-zinc-500">🎯 Compra: <strong className={`${(historyModal.visitor.purchaseIntentScore) >= 60 ? 'text-emerald-600' : (historyModal.visitor.purchaseIntentScore) >= 30 ? 'text-amber-600' : (historyModal.visitor.purchaseIntentScore) >= 1 ? 'text-zinc-700' : 'text-zinc-400'}`}>{historyModal.visitor.purchaseIntentScore}</strong></span>
                 )}
                 <span className="text-zinc-500">Primeiro acesso: <strong className="text-zinc-700">{timeAgo(historyModal.visitor.firstSeenAt)}</strong></span>
                 {historyModal.visitor.pipelineStage && historyModal.visitor.pipelineStage !== 'novo_atendimento' && (
@@ -2552,7 +2552,7 @@ function LiveChat() {
                   ) : (
                     <div className="space-y-2">
                       {historyModal.pageviews.map((pv, i) => {
-                        // #2 — Intent tag badge
+                        // #2 — Intent tag badge (todos os tags gerados pelo servidor)
                         const INTENT_COLORS: Record<string, string> = {
                           checkout_compra:           'bg-emerald-50 text-emerald-700 border-emerald-200',
                           orcamento_contato:         'bg-blue-50 text-blue-700 border-blue-200',
@@ -2561,17 +2561,21 @@ function LiveChat() {
                           maquinas_geral:            'bg-amber-50 text-amber-700 border-amber-200',
                           pecas_reposicao:           'bg-yellow-50 text-yellow-700 border-yellow-200',
                           pos_venda_suporte:         'bg-purple-50 text-purple-700 border-purple-200',
-                          institucional:             'bg-zinc-50 text-zinc-500 border-zinc-200',
+                          institucional:             'bg-zinc-100 text-zinc-500 border-zinc-200',
                           blog_conteudo:             'bg-sky-50 text-sky-600 border-sky-200',
+                          navegacao_geral:           'bg-slate-50 text-slate-400 border-slate-200', // ← faltava
                         };
                         const INTENT_ICONS: Record<string, string> = {
                           checkout_compra: '🛒', orcamento_contato: '📋',
                           maquinas_seladora_premium: '🏭', maquinas_seladora: '⚙️',
                           maquinas_geral: '🔧', pecas_reposicao: '🔩',
                           pos_venda_suporte: '🛠️', institucional: '🏢', blog_conteudo: '📰',
+                          navegacao_geral: '🌐',  // ← faltava
                         };
-                        const intentClass = pv.intentTag ? (INTENT_COLORS[pv.intentTag] ?? 'bg-zinc-50 text-zinc-500 border-zinc-200') : null;
-                        const intentIcon = pv.intentTag ? (INTENT_ICONS[pv.intentTag] ?? '🌐') : null;
+                        // Oculta tag 'navegacao_geral' para não poluir (ela é o fallback, aparece em toda page sem intent clara)
+                        const showIntent = pv.intentTag && pv.intentTag !== 'navegacao_geral';
+                        const intentClass = showIntent ? (INTENT_COLORS[pv.intentTag!] ?? 'bg-zinc-50 text-zinc-500 border-zinc-200') : null;
+                        const intentIcon = showIntent ? (INTENT_ICONS[pv.intentTag!] ?? '🌐') : null;
 
                         return (
                           <div key={pv.id} className="flex items-start gap-3 p-3 rounded-lg border border-zinc-100 hover:border-zinc-200 transition-colors bg-white">
@@ -2628,23 +2632,50 @@ function LiveChat() {
                       <p className="text-sm">Nenhum evento na timeline</p>
                     </div>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="space-y-0">
                       {historyModal.timeline.map((evt, i) => {
-                        const TYPE_META: Record<string, { icon: string; color: string }> = {
-                          session_start: { icon: '🌐', color: 'text-blue-500' },
-                          pageview:      { icon: '🖼️', color: 'text-zinc-400' },
-                          chat_start:    { icon: '💬', color: 'text-emerald-500' },
-                          chat_closed:   { icon: '✅', color: 'text-zinc-400' },
-                          note_added:    { icon: '🧠', color: 'text-amber-500' },
-                          returned:      { icon: '🔄', color: 'text-purple-500' },
+                        const TYPE_META: Record<string, { icon: string; color: string; bgLine: string }> = {
+                          session_start: { icon: '🌐', color: 'text-blue-500',   bgLine: 'border-blue-200' },
+                          pageview:      { icon: '📄', color: 'text-zinc-400',   bgLine: 'border-zinc-100' },
+                          chat_start:    { icon: '💬', color: 'text-emerald-500',bgLine: 'border-emerald-200' },
+                          chat_closed:   { icon: '✅', color: 'text-zinc-400',   bgLine: 'border-zinc-100' },
+                          note_added:    { icon: '🧠', color: 'text-amber-500',  bgLine: 'border-amber-200' },
+                          returned:      { icon: '🔄', color: 'text-purple-500', bgLine: 'border-purple-200' },
                         };
-                        const meta = TYPE_META[evt.type] ?? { icon: '●', color: 'text-zinc-300' };
+                        const meta = TYPE_META[evt.type] ?? { icon: '●', color: 'text-zinc-300', bgLine: 'border-zinc-100' };
+                        const isPageview = evt.type === 'pageview';
+                        // Extrai path da URL se existir nos meta
+                        const urlPath = evt.meta?.url
+                          ? (evt.meta.url as string).replace(/^https?:\/\/[^/]+/, '').slice(0, 60)
+                          : null;
+                        // Intent tag do pageview (se existir)
+                        const intentTag = evt.meta?.intentTag as string | undefined;
+                        const QUICK_INTENT: Record<string, string> = {
+                          checkout_compra: '🛒', orcamento_contato: '📋',
+                          maquinas_seladora_premium: '🏭', maquinas_seladora: '⚙️',
+                          maquinas_geral: '🔧', pecas_reposicao: '🔩',
+                          pos_venda_suporte: '🛠️', institucional: '🏢', blog_conteudo: '📰',
+                        };
+                        const intentEmoji = intentTag && intentTag !== 'navegacao_geral' ? QUICK_INTENT[intentTag] : null;
+
                         return (
-                          <div key={i} className="flex items-start gap-3 py-2 border-l-2 border-zinc-100 pl-4 ml-3">
-                            <span className={`text-base flex-shrink-0 ${meta.color}`}>{meta.icon}</span>
+                          <div key={i} className={`flex items-start gap-2.5 py-1.5 border-l-2 pl-3 ml-3 ${meta.bgLine}`}>
+                            <span className={`text-sm flex-shrink-0 mt-0.5 ${meta.color}`}>{meta.icon}</span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[12px] text-zinc-700 font-medium truncate">{evt.label}</p>
-                              <p className="text-[10px] text-zinc-400">{new Date(evt.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className={`text-[11px] font-medium truncate ${isPageview ? 'text-zinc-600' : 'text-zinc-800'}`}>
+                                  {evt.label}
+                                </p>
+                                {intentEmoji && (
+                                  <span className="text-[10px] flex-shrink-0" title={intentTag}>{intentEmoji}</span>
+                                )}
+                              </div>
+                              {urlPath && urlPath !== '/' && (
+                                <p className="text-[9px] text-zinc-300 truncate font-mono">{urlPath}</p>
+                              )}
+                              <p className="text-[9px] text-zinc-300 mt-0.5">
+                                {new Date(evt.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                              </p>
                             </div>
                           </div>
                         );
