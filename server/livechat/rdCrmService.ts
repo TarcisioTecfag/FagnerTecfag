@@ -679,10 +679,13 @@ async function createDeal(
 
   const pipelineId = (process.env.RD_CRM_PIPELINE_OS_ID ?? "67c9f944c7fe880018b30ab1").trim();
   const stageId    = (process.env.RD_CRM_PIPELINE_OS_STAGE_ID ?? "").trim();
-  const ownerId    = (process.env.RD_CRM_OWNER_POS_VENDA_ID ?? "").trim();
+  // Prioridade: ownerId passado pelo chamador (rodízio do painel) > env var (fallback hardcoded)
+  const ownerId    = (posVenda.ownerId || process.env.RD_CRM_OWNER_POS_VENDA_ID || "").trim();
 
   if (!stageId) throw new Error("[RD CRM] RD_CRM_PIPELINE_OS_STAGE_ID não configurado");
-  if (!ownerId) throw new Error("[RD CRM] RD_CRM_OWNER_POS_VENDA_ID não configurado");
+  if (!ownerId) throw new Error("[RD CRM] Nenhum owner configurado para Pós Venda — configure operadores no painel ou defina RD_CRM_OWNER_POS_VENDA_ID");
+
+  console.log(`[RD CRM] Owner Pós Venda: ${ownerId} (fonte: ${posVenda.ownerId ? 'rodízio do painel' : 'env var fallback'})`);
 
   // Busca IDs de fonte e campanha (cria se não existir)
   const [sourceId, campaignId] = await Promise.all([
@@ -790,7 +793,7 @@ async function createCallTask(
 // ─── Função principal ────────────────────────────────────────────────────────
 export async function createPosVendaOS(
   visitorId: string,
-  posVendaData: Omit<PosVendaData, 'conversationSnippet'> & { conversationSummary?: string },
+  posVendaData: Omit<PosVendaData, 'conversationSnippet'> & { conversationSummary?: string; ownerId?: string },
   relatorio: string
 ): Promise<string> {
   if (!process.env.RD_CRM_CLIENT_ID || !process.env.RD_CRM_PIPELINE_OS_STAGE_ID) {
@@ -808,8 +811,10 @@ export async function createPosVendaOS(
 
   console.log(`[RD CRM] Criando OS de Pós Venda para visitante ${visitorId}...`);
 
-  const ownerId = (process.env.RD_CRM_OWNER_POS_VENDA_ID ?? "").trim();
-  
+  // Resolve ownerId: prioridade ao valor do rodízio do painel, com env var como fallback
+  const ownerId = (posVendaData.ownerId || process.env.RD_CRM_OWNER_POS_VENDA_ID || "").trim();
+  console.log(`[RD CRM] Pós Venda owner: ${ownerId} (fonte: ${posVendaData.ownerId ? 'rodízio do painel' : 'env var fallback'})`);
+
   // 1. Empresa — SEMPRE cria (com CNPJ se disponível, com nome do cliente como fallback)
   // Não condiciona mais ao isCnpj/isCpf — toda negociação deve ter empresa vinculada
   let organizationId: string | null = null;
@@ -823,7 +828,7 @@ export async function createPosVendaOS(
   // 2. Contato (cria ou busca, e atualiza e-mail se necessário)
   const contactId = await upsertContact(posVendaData as PosVendaData, organizationId);
 
-  // 3. Negociação
+  // 3. Negociação — createDeal usa posVendaData.ownerId (rodízio) com fallback para env var
   const { dealId, ownerId: resolvedOwner } = await createDeal(posVendaData as PosVendaData, contactId, organizationId);
 
   // 4. Anotação com relatório completo

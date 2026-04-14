@@ -1229,6 +1229,21 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             return `${posVendaData.problema ?? 'Suporte pós-venda'}`.slice(0, 400);
                           })();
 
+                          // ── Resolver owner via rodízio do funil pos_venda (persistido no banco) ──
+                          // Idêntico ao padrão já usado em Máquinas e Peças.
+                          // Garante que a configuração do painel de Settings (Lucimara / Melissa Bueno)
+                          // seja respeitada — a env var RD_CRM_OWNER_POS_VENDA_ID fica como fallback.
+                          let posVendaOwnerId: string | undefined;
+                          try {
+                            const rotationOwnerPv = await lcStorage.getNextOwnerForFunnel('pos_venda');
+                            if (rotationOwnerPv) {
+                              posVendaOwnerId = rotationOwnerPv;
+                              console.log(`[LiveChat] Owner PÓS VENDA via rodízio: ${posVendaOwnerId}`);
+                            }
+                          } catch (rotErrPv: any) {
+                            console.warn(`[LiveChat] Falha no rodízio de pós_venda:`, rotErrPv.message);
+                          }
+
                           const dealId = await createPosVendaOS(
                             currentVisitorId,
                             {
@@ -1240,6 +1255,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                               problema:            posVendaData.problema,
                               cnpjData:            posVendaData.cnpjData    ?? undefined,
                               conversationSummary: conversationSummary,
+                              ownerId:             posVendaOwnerId,
                             },
                             relatorio
                           );

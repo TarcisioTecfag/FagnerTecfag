@@ -2895,22 +2895,31 @@ function LiveChat() {
 
                 <div className="flex-1" />
 
-                {/* Status note */}
-                <div
-                  className="p-3 rounded-xl text-[9px] leading-relaxed"
-                  style={{ background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.15)", color: "#fb923c" }}
-                >
-                  <strong>Peças</strong> aguarda habilitação.<br />
-                  <span style={{ color: "#6ee7b7" }}><strong>Pós Venda</strong> e <strong>Máquinas</strong></span> estão operacionais.
-                </div>
+                {/* Status note — só aparece se Peças realmente não tiver operadores configurados */}
+                {liveSettings.funnels.pecas.operators.length === 0 ? (
+                  <div
+                    className="p-3 rounded-xl text-[9px] leading-relaxed"
+                    style={{ background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.15)", color: "#fb923c" }}
+                  >
+                    <strong>Peças</strong> aguarda habilitação.<br />
+                    <span style={{ color: "#6ee7b7" }}><strong>Pós Venda</strong> e <strong>Máquinas</strong></span> estão operacionais.
+                  </div>
+                ) : (
+                  <div
+                    className="p-3 rounded-xl text-[9px] leading-relaxed"
+                    style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.15)", color: "#4ade80" }}
+                  >
+                    <strong>Pós Venda</strong>, <strong>Máquinas</strong> e <strong>Peças</strong> estão operacionais.
+                  </div>
+                )}
               </div>
 
               {/* Main Config Area */}
               <div className="flex-1 overflow-y-auto p-7">
                 {([
-                  { key: "pos_venda" as const, label: "Pós Venda", icon: "🎫", color: "#8b5cf6", active: true },
-                  { key: "maquinas" as const, label: "Máquinas", icon: "🏭", color: "#ea580c", active: true },
-                  { key: "pecas" as const, label: "Peças", icon: "⚙️", color: "#f59e0b", active: false },
+                  { key: "pos_venda" as const, label: "Pós Venda", icon: "🎫", color: "#8b5cf6", active: liveSettings.funnels.pos_venda.operators.length > 0 },
+                  { key: "maquinas" as const, label: "Máquinas", icon: "🏭", color: "#ea580c", active: liveSettings.funnels.maquinas.operators.length > 0 },
+                  { key: "pecas" as const, label: "Peças", icon: "⚙️", color: "#f59e0b", active: liveSettings.funnels.pecas.operators.length > 0 },
                 ]).filter(f => f.key === activeFunnel).map((f) => {
                   const cfg = liveSettings.funnels[f.key];
 
