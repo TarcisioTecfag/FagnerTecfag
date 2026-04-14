@@ -44,7 +44,7 @@ export function registerLiveChatRoutes(app: any): void {
 
   router.get("/visitors/all", requireAuth, async (req: Request, res: Response) => {
     try {
-      const limit = parseInt(req.query.limit as string) || 100;
+      const limit = parseInt(req.query.limit as string) || 5000;
       const visitors = await lcStorage.listAllVisitors(limit);
       return res.json(visitors);
     } catch (err: any) {

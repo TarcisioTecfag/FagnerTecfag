@@ -483,7 +483,7 @@ function LiveChat() {
       const [chatsRes, statsRes, allVisitorsRes, pipelineRes] = await Promise.all([
         fetch("/api/livechat/chats", { credentials: "include" }),
         fetch("/api/livechat/stats", { credentials: "include" }),
-        fetch("/api/livechat/visitors/all?limit=200", { credentials: "include" }),
+        fetch("/api/livechat/visitors/all", { credentials: "include" }),
         fetch("/api/livechat/pipeline", { credentials: "include" }),
       ]);
       if (chatsRes.ok) setChats(await chatsRes.json());
