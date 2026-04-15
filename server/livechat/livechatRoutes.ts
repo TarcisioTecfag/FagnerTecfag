@@ -1,8 +1,8 @@
-/**
+﻿/**
  * server/livechat/livechatRoutes.ts
  *
- * Rotas REST do Live Chat â€” /api/livechat/*
- * Todas protegidas por requireAuth (exceto widget.js que Ã© pÃºblico)
+ * Rotas REST do Live Chat Ã¢â‚¬â€ /api/livechat/*
+ * Todas protegidas por requireAuth (exceto widget.js que ÃƒÂ© pÃƒÂºblico)
  */
 
 import { Router, type Request, type Response, type NextFunction } from "express";
@@ -18,7 +18,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-// ── Multer: upload de arquivos do agente ──────────────────────────────────────
+// â”€â”€ Multer: upload de arquivos do agente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const UPLOADS_DIR = path.join(__dirname, "../../data/uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -46,16 +46,16 @@ const agentUpload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIMES.includes(file.mimetype)) return cb(null, true);
-    cb(new Error(`Tipo de arquivo não permitido: ${file.mimetype}`));
+    cb(new Error(`Tipo de arquivo nÃ£o permitido: ${file.mimetype}`));
   },
 });
 
 
-// â”€â”€â”€ Auth middleware (mesma lÃ³gica do index.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Auth middleware (mesma lÃƒÂ³gica do index.ts) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!(req.session as any).userId) {
-    return res.status(401).json({ message: "NÃ£o autenticado" });
+    return res.status(401).json({ message: "NÃƒÂ£o autenticado" });
   }
   next();
 }
@@ -65,18 +65,18 @@ function p(param: string | string[]): string {
   return Array.isArray(param) ? param[0] : param;
 }
 
-// â”€â”€â”€ Router â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Router Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export function registerLiveChatRoutes(app: any): void {
   const router = Router();
 
-  // â”€â”€ Stats (dashboard) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Stats (dashboard) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/stats", requireAuth, async (_req: Request, res: Response) => {
     const stats = await lcStorage.getStats();
     return res.json(stats);
   });
 
-  // â”€â”€ Visitors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Visitors Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/visitors", requireAuth, async (_req: Request, res: Response) => {
     const visitors = await lcStorage.listOnlineVisitors();
     return res.json(visitors);
@@ -95,13 +95,13 @@ export function registerLiveChatRoutes(app: any): void {
 
   router.get("/visitors/:id", requireAuth, async (req: Request, res: Response) => {
     const visitor = await lcStorage.getVisitorById(p(req.params.id));
-    if (!visitor) return res.status(404).json({ message: "Visitante nÃ£o encontrado" });
+    if (!visitor) return res.status(404).json({ message: "Visitante nÃƒÂ£o encontrado" });
     return res.json(visitor);
   });
 
   router.get("/visitors/:id/history", requireAuth, async (req: Request, res: Response) => {
     const visitor = await lcStorage.getVisitorById(p(req.params.id));
-    if (!visitor) return res.status(404).json({ message: "Visitante nÃ£o encontrado" });
+    if (!visitor) return res.status(404).json({ message: "Visitante nÃƒÂ£o encontrado" });
     const history = await lcStorage.getVisitorHistoryByCookie(visitor.cookieId, visitor.id);
     return res.json(history);
   });
@@ -139,7 +139,7 @@ export function registerLiveChatRoutes(app: any): void {
   });
 
 
-  // â”€â”€ Chats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Chats Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/chats", requireAuth, async (req: Request, res: Response) => {
     const status = req.query.status as string | undefined;
     const chats = await lcStorage.listChats(status);
@@ -153,7 +153,7 @@ export function registerLiveChatRoutes(app: any): void {
 
   router.get("/chats/:id", requireAuth, async (req: Request, res: Response) => {
     const chat = await lcStorage.getChatById(p(req.params.id));
-    if (!chat) return res.status(404).json({ message: "Chat nÃ£o encontrado" });
+    if (!chat) return res.status(404).json({ message: "Chat nÃƒÂ£o encontrado" });
     return res.json(chat);
   });
 
@@ -189,7 +189,7 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json({ ok: true });
   });
 
-  // â”€â”€ Renomear tÃ­tulo do chat (visitorName) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Renomear tÃƒÂ­tulo do chat (visitorName) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.patch("/chats/:id/rename", requireAuth, async (req: Request, res: Response) => {
     try {
       const { title } = req.body;
@@ -202,7 +202,7 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // â”€â”€ Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Settings Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/settings/:key", requireAuth, async (req: Request, res: Response) => {
     const value = await lcStorage.getSettingParsed(p(req.params.key));
     return res.json(value);
@@ -210,12 +210,12 @@ export function registerLiveChatRoutes(app: any): void {
 
   router.post("/settings", requireAuth, async (req: Request, res: Response) => {
     const { key, value } = req.body;
-    if (!key) return res.status(400).json({ message: "Chave obrigatÃ³ria" });
+    if (!key) return res.status(400).json({ message: "Chave obrigatÃƒÂ³ria" });
     await lcStorage.setSetting(key, value ?? "");
     return res.json({ ok: true });
   });
 
-  // â”€â”€ Pipeline CRM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Pipeline CRM Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/pipeline", requireAuth, async (_req: Request, res: Response) => {
     try {
       try { await lcStorage.migrateNullPipelineStages(); } catch {}
@@ -236,7 +236,7 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json(stats);
   });
 
-  // ── Mover card no Kanban (drag & drop manual pelo operador) ──────────────────
+  // â”€â”€ Mover card no Kanban (drag & drop manual pelo operador) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   router.patch("/visitors/:id/pipeline", requireAuth, async (req: Request, res: Response) => {
     try {
       const { stage } = req.body;
@@ -249,16 +249,16 @@ export function registerLiveChatRoutes(app: any): void {
         "sem_resposta", "outros",
       ];
       if (!VALID_STAGES.includes(stage)) {
-        return res.status(400).json({ error: `Stage inválido: ${stage}` });
+        return res.status(400).json({ error: `Stage invÃ¡lido: ${stage}` });
       }
       const visitorId = p(req.params.id);
       const visitor = await lcStorage.updateVisitorPipeline(visitorId, stage);
-      if (!visitor) return res.status(404).json({ error: "Visitante não encontrado" });
+      if (!visitor) return res.status(404).json({ error: "Visitante nÃ£o encontrado" });
 
       // Notifica todos os agentes via WebSocket em tempo real
       await broadcastPipelineUpdateExternal(visitorId, stage);
 
-      console.log(`[LiveChat] 🃏 Card ${visitorId} movido manualmente para '${stage}' pelo operador`);
+      console.log(`[LiveChat] ðŸƒ Card ${visitorId} movido manualmente para '${stage}' pelo operador`);
       return res.json({ ok: true, stage, visitor });
     } catch (err: any) {
       console.error("[LiveChat] PATCH /visitors/:id/pipeline error:", err?.message);
@@ -267,7 +267,7 @@ export function registerLiveChatRoutes(app: any): void {
   });
 
 
-  // â”€â”€ PÃ³s Venda â€” Salvar dados coletados pelo Fagner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ PÃƒÂ³s Venda Ã¢â‚¬â€ Salvar dados coletados pelo Fagner Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.patch("/visitors/:id/pos-venda", requireAuth, async (req: Request, res: Response) => {
     try {
       const { nome, telefone, email, cnpjCpf, notaPedido, problema } = req.body;
@@ -286,7 +286,7 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // â”€â”€ Melhoria 4: EstatÃ­sticas enriquecidas (engagement, VTEX, ruÃ­do) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Melhoria 4: EstatÃƒÂ­sticas enriquecidas (engagement, VTEX, ruÃƒÂ­do) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/enhanced-stats", requireAuth, async (req: Request, res: Response) => {
     try {
       // Suporta: ?date=YYYY-MM-DD (data exata) ou ?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD (range)
@@ -299,11 +299,11 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // â”€â”€ DiagnÃ³stico RD CRM â€” sem auth (acesso via token secreto na URL) â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ DiagnÃƒÂ³stico RD CRM Ã¢â‚¬â€ sem auth (acesso via token secreto na URL) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/rd-debug", async (req: Request, res: Response) => {
-    // ProteÃ§Ã£o mÃ­nima: token secreto na query string
+    // ProteÃƒÂ§ÃƒÂ£o mÃƒÂ­nima: token secreto na query string
     if (req.query.token !== "tecfag2025debug") {
-      return res.status(403).json({ error: "Token invÃ¡lido. Use ?token=tecfag2025debug" });
+      return res.status(403).json({ error: "Token invÃƒÂ¡lido. Use ?token=tecfag2025debug" });
     }
     const result: Record<string, any> = {};
     try {
@@ -336,7 +336,7 @@ export function registerLiveChatRoutes(app: any): void {
       const testSrcRes = await fetch("https://api.rd.services/crm/v2/sources", {
         method: "POST",
         headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "ReferÃªncia | tecfag.com.br" })
+        body: JSON.stringify({ name: "ReferÃƒÂªncia | tecfag.com.br" })
       });
       const testSrcJson = await testSrcRes.json();
       result.create_source_status = testSrcRes.status;
@@ -405,14 +405,14 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json(result);
   });
 
-  // â”€â”€ UsuÃ¡rios do RD CRM (para dropdown de operadores nas configuraÃ§Ãµes) â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ UsuÃƒÂ¡rios do RD CRM (para dropdown de operadores nas configuraÃƒÂ§ÃƒÂµes) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/rd-users", requireAuth, async (_req: Request, res: Response) => {
     try {
       const at = await getRdValidToken();
       const allUsers: any[] = [];
       let page = 1;
 
-      // Busca com paginaÃ§Ã£o â€” formato correto: page[number] e page[size]
+      // Busca com paginaÃƒÂ§ÃƒÂ£o Ã¢â‚¬â€ formato correto: page[number] e page[size]
       while (page <= 10) {
         const url = `https://api.rd.services/crm/v2/users?page[number]=${page}&page[size]=100&filter=is:active`;
         const r = await fetch(url, {
@@ -431,10 +431,10 @@ export function registerLiveChatRoutes(app: any): void {
                                 : Array.isArray(json)       ? json
                                 : [];
 
-        console.log(`[LiveChat] rd-users page ${page}: ${pageUsers.length} usuÃ¡rios`);
+        console.log(`[LiveChat] rd-users page ${page}: ${pageUsers.length} usuÃƒÂ¡rios`);
         allUsers.push(...pageUsers);
 
-        // Para quando vier menos de 100 (Ãºltima pÃ¡gina) ou nÃ£o vier 'next' nos links
+        // Para quando vier menos de 100 (ÃƒÂºltima pÃƒÂ¡gina) ou nÃƒÂ£o vier 'next' nos links
         if (pageUsers.length < 100 || !json?.links?.next) break;
         page++;
       }
@@ -445,7 +445,7 @@ export function registerLiveChatRoutes(app: any): void {
         email: u.email ?? ""
       })).filter(u => u.name); // remove registros sem nome
 
-      console.log(`[LiveChat] rd-users: retornando ${normalized.length} usuÃ¡rios no total`);
+      console.log(`[LiveChat] rd-users: retornando ${normalized.length} usuÃƒÂ¡rios no total`);
       return res.json(normalized);
     } catch (err: any) {
       console.error("[LiveChat] GET /rd-users ERRO:", err?.message, err?.stack?.slice(0, 300));
@@ -453,7 +453,7 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // â”€â”€ ConfiguraÃ§Ãµes de Funil (persistidas no servidor para uso no backend) â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ ConfiguraÃƒÂ§ÃƒÂµes de Funil (persistidas no servidor para uso no backend) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/funnel-settings", requireAuth, async (_req: Request, res: Response) => {
     try {
       const settings = await lcStorage.getFunnelSettings();
@@ -468,10 +468,10 @@ export function registerLiveChatRoutes(app: any): void {
     try {
       const body = req.body;
       if (!body || typeof body !== 'object') {
-        return res.status(400).json({ message: "Body invÃ¡lido" });
+        return res.status(400).json({ message: "Body invÃƒÂ¡lido" });
       }
       await lcStorage.saveFunnelSettings(body);
-      console.log("[LiveChat] âš™ï¸ Funnel settings atualizadas via admin");
+      console.log("[LiveChat] Ã¢Å¡â„¢Ã¯Â¸Â Funnel settings atualizadas via admin");
       return res.json({ ok: true });
     } catch (err: any) {
       console.error("[LiveChat] PUT /funnel-settings error:", err?.message);
@@ -479,11 +479,11 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // â”€â”€ Reset Completo (Admin only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Reset Completo (Admin only) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.delete("/reset-all", requireAuth, async (_req: Request, res: Response) => {
     try {
       await lcStorage.resetAllLiveChatData();
-      console.log("[LiveChat] âœ… Reset completo realizado por admin");
+      console.log("[LiveChat] Ã¢Å“â€¦ Reset completo realizado por admin");
       return res.json({ ok: true, message: "Todos os dados do Live Chat foram apagados." });
     } catch (err: any) {
       console.error("[LiveChat] DELETE /reset-all error:", err?.message);
@@ -491,7 +491,7 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // â”€â”€ DiagnÃ³stico RD CRM: lista funis/etapas reais (para obter IDs corretos) â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ DiagnÃƒÂ³stico RD CRM: lista funis/etapas reais (para obter IDs corretos) Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/rd-pipelines", async (_req: Request, res: Response) => {
     try {
       const at = await getRdValidToken();
@@ -505,7 +505,7 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // â”€â”€ DiagnÃ³stico RD CRM: lista etapas de um funil especÃ­fico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ DiagnÃƒÂ³stico RD CRM: lista etapas de um funil especÃƒÂ­fico Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/rd-stages/:pipelineId", async (req: Request, res: Response) => {
     try {
       const at = await getRdValidToken();
@@ -520,7 +520,7 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // â”€â”€ DiagnÃ³stico: Fontes disponÃ­veis no RD CRM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ DiagnÃƒÂ³stico: Fontes disponÃƒÂ­veis no RD CRM Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/rd-sources", async (_req: Request, res: Response) => {
     try {
       const at = await getRdValidToken();
@@ -529,7 +529,7 @@ export function registerLiveChatRoutes(app: any): void {
     } catch (err: any) { return res.status(500).json({ message: err?.message }); }
   });
 
-  // â”€â”€ DiagnÃ³stico: Campanhas disponÃ­veis no RD CRM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ DiagnÃƒÂ³stico: Campanhas disponÃƒÂ­veis no RD CRM Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/rd-campaigns", async (_req: Request, res: Response) => {
     try {
       const at = await getRdValidToken();
@@ -538,7 +538,7 @@ export function registerLiveChatRoutes(app: any): void {
     } catch (err: any) { return res.status(500).json({ message: err?.message }); }
   });
 
-  // â”€â”€ DiagnÃ³stico: Campos personalizados de Deals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ DiagnÃƒÂ³stico: Campos personalizados de Deals Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/rd-deal-fields", async (_req: Request, res: Response) => {
     try {
       const at = await getRdValidToken();
@@ -547,7 +547,7 @@ export function registerLiveChatRoutes(app: any): void {
     } catch (err: any) { return res.status(500).json({ message: err?.message }); }
   });
 
-  // â”€â”€ DiagnÃ³stico: Campos personalizados de Contatos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ DiagnÃƒÂ³stico: Campos personalizados de Contatos Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   router.get("/rd-contact-fields", async (_req: Request, res: Response) => {
     try {
       const at = await getRdValidToken();
@@ -556,18 +556,18 @@ export function registerLiveChatRoutes(app: any): void {
     } catch (err: any) { return res.status(500).json({ message: err?.message }); }
   });
 
-  // â”€â”€ VTEX Order Hook â€” chamado pela VTEX quando pagamento confirmado ou cancelado
-  // NÃƒO usa requireAuth â€” a VTEX chama sem sessÃ£o, protegido por secret no header
+  // Ã¢â€â‚¬Ã¢â€â‚¬ VTEX Order Hook Ã¢â‚¬â€ chamado pela VTEX quando pagamento confirmado ou cancelado
+  // NÃƒÆ’O usa requireAuth Ã¢â‚¬â€ a VTEX chama sem sessÃƒÂ£o, protegido por secret no header
   router.post("/vtex-order-hook", async (req: Request, res: Response) => {
     // 1. Valida secret
     const secret = req.headers['x-vtex-hook-secret'] as string | undefined;
     const expectedSecret = process.env.VTEX_ORDER_HOOK_SECRET;
     if (expectedSecret && secret !== expectedSecret) {
-      console.warn('[VTEX Hook] âš ï¸ Secret invÃ¡lido â€” ignorando webhook');
+      console.warn('[VTEX Hook] Ã¢Å¡Â Ã¯Â¸Â Secret invÃƒÂ¡lido Ã¢â‚¬â€ ignorando webhook');
       return res.status(401).json({ error: 'Invalid secret' });
     }
 
-    // 2. Responde imediatamente (VTEX nÃ£o espera processamento longo)
+    // 2. Responde imediatamente (VTEX nÃƒÂ£o espera processamento longo)
     res.json({ ok: true });
 
     // 3. Processa em background
@@ -589,7 +589,7 @@ export function registerLiveChatRoutes(app: any): void {
           : null;
 
         if (!visitor) {
-          console.warn(`[VTEX Hook] NÃ£o foi encontrado visitante para orderFormId=${orderFormId} â€” provavelmente pedido externo`);
+          console.warn(`[VTEX Hook] NÃƒÂ£o foi encontrado visitante para orderFormId=${orderFormId} Ã¢â‚¬â€ provavelmente pedido externo`);
           return;
         }
 
@@ -599,13 +599,13 @@ export function registerLiveChatRoutes(app: any): void {
           vtexOrderStatus: status,
         });
 
-        // 6. Cria anotaÃ§Ã£o de IA no card (visÃ­vel no painel)
+        // 6. Cria anotaÃƒÂ§ÃƒÂ£o de IA no card (visÃƒÂ­vel no painel)
         const valorFormatado = value > 0
           ? (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
           : '';
         const nota = status === 'payment-approved'
-          ? `âœ… Pagamento confirmado!\nPedido: #${orderId}${valorFormatado ? `\nValor: ${valorFormatado}` : ''}\nData: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
-          : `âŒ Pedido cancelado\nPedido: #${orderId}\nData: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`;
+          ? `Ã¢Å“â€¦ Pagamento confirmado!\nPedido: #${orderId}${valorFormatado ? `\nValor: ${valorFormatado}` : ''}\nData: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
+          : `Ã¢ÂÅ’ Pedido cancelado\nPedido: #${orderId}\nData: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`;
 
         await lcStorage.addVisitorNote(visitor.id, 'VTEX', nota);
 
@@ -616,34 +616,34 @@ export function registerLiveChatRoutes(app: any): void {
         if (openChat) {
           const clientMsg = status === 'payment-approved'
             ? [
-                `âœ… Pagamento confirmado! Seu pedido foi aprovado! ðŸŽ‰`,
+                `Ã¢Å“â€¦ Pagamento confirmado! Seu pedido foi aprovado! Ã°Å¸Å½â€°`,
                 ``,
-                `ðŸ“¦ Pedido: #${orderId}`,
-                valorFormatado ? `ðŸ’° Valor: ${valorFormatado}` : '',
-                `ðŸšš Em breve vocÃª receberÃ¡ as informaÃ§Ãµes de rastreio por email.`,
+                `Ã°Å¸â€œÂ¦ Pedido: #${orderId}`,
+                valorFormatado ? `Ã°Å¸â€™Â° Valor: ${valorFormatado}` : '',
+                `Ã°Å¸Å¡Å¡ Em breve vocÃƒÂª receberÃƒÂ¡ as informaÃƒÂ§ÃƒÂµes de rastreio por email.`,
                 ``,
-                `Qualquer dÃºvida, estou por aqui! ðŸ˜Š`,
+                `Qualquer dÃƒÂºvida, estou por aqui! Ã°Å¸ËœÅ `,
               ].filter(Boolean).join('\n')
             : [
-                `âŒ Infelizmente seu pedido foi cancelado.`,
+                `Ã¢ÂÅ’ Infelizmente seu pedido foi cancelado.`,
                 `Pedido: #${orderId}`,
                 ``,
-                `Se quiser refazer o pedido ou tiver alguma dÃºvida, Ã© sÃ³ falar comigo! ðŸ˜Š`,
+                `Se quiser refazer o pedido ou tiver alguma dÃƒÂºvida, ÃƒÂ© sÃƒÂ³ falar comigo! Ã°Å¸ËœÅ `,
               ].join('\n');
 
           await lcStorage.createMessage({ chatId: openChat.id, sender: 'ai', content: clientMsg });
         }
 
-        console.log(`[VTEX Hook] âœ… Processado: visitante=${visitor.id} orderId=${orderId} status=${status}`);
+        console.log(`[VTEX Hook] Ã¢Å“â€¦ Processado: visitante=${visitor.id} orderId=${orderId} status=${status}`);
       } catch (err: any) {
-        console.error('[VTEX Hook] ❌ Erro ao processar webhook:', err.message);
+        console.error('[VTEX Hook] âŒ Erro ao processar webhook:', err.message);
       }
     });
   });
 
-  // ── Visitor Intelligence — Fase 1 & 2 & 3 ──────────────────────────────────
+  // â”€â”€ Visitor Intelligence â€” Fase 1 & 2 & 3 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  // #8 — Analytics: top páginas visitadas ANTES do primeiro chat
+  // #8 â€” Analytics: top pÃ¡ginas visitadas ANTES do primeiro chat
   router.get("/stats/pre-chat-pages", requireAuth, async (req: Request, res: Response) => {
     try {
       const limit = parseInt(req.query.limit as string) || 10;
@@ -658,7 +658,7 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // #10 — Timeline unificada do visitante
+  // #10 â€” Timeline unificada do visitante
   router.get("/visitors/:id/timeline", requireAuth, async (req: Request, res: Response) => {
     try {
       const timeline = await lcStorage.getVisitorTimeline(p(req.params.id));
@@ -669,11 +669,11 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // #7 — Salvar aiBriefing manualmente (opcional — também gerado automaticamente)
+  // #7 â€” Salvar aiBriefing manualmente (opcional â€” tambÃ©m gerado automaticamente)
   router.patch("/visitors/:id/briefing", requireAuth, async (req: Request, res: Response) => {
     try {
       const briefing = req.body;
-      if (!briefing || typeof briefing !== "object") return res.status(400).json({ error: "Briefing inválido" });
+      if (!briefing || typeof briefing !== "object") return res.status(400).json({ error: "Briefing invÃ¡lido" });
       await lcStorage.updateAiBriefing(p(req.params.id), briefing);
       return res.json({ ok: true });
     } catch (err: any) {
@@ -681,7 +681,7 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
-  // ── Analytics Avançadas — Dashboard de Estatísticas ───────────────────────────
+  // â”€â”€ Analytics AvanÃ§adas â€” Dashboard de EstatÃ­sticas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   router.get('/stats/activation-rate', requireAuth, async (req: Request, res: Response) => {
     try {
@@ -732,7 +732,7 @@ export function registerLiveChatRoutes(app: any): void {
     } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
   });
 
-  // ── Upload de arquivo pelo agente (para enviar ao cliente) ──────────────────
+  // â”€â”€ Upload de arquivo pelo agente (para enviar ao cliente) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   router.post("/upload-agent", requireAuth, (req: Request, res: Response, next: NextFunction) => {
     agentUpload.single("file")(req, res, (err) => {
       if (err) {
@@ -745,7 +745,7 @@ export function registerLiveChatRoutes(app: any): void {
       const mimeType = req.file.mimetype;
       const name = req.file.originalname;
       const size = req.file.size;
-      console.log(`[LiveChat] 📎 Agente fez upload: ${name} (${mimeType}) → ${url}`);
+      console.log(`[LiveChat] ðŸ“Ž Agente fez upload: ${name} (${mimeType}) â†’ ${url}`);
       return res.json({ url, name, mimeType, size });
     });
   });
@@ -753,5 +753,5 @@ export function registerLiveChatRoutes(app: any): void {
   // Mount all routes under /api/livechat
   app.use("/api/livechat", router);
 
-  console.log("[LiveChat] ✅ Rotas /api/livechat/* registradas");
+  console.log("[LiveChat] âœ… Rotas /api/livechat/* registradas");
 }

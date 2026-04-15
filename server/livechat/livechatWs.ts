@@ -2282,8 +2282,13 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             // Attachments enviados pelo agente (imagens, PDFs, etc.)
             const agentAttachments: { url: string; name: string; mimeType: string; size?: number }[] = data.attachments ?? [];
 
-            // Conteúdo salvo inclui attachments como JSON embed (para histórico)
-            const savedContent = data.content || (agentAttachments.length > 0 ? `[AGENT_ATTACHMENTS:${JSON.stringify(agentAttachments)}]` : "");
+            // Conteúdo de texto enviado pelo agente (vazio se for só attachment)
+            const textContent = data.content ?? "";
+
+            // Conteúdo salvo no banco: texto + referência de attachments (para histórico)
+            const savedContent = textContent || (agentAttachments.length > 0
+              ? `[AGENT_ATTACHMENTS:${JSON.stringify(agentAttachments)}]`
+              : "");
 
             // Save agent message
             await lcStorage.createMessage({
@@ -2297,19 +2302,21 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               type: "CHAT_REPLY",
               chatId: chat.id,
               sender: "agent",
-              content: data.content || "",
+              content: textContent,
               attachments: agentAttachments.length > 0 ? agentAttachments : undefined,
               timestamp: new Date().toISOString(),
             });
 
-            // Broadcast to other agents
+            // Broadcast to other agents — usa campo separado para attachments
+            // (NÃO embute [AGENT_ATTACHMENTS:] no content para não virar log oculto no painel)
             broadcastToAgents({
               type: "CHAT_MESSAGE",
               chatId: chat.id,
               visitorId: chat.visitorId,
               sender: "agent",
               agentId: data.userId,
-              content: savedContent,
+              content: textContent,
+              attachments: agentAttachments.length > 0 ? agentAttachments : undefined,
               timestamp: new Date().toISOString(),
             });
             break;

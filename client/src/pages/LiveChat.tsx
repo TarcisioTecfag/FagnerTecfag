@@ -146,6 +146,7 @@ interface Message {
   content: string;
   read: string;
   sentAt: string;
+  attachments?: { url: string; name: string; mimeType: string; size?: number }[];
 }
 
 interface Stats {
@@ -422,6 +423,8 @@ function LiveChat() {
   const [agentInput, setAgentInput] = useState("");
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const agentFileInputRef = useRef<HTMLInputElement>(null);
+  // Preview modal: arquivo selecionado aguardando confirmação de envio
+  const [pendingFile, setPendingFile] = useState<{ file: File; previewUrl: string | null } | null>(null);
   const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
   const [allVisitors, setAllVisitors] = useState<Visitor[]>([]);
   const [pipelineData, setPipelineData] = useState<Record<string, Visitor[]>>({});
@@ -755,6 +758,7 @@ function LiveChat() {
                 chatId: data.chatId,
                 sender: data.sender,
                 content: data.content,
+                attachments: data.attachments,
                 read: "false",
                 sentAt: data.timestamp,
               }]);
@@ -1043,11 +1047,26 @@ function LiveChat() {
   };
 
   // ——— Agent: upload e envio de arquivo ao cliente ——————————————————————
-  const handleAgentFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Passo 1: usuário seleciona o arquivo → exibe preview
+  const handleAgentFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !selectedChat) return;
-    // Reseta o input para permitir reenvio do mesmo arquivo
+    if (!file) return;
     if (agentFileInputRef.current) agentFileInputRef.current.value = "";
+    const isImage = file.type.startsWith("image/");
+    if (isImage) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setPendingFile({ file, previewUrl: ev.target?.result as string });
+      reader.readAsDataURL(file);
+    } else {
+      setPendingFile({ file, previewUrl: null });
+    }
+  };
+
+  // Passo 2: confirmação do agente → faz upload e envia via WS
+  const handleAgentFileUpload = async () => {
+    if (!pendingFile || !selectedChat) return;
+    const file = pendingFile.file;
+    setPendingFile(null);
     setIsUploadingFile(true);
     try {
       const fd = new FormData();
@@ -2058,6 +2077,36 @@ function LiveChat() {
                               <span>{isVisitor ? "Visitante" : isAI ? "Fagner (IA)" : "Agente"}</span>
                               <span>&bull; {timeAgo(msg.sentAt)}</span>
                             </div>
+
+                            {/* ── Attachments do agente (imagem/doc enviado pelo operador) ── */}
+                            {msg.attachments && msg.attachments.length > 0 && (
+                              <div className="flex flex-col gap-2 mb-1">
+                                {msg.attachments.map((att, i) => {
+                                  const isImg = att.mimeType?.startsWith("image/");
+                                  const isVid = att.mimeType?.startsWith("video/");
+                                  if (isImg) return (
+                                    <a key={i} href={att.url} target="_blank" rel="noopener noreferrer"
+                                      className="block rounded-xl overflow-hidden border border-white/20 shadow">
+                                      <img src={att.url} alt={att.name}
+                                        className="max-w-[220px] max-h-[180px] object-contain w-full hover:opacity-90 transition-opacity" />
+                                    </a>
+                                  );
+                                  if (isVid) return (
+                                    <video key={i} controls src={att.url}
+                                      className="max-w-[240px] rounded-xl border border-white/20 shadow" />
+                                  );
+                                  return (
+                                    <a key={i} href={att.url} target="_blank" rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all text-xs font-semibold border border-white/20">
+                                      <Paperclip className="w-3.5 h-3.5" />
+                                      <span className="truncate max-w-[160px]">{att.name}</span>
+                                      {att.size && <span className="opacity-60">{Math.round(att.size / 1024)}KB</span>}
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            )}
+
                             <div className="whitespace-pre-wrap break-words text-sm">
                               {(() => {
                                 const isLog = /^\s*\[[A-Z0-9_]+(?:[:\]])/s.test(msg.content.trim());
@@ -2082,6 +2131,8 @@ function LiveChat() {
                                     </div>
                                   );
                                 }
+                                // Não mostra nada se não tem texto (é só attachment)
+                                if (!msg.content?.trim()) return null;
                                 return renderMessageContent(msg.content);
                               })()}
                             </div>
@@ -2091,6 +2142,49 @@ function LiveChat() {
                     })}
                     <div ref={messagesEndRef} />
                   </div>
+
+                  {/* ── Modal de preview antes de enviar arquivo ── */}
+                  {pendingFile && (
+                    <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm pb-4 px-4">
+                      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden animate-pop-in">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
+                          <span className="text-sm font-semibold text-zinc-800">Enviar para o cliente?</span>
+                          <button onClick={() => setPendingFile(null)}
+                            className="flex items-center justify-center w-7 h-7 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        {/* Preview */}
+                        <div className="px-4 py-3 flex flex-col items-center gap-3">
+                          {pendingFile.previewUrl ? (
+                            <img src={pendingFile.previewUrl} alt={pendingFile.file.name}
+                              className="max-h-52 max-w-full rounded-xl object-contain shadow border border-zinc-100" />
+                          ) : (
+                            <div className="flex flex-col items-center gap-2 py-4">
+                              <Paperclip className="w-8 h-8 text-zinc-400" />
+                              <span className="text-xs text-zinc-500 font-medium text-center break-all max-w-[220px]">
+                                {pendingFile.file.name}
+                              </span>
+                            </div>
+                          )}
+                          <span className="text-[11px] text-zinc-400">{pendingFile.file.name} • {Math.round(pendingFile.file.size / 1024)}KB</span>
+                        </div>
+                        {/* Ações */}
+                        <div className="flex gap-2 px-4 pb-4">
+                          <button onClick={() => setPendingFile(null)}
+                            className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-all">
+                            Cancelar
+                          </button>
+                          <button onClick={handleAgentFileUpload}
+                            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all shadow"
+                            style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}>
+                            ✈️ Enviar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Input area */}
                   <div className="px-4 py-3 border-t border-zinc-100 bg-white">
@@ -2111,7 +2205,7 @@ function LiveChat() {
                             type="file"
                             accept="image/*,.pdf,.xlsx,.xls,.docx,.doc,video/mp4,video/webm"
                             className="hidden"
-                            onChange={handleAgentFileUpload}
+                            onChange={handleAgentFileSelected}
                           />
                           {/* Botão clipe */}
                           <button
