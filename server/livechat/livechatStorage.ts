@@ -1430,10 +1430,10 @@ export const lcStorage = {
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE category = 'lead_warm' ${dwLast}`)) as any,
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE 1=1 ${dwLast}`)) as any,
       db.execute(sql.raw(`
-        SELECT DATE_TRUNC('day', "firstSeenAt"::timestamptz)::date::text AS date, COUNT(*)::int AS count
+        SELECT DATE_TRUNC('day', "lastSeenAt"::timestamptz)::date::text AS date, COUNT(*)::int AS count
         FROM lc_visitors
         WHERE category IN ('lead_hot','customer')
-          AND "firstSeenAt"::timestamptz >= NOW() - INTERVAL '30 days'
+          AND "lastSeenAt"::timestamptz >= NOW() - INTERVAL '30 days'
         GROUP BY 1 ORDER BY 1 ASC
       `)) as any,
     ]);
