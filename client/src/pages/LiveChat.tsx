@@ -1015,9 +1015,26 @@ function LiveChat() {
     setEditingTitleChatId(null);
     try {
       const res = await fetch(`/api/livechat/chats/${chat.id}/messages`, { credentials: "include" });
-      if (res.ok) setChatMessages(await res.json());
+      if (res.ok) {
+        const msgs: Message[] = await res.json();
+        // Bug 1.1: parsear [AGENT_ATTACHMENTS:{...}] salvo no banco e mapear para o campo attachments
+        const parsed = msgs.map((m) => {
+          if (m.sender === "agent" && m.content?.startsWith("[AGENT_ATTACHMENTS:")) {
+            try {
+              const jsonStr = m.content.replace(/^\[AGENT_ATTACHMENTS:/, "").replace(/\]$/, "");
+              const atts = JSON.parse(jsonStr);
+              if (Array.isArray(atts)) {
+                return { ...m, content: "", attachments: atts };
+              }
+            } catch {}
+          }
+          return m;
+        });
+        setChatMessages(parsed);
+      }
     } catch {}
   };
+
 
   // ——— Renomear título do chat ——————————————————————————————————————————————
   const startEditTitle = (chat: Chat, e: React.MouseEvent) => {
