@@ -179,7 +179,7 @@ export function isObviousNoise(message: string): { isNoise: boolean; reply: stri
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const GEMINI_CHAT_MODEL          = "gemini-3.1-pro-preview";
-const GEMINI_FALLBACK_MODEL      = "gemini-2.5-pro"; // Fallback imediato quando o primário retorna 503
+const GEMINI_FALLBACK_MODEL      = "gemini-2.0-flash"; // Fallback GA estável (não preview) — muito menor chance de 503
 const GEMINI_BASE                = "https://generativelanguage.googleapis.com/v1beta";
 
 // ─── In-memory chat sessions (histórico por chat) ─────────────────────────────
@@ -828,14 +828,16 @@ async function getRagDocuments(): Promise<{ id: string; name: string; content: s
 
 // ─── Gemini request com fallback de modelo ──────────────────────────────────
 // Estratégia:
-//   1. Tenta o modelo PRIMÁRIO (gemini-3.1-pro-preview) UMA vez (45s timeout)
-//   2. Se retornar 503 UNAVAILABLE → chama IMEDIATAMENTE o modelo FALLBACK (gemini-2.5-pro)
-//   3. O fallback tem UMA tentativa extra (30s timeout)
+//   1. Tenta o modelo PRIMÁRIO (gemini-3.1-pro-preview) UMA vez (20s timeout — falha rápida)
+//   2. Se retornar 503/429/timeout → chama IMEDIATAMENTE o FALLBACK (gemini-2.0-flash)
+//   3. O fallback (modelo GA estável) tem 25s de timeout
 //   4. Se ambos falharem, lança erro limpo — sem JSON exposto ao visitante
 //
-// Racional: HTTP 503 com "status: UNAVAILABLE" é diagnóstico definitivo de sobrecarga.
-// Retryar no mesmo modelo sobrecarregado desperdiça tempo (~16s sem resultado).
-// A troca imediata para gemini-2.5-pro resolve em ~1-2s adicionais.
+// Por que gemini-2.0-flash como fallback?
+//   - É um modelo GA (não preview) com SLA e capacidade muito superior
+//   - Muito raramente retorna 503 — lida com picos de demanda com muito mais folga
+//   - Responde em ~1-3s vs 10-45s do 3.1-pro-preview sob carga
+//   - gemini-2.5-pro é também preview — mesma fragilidade do primário
 
 async function geminiRequest(url: string, payload: object): Promise<any> {
   const apiKey = url.split("key=")[1] ?? "";
@@ -846,7 +848,7 @@ async function geminiRequest(url: string, payload: object): Promise<any> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(20_000), // 20s: falha rápida — se 3.1-pro não respondeu em 20s, o fallback resolve mais rápido
     });
 
     if (res.ok) return await res.json();
@@ -887,7 +889,7 @@ async function geminiRequest(url: string, payload: object): Promise<any> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(25_000), // 25s: gemini-2.0-flash é muito mais rápido, raramente precisa de mais
     });
 
     if (fallbackRes.ok) {
