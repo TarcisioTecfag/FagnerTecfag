@@ -53,6 +53,7 @@ import {
   MicOff,
   Square,
   Target,
+  Paperclip,
 } from "lucide-react";
 import { CustomerModal } from "@/components/CustomerModal";
 import ActivationRateCard    from "../components/dashboard/ActivationRateCard";
@@ -419,6 +420,8 @@ function LiveChat() {
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [agentInput, setAgentInput] = useState("");
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const agentFileInputRef = useRef<HTMLInputElement>(null);
   const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
   const [allVisitors, setAllVisitors] = useState<Visitor[]>([]);
   const [pipelineData, setPipelineData] = useState<Record<string, Visitor[]>>({});
@@ -1036,6 +1039,40 @@ function LiveChat() {
     } finally {
       setSavingTitle(false);
       setEditingTitleChatId(null);
+    }
+  };
+
+  // ——— Agent: upload e envio de arquivo ao cliente ——————————————————————
+  const handleAgentFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedChat) return;
+    // Reseta o input para permitir reenvio do mesmo arquivo
+    if (agentFileInputRef.current) agentFileInputRef.current.value = "";
+    setIsUploadingFile(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/livechat/upload-agent", {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+      if (!res.ok) throw new Error("Falha no upload");
+      const { url, name, mimeType, size } = await res.json();
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: "AGENT_MESSAGE",
+          chatId: selectedChat.id,
+          userId: currentUser?.id ?? "admin",
+          content: "",
+          attachments: [{ url, name, mimeType, size }],
+        }));
+      }
+      toast({ description: `📎 "${name}" enviado ao cliente!` });
+    } catch (err: any) {
+      toast({ description: `Erro ao enviar arquivo: ${err.message}`, variant: "destructive" });
+    } finally {
+      setIsUploadingFile(false);
     }
   };
 
@@ -2066,8 +2103,27 @@ function LiveChat() {
                       </div>
                     ) : selectedChat.status === "human_active" ? (
                       <div className="space-y-2">
-                        {/* Linha de input de texto */}
+                        {/* Linha de input de texto + botão clipe */}
                         <div className="flex gap-2">
+                          {/* Input oculto para upload de arquivo */}
+                          <input
+                            ref={agentFileInputRef}
+                            type="file"
+                            accept="image/*,.pdf,.xlsx,.xls,.docx,.doc,video/mp4,video/webm"
+                            className="hidden"
+                            onChange={handleAgentFileUpload}
+                          />
+                          {/* Botão clipe */}
+                          <button
+                            onClick={() => agentFileInputRef.current?.click()}
+                            disabled={isRecording || isSendingAudio || isUploadingFile}
+                            title="Enviar arquivo (imagem, PDF, planilha, vídeo)"
+                            className="self-end flex items-center justify-center h-[44px] w-[44px] rounded-xl border border-zinc-200 bg-white text-zinc-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-all disabled:opacity-40"
+                          >
+                            {isUploadingFile
+                              ? <div className="w-4 h-4 border-2 border-zinc-300 border-t-red-500 rounded-full animate-spin" />
+                              : <Paperclip className="w-4 h-4" />}
+                          </button>
                           <Textarea
                             value={agentInput}
                             onChange={(e) => setAgentInput(e.target.value)}

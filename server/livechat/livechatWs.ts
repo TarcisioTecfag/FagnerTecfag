@@ -2279,19 +2279,26 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               needsHuman: "false",
             });
 
+            // Attachments enviados pelo agente (imagens, PDFs, etc.)
+            const agentAttachments: { url: string; name: string; mimeType: string; size?: number }[] = data.attachments ?? [];
+
+            // Conteúdo salvo inclui attachments como JSON embed (para histórico)
+            const savedContent = data.content || (agentAttachments.length > 0 ? `[AGENT_ATTACHMENTS:${JSON.stringify(agentAttachments)}]` : "");
+
             // Save agent message
             await lcStorage.createMessage({
               chatId: chat.id,
               sender: "agent",
-              content: data.content,
+              content: savedContent,
             });
 
-            // Send to visitor
+            // Send to visitor — inclui attachments para renderização no widget
             sendToVisitor(chat.visitorId, {
               type: "CHAT_REPLY",
               chatId: chat.id,
               sender: "agent",
-              content: data.content,
+              content: data.content || "",
+              attachments: agentAttachments.length > 0 ? agentAttachments : undefined,
               timestamp: new Date().toISOString(),
             });
 
@@ -2302,7 +2309,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               visitorId: chat.visitorId,
               sender: "agent",
               agentId: data.userId,
-              content: data.content,
+              content: savedContent,
               timestamp: new Date().toISOString(),
             });
             break;

@@ -10,6 +10,46 @@ import { lcStorage } from "./livechatStorage.js";
 import { getDiagLog } from "./livechatAI.js";
 import { getRdValidToken } from "./rdCrmService.js";
 import { broadcastPipelineUpdateExternal } from "./livechatWs.js";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+
+// ── Multer: upload de arquivos do agente ──────────────────────────────────────
+const UPLOADS_DIR = path.join(__dirname, "../../data/uploads");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const agentUploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const ext  = path.extname(file.originalname);
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+    cb(null, `${Date.now()}-${safe}`);
+  },
+});
+
+const ALLOWED_MIMES = [
+  "image/jpeg","image/png","image/gif","image/webp",
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",     // xlsx
+  "application/vnd.ms-excel",                                               // xls
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",// docx
+  "application/msword",                                                      // doc
+  "video/mp4","video/webm","video/ogg",
+];
+
+const agentUpload = multer({
+  storage: agentUploadStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIMES.includes(file.mimetype)) return cb(null, true);
+    cb(new Error(`Tipo de arquivo não permitido: ${file.mimetype}`));
+  },
+});
+
 
 // â”€â”€â”€ Auth middleware (mesma lÃ³gica do index.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -690,6 +730,24 @@ export function registerLiveChatRoutes(app: any): void {
       const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
       return res.json(await lcStorage.getLeadScoringDistribution(dateFrom, dateTo));
     } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
+  });
+
+  // ── Upload de arquivo pelo agente (para enviar ao cliente) ──────────────────
+  router.post("/upload-agent", requireAuth, (req: Request, res: Response, next: NextFunction) => {
+    agentUpload.single("file")(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({ error: err.message ?? "Erro no upload" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: "Nenhum arquivo recebido" });
+      }
+      const url = `/uploads/${req.file.filename}`;
+      const mimeType = req.file.mimetype;
+      const name = req.file.originalname;
+      const size = req.file.size;
+      console.log(`[LiveChat] 📎 Agente fez upload: ${name} (${mimeType}) → ${url}`);
+      return res.json({ url, name, mimeType, size });
+    });
   });
 
   // Mount all routes under /api/livechat
