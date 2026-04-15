@@ -1,19 +1,9 @@
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import DashboardCard from "./DashboardCard";
 import { useStatsData, periodToDates } from "./useStatsData";
 
-const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload?.length) {
-    const d = payload[0].payload;
-    return (
-      <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-lg">
-        <p className="text-sm font-semibold text-card-foreground">{d.icon} {d.name}</p>
-        <p className="text-sm text-muted-foreground">{d.value} chats</p>
-      </div>
-    );
-  }
-  return null;
-};
+
+
 
 const ContainmentIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--chart-green))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -72,7 +62,6 @@ const ContainmentRateCard = ({ period = "14d", delay = 0 }: { period?: string; d
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip content={<CustomTooltip />} />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
