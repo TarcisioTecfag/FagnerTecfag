@@ -931,6 +931,19 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 const bufferedContents = chatMessageBuffers.get(chat.id)?.content ?? [data.content];
                 chatMessageBuffers.delete(chat.id);
 
+                // ── GUARD 2.0: Verifica se operador assumiu durante o buffer de 15s ──
+                // cancelGeneration() só cancela o fetch Gemini se ele JÁ iniciou.
+                // Se o TAKE_OVER chegou DENTRO dos 15s, o Gemini ainda não foi chamado.
+                // Esta verificação garante que não iremos chamar a IA nesse caso.
+                {
+                  const chatSnapshot = await lcStorage.getChatById(chat.id);
+                  if (!chatSnapshot || chatSnapshot.status === "human_active" || chatSnapshot.status === "closed") {
+                    console.log(`[LiveChat AI] ⚡ Buffer de 15s abortado — chat ${chat.id} status="${chatSnapshot?.status}" (operador assumiu durante o debounce)`);
+                    sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
+                    return;
+                  }
+                }
+
                 // Smart deduplication: se a última mensagem do buffer contém um dado estruturado
                 // (CNPJ, CPF, CEP, email), usa APENAS ela — evita confundir o Gemini
                 // com repetições do mesmo dado + perguntas avulsas concatenadas.

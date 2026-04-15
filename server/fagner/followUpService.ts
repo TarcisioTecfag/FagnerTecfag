@@ -6,6 +6,14 @@ import { sendMessage } from "./rdConversasService.js";
 
 const FOLLOW_UP_MS   = 5  * 60_000; // 5 minutos sem resposta → follow-up
 const PAUSE_MS       = 10 * 60_000; // 10 minutos após follow-up → pausa
+const ABANDON_CLOSE_MS = 20 * 60_000; // 20 minutos de inatividade total → fechar com dados parciais
+
+// Importado dinamicamente para evitar dependência circular
+let _forceCloseSession: ((session: ContactSession, reason: string) => Promise<void>) | null = null;
+
+export function setForceCloseSession(fn: (session: ContactSession, reason: string) => Promise<void>) {
+  _forceCloseSession = fn;
+}
 
 const FOLLOW_UP_MESSAGES = [
   "Oi, ainda estou por aqui! Posso te ajudar com mais alguma coisa? 😊",
@@ -22,6 +30,8 @@ function randomFollowUp(): string {
 /**
  * Verifica todas as sessões ativas e envia follow-up ou pausa conforme
  * o tempo desde a última mensagem.
+ * Também aciona o fechamento por abandono quando o cliente tem telefone
+ * e ficou mais de 20 minutos sem responder.
  */
 export async function checkFollowUps(activeSessions: ContactSession[]): Promise<void> {
   const now = Date.now();
@@ -40,6 +50,21 @@ export async function checkFollowUps(activeSessions: ContactSession[]): Promise<
     if (session.assignedOperator) {
       session.isPaused = true;
       console.log(`[FollowUp] Sessão ${session.contactId} pausada — operador já atribuído (${session.assignedOperator}), follow-up bloqueado.`);
+      continue;
+    }
+
+    // ── FECHAMENTO POR ABANDONO ───────────────────────────────────────────────
+    // Se o cliente forneceu telefone mas ficou 20+ min sem responder,
+    // cria o card com os dados parciais e fecha a sessão.
+    if (
+      sinceLastMsg >= ABANDON_CLOSE_MS &&
+      session.flowData.clientPhone &&
+      _forceCloseSession
+    ) {
+      console.log(`[FollowUp] Sessão ${session.contactId} — abandono detectado (telefone coletado, 20min sem resposta). Fechando com dados parciais.`);
+      await _forceCloseSession(session, "inatividade de 20 minutos com telefone coletado").catch((e) =>
+        console.error(`[FollowUp] Erro em forceCloseSession para ${session.contactId}:`, e)
+      );
       continue;
     }
 

@@ -237,6 +237,16 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d`;
 }
 
+// Bug 3.1: horário exato (HH:MM) para as mensagens do chat do operador
+function formatTime(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
 function formatTextWithLinks(text: string) {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = text.split(urlRegex);
@@ -1238,6 +1248,38 @@ function LiveChat() {
     toast({ title: "Fagner reativado", description: "O Fagner voltará a responder quando o cliente mandar mensagem." });
   };
 
+  // ——— Bug 3.2: Copiar histórico completo da conversa ——————————————————————
+  const handleCopyHistory = async () => {
+    if (!chatMessages.length) {
+      toast({ description: "Não há mensagens para copiar." });
+      return;
+    }
+    const visitorLabel = selectedChat?.visitorName ?? "Visitante";
+    const dateHeader = selectedChat?.startedAt
+      ? new Date(selectedChat.startedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+      : "";
+    const header = `=== Histórico de Chat — ${visitorLabel} | ${dateHeader} ===\n`;
+    const lines = chatMessages.map((m) => {
+      const who =
+        m.sender === "visitor" ? visitorLabel
+        : m.sender === "ai" ? "Fagner (IA)"
+        : m.sender === "system" ? "Sistema"
+        : "Agente";
+      const time = formatTime(m.sentAt);
+      const body = m.content?.trim()
+        || (m.attachments?.length ? `[Arquivo: ${m.attachments.map(a => a.name).join(", ")}]` : "");
+      return `[${time}] ${who}: ${body}`;
+    });
+    const text = header + lines.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ description: "📋 Histórico copiado para a área de transferência!" });
+    } catch {
+      toast({ description: "Erro ao copiar. Tente novamente.", variant: "destructive" });
+    }
+  };
+
+
   // ——— Close chat —————————————————————————————————————————————————
   const handleCloseChat = async (chatId: string) => {
     // Notifica o visitante via WS (se disponível)
@@ -1926,6 +1968,17 @@ function LiveChat() {
                             </div>
                           )}
 
+                          {/* Bug 3.2: Botão Copiar Histórico */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCopyHistory}
+                            className="h-8 text-xs gap-1.5 border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300"
+                            title="Copiar todo o histórico desta conversa"
+                          >
+                            📋 Copiar
+                          </Button>
+
                           <Button
                             size="sm"
                             onClick={() => handleCloseChat(selectedChat.id)}
@@ -2075,7 +2128,7 @@ function LiveChat() {
                               {isAI && <Bot className="w-3 h-3" />}
                               {msg.sender === "agent" && <User className="w-3 h-3" />}
                               <span>{isVisitor ? "Visitante" : isAI ? "Fagner (IA)" : "Agente"}</span>
-                              <span>&bull; {timeAgo(msg.sentAt)}</span>
+                              <span>&bull; {formatTime(msg.sentAt)}</span>
                             </div>
 
                             {/* ── Attachments do agente (imagem/doc enviado pelo operador) ── */}
@@ -2084,19 +2137,21 @@ function LiveChat() {
                                 {msg.attachments.map((att, i) => {
                                   const isImg = att.mimeType?.startsWith("image/");
                                   const isVid = att.mimeType?.startsWith("video/");
+                                  // Bug 1.1: URL relativa precisa do prefixo do backend Railway
+                                  const attUrl = att.url.startsWith("/") ? `${BACKEND}${att.url}` : att.url;
                                   if (isImg) return (
-                                    <a key={i} href={att.url} target="_blank" rel="noopener noreferrer"
+                                    <a key={i} href={attUrl} target="_blank" rel="noopener noreferrer"
                                       className="block rounded-xl overflow-hidden border border-white/20 shadow">
-                                      <img src={att.url} alt={att.name}
+                                      <img src={attUrl} alt={att.name}
                                         className="max-w-[220px] max-h-[180px] object-contain w-full hover:opacity-90 transition-opacity" />
                                     </a>
                                   );
                                   if (isVid) return (
-                                    <video key={i} controls src={att.url}
+                                    <video key={i} controls src={attUrl}
                                       className="max-w-[240px] rounded-xl border border-white/20 shadow" />
                                   );
                                   return (
-                                    <a key={i} href={att.url} target="_blank" rel="noopener noreferrer"
+                                    <a key={i} href={attUrl} target="_blank" rel="noopener noreferrer"
                                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all text-xs font-semibold border border-white/20">
                                       <Paperclip className="w-3.5 h-3.5" />
                                       <span className="truncate max-w-[160px]">{att.name}</span>
@@ -2106,6 +2161,7 @@ function LiveChat() {
                                 })}
                               </div>
                             )}
+
 
                             <div className="whitespace-pre-wrap break-words text-sm">
                               {(() => {

@@ -58,7 +58,7 @@ import {
   generateReportText,
   saveReportToDb,
 } from "./reportService.js";
-import { checkFollowUps, reactivateSession } from "./followUpService.js";
+import { checkFollowUps, reactivateSession, setForceCloseSession } from "./followUpService.js";
 import {
   isWithinSchedule,
   getOffHoursMessage,
@@ -106,6 +106,8 @@ let deps: OrchestratorDeps;
 export function initOrchestrator(d: OrchestratorDeps) {
   deps = d;
   deps.emitLog("Fagner Orchestrator inicializado 🚀", "SUCCESS");
+  // Injeta forceCloseSession no followUpService (evita import circular)
+  setForceCloseSession(forceCloseSession);
 }
 
 // ─── Round-robin de Peças ───────────────────────────────────────────────────────
@@ -518,10 +520,65 @@ async function processContact(session: ContactSession, combinedMessage: string):
 
   } finally {
     session.isProcessing = false;
+
+    // ── INTERRUPT & REPLAY: consome mensagens que chegaram durante o processamento ──
+    // Usa enqueueMessage (caminho normal) para garantir que o histórico do Gemini
+    // já está atualizado antes do replay — evita re-greeting e contexto quebrado.
+    if (!session.isCompleted && session.pendingWhileProcessing.length > 0) {
+      const pending = session.pendingWhileProcessing.splice(0).join("\n").trim();
+      deps.emitLog(`[${session.contactId}] 🔄 Replay: re-enfileirando mensagem pendente após processamento.`, "INFO");
+      // Pequena pausa para garantir que o histórico foi persistido antes do replay
+      setTimeout(() => {
+        enqueueMessage(session, pending, processContact);
+      }, 800);
+    }
   }
 }
 
-// ─── Processamento de mídia (webhook com media) ────────────────────────────
+// ─── Fechamento forçado por abandono ─────────────────────────────────────────
+// Chamada pelo followUpService quando o cliente tem telefone mas parou de responder.
+// Cria o card CRM com os dados parciais e marca a sessão como concluída.
+
+export async function forceCloseSession(session: ContactSession, reason: string): Promise<void> {
+  if (session.isCompleted || session.isProcessing) return;
+
+  deps.emitLog(`[${session.contactId}] ⏱️ forceCloseSession: ${reason}`, "WARN");
+
+  session.isCompleted = true;
+  cancelDebounce(session);
+
+  try {
+    const apiKey = await deps.getApiKey();
+
+    // Adiciona observação de abandono ao flowData
+    const abandonNote = `[ABANDONO] Cliente parou de responder no meio do atendimento (${reason}). Dados parciais coletados.`;
+    session.flowData.notes = session.flowData.notes
+      ? `${session.flowData.notes}\n${abandonNote}`
+      : abandonNote;
+
+    // Gera relatório com dados parciais
+    const reportJson = await generateReportJson(session, apiKey).catch(() => ({}));
+    const reportText = generateReportText(session, reportJson, session.cnpjApiData as any);
+
+    // Cria card CRM se o fluxo gera card
+    if (flowGeneratesCard(session)) {
+      await upsertDeal(session, session.cnpjApiData as any).catch((e: any) =>
+        deps.emitLog(`[${session.contactId}] Aviso: falha ao criar card (abandono) — ${e.message}`, "WARN")
+      );
+    }
+
+    const operator = getTransferTarget(session);
+    await saveReportToDb(deps.storage, session, reportText, reportJson, operator.name).catch((e: any) =>
+      deps.emitLog(`[${session.contactId}] Aviso: falha ao salvar relatório (abandono) — ${e.message}`, "WARN")
+    );
+
+    deps.emitLog(`[${session.contactId}] ✅ Card criado por abandono. Operador: ${operator.name}`, "SUCCESS");
+  } catch (err: any) {
+    deps.emitLog(`[${session.contactId}] Erro em forceCloseSession: ${err.message}`, "ERROR");
+  }
+}
+
+
 
 export async function processMedia(
   session: ContactSession,

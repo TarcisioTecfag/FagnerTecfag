@@ -57,9 +57,12 @@ function fireBuffer(session: ContactSession, processFn: ProcessFn): void {
   // Não processa se a sessão já está completa
   if (session.isCompleted) return;
 
-  // Não processa se já está em processamento (mutex simples)
+  // ── INTERRUPT & REPLAY ───────────────────────────────────────────────────────
+  // Se já está processando, enfileira para replay em vez de descartar.
+  // O orquestrador consome pendingWhileProcessing no bloco finally via enqueueMessage.
   if (session.isProcessing) {
-    console.warn(`[Debounce] Sessão ${session.contactId} já em processamento — pulando.`);
+    console.log(`[Debounce] Sessão ${session.contactId} em processamento — enfileirando para replay: "${combined.slice(0, 60)}"`);
+    session.pendingWhileProcessing.push(combined);
     return;
   }
 

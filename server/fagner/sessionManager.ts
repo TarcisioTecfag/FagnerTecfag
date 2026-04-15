@@ -82,6 +82,7 @@ export interface ContactSession {
   // Buffer / debounce
   messageBuffer: string[];
   debounceTimer: ReturnType<typeof setTimeout> | null;
+  pendingWhileProcessing: string[];  // mensagens recebidas enquanto isProcessing=true (replay)
   // Misc
   productNotes: string[];     // códigos/nomes de produto mencionados
   messageCount: number;       // total de mensagens recebidas
@@ -119,6 +120,7 @@ export function createSession(contactId: string): ContactSession {
     mediaMemory: [],
     messageBuffer: [],
     debounceTimer: null,
+    pendingWhileProcessing: [],
     productNotes: [],
     messageCount: 0,
     createdAt: new Date(),
