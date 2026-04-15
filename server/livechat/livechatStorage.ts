@@ -1203,12 +1203,16 @@ export const lcStorage = {
     const total = g(totalR), human = g(humanR), abandoned = g(abandonedR);
     // Resolvido pela IA = chats sem intervenção humana e sem abandono
     const ai = Math.max(0, total - human - abandoned);
+    // Containment rate CORRETO:
+    //   Abandono = visitante saiu sozinho, IA nunca precisou de humano → CONTIDO
+    //   Taxa = (IA resolvido + Abandonado) / Total = "% que não precisou de humano"
+    const contained = ai + abandoned;
     return {
       aiResolved: ai,
       humanEscalated: human,
       abandoned,
       totalChats: total,
-      containmentRate: total > 0 ? Math.round((ai / total) * 100) : 0,
+      containmentRate: total > 0 ? Math.round((contained / total) * 100) : 0,
     };
   },
 
@@ -1391,9 +1395,10 @@ export const lcStorage = {
       : dateTo   ? `AND "firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
       : '';
     const g = (r: any) => Number(r?.rows?.[0]?.c ?? r?.[0]?.c ?? 0);
-    const [s1, s2, s3, s4, s5] = await Promise.all([
+    // "Chat Aberto" removido: rastreamento de clique iniciou hoje, dados insuficientes
+    // para comparação com etapas históricas. Reintroduzir após 30 dias de acúmulo.
+    const [s1, s3, s4, s5] = await Promise.all([
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE 1=1 ${dw}`)) as any,
-      db.execute(sql.raw(`SELECT COUNT(DISTINCT ce."visitorId")::int AS c FROM lc_click_events ce INNER JOIN lc_visitors v ON v.id = ce."visitorId" WHERE ce."clickType" = 'chat_open' ${dw.replace(/"firstSeenAt"/g,'v."firstSeenAt"')}`)) as any,
       db.execute(sql.raw(`SELECT COUNT(DISTINCT v.id)::int AS c FROM lc_visitors v INNER JOIN lc_chats ch ON ch."visitorId" = v.id WHERE 1=1 ${dw.replace(/"firstSeenAt"/g,'v."firstSeenAt"')}`)) as any,
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE "posVendaNome" IS NOT NULL ${dw}`)) as any,
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE "rdCrmDealId" IS NOT NULL ${dw}`)) as any,
@@ -1401,7 +1406,6 @@ export const lcStorage = {
     const total = g(s1);
     const steps = [
       { label: 'Sessão Iniciada',  count: total },
-      { label: 'Chat Aberto',      count: g(s2) },
       { label: '1ª Mensagem',      count: g(s3) },
       { label: 'Dados Capturados', count: g(s4) },
       { label: 'Lead no CRM',      count: g(s5) },
