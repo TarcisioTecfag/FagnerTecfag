@@ -1,15 +1,35 @@
 import DashboardCard from "./DashboardCard";
 import { useStatsData, periodToDates } from "./useStatsData";
 
+// ─── Thresholds calibrados para o Fagner (Gemini LLM) ───────────────────────
+// Contexto: LLMs geram tokens sequencialmente. Respostas longas = mais tempo.
+// Margem de erro técnica (rede + Railway + API cold start): ~8 segundos.
+//
+//   ≤8s   → Rápido   (dentro da margem — pode ser só overhead de infra)
+//   8–20s → Regular  (IA processando normalmente, sem problemas)
+//   >20s  → Lento    (atenção: sobrecarga, resposta longa ou retry na API)
+const FAST_MS    = 8_000;   // 8s
+const REGULAR_MS = 20_000;  // 20s
+
 const legend = [
-  { label: "≤1.5s Rápido", color: "bg-success" },
-  { label: "1.5–3s Médio", color: "bg-warning" },
-  { label: ">3s Lento",    color: "bg-destructive" },
+  { label: "≤8s Rápido",    color: "bg-success"     },
+  { label: "8–20s Regular", color: "bg-warning"      },
+  { label: ">20s Lento",    color: "bg-destructive"  },
 ];
 
 const fmtMs = (ms: number) => ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+
 const latColor = (ms: number) =>
-  ms === 0 ? "text-muted-foreground" : ms <= 1500 ? "text-success" : ms <= 3000 ? "text-warning" : "text-destructive";
+  ms === 0
+    ? "text-muted-foreground"
+    : ms <= FAST_MS    ? "text-success"
+    : ms <= REGULAR_MS ? "text-warning"
+    : "text-destructive";
+
+const barColor = (ms: number) =>
+  ms <= FAST_MS    ? "hsl(var(--chart-green))"
+  : ms <= REGULAR_MS ? "hsl(var(--warning))"
+  : "hsl(var(--destructive))";
 
 const ClockIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--chart-green))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -27,11 +47,11 @@ const LatencyCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: n
 
   const metrics = [
     { label: "P50 (Mediana)", value: data?.p50 ?? 0, desc: "Metade das respostas abaixo desse tempo" },
-    { label: "P90",           value: data?.p90 ?? 0, desc: "90% das respostas abaixo desse tempo" },
-    { label: "P95 (Pior 5%)", value: data?.p95 ?? 0, desc: "Apenas 5% acima desse tempo" },
+    { label: "P90",           value: data?.p90 ?? 0, desc: "90% das respostas abaixo desse tempo"    },
+    { label: "P95 (Pior 5%)", value: data?.p95 ?? 0, desc: "Apenas 5% das respostas acima desse tempo" },
   ];
 
-  const byDay = data?.byDay ?? [];
+  const byDay  = data?.byDay ?? [];
   const dayMax = Math.max(...byDay.map((d) => d.avgMs), 1);
 
   return (
@@ -48,7 +68,8 @@ const LatencyCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: n
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {/* Cards P50 / P90 / P95 */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
             {metrics.map((m) => (
               <div key={m.label} className="rounded-xl border border-border p-5 text-center hover:border-primary/30 transition-colors group">
                 <span className="text-xs text-muted-foreground">{m.label}</span>
@@ -58,8 +79,21 @@ const LatencyCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: n
             ))}
           </div>
 
+          {/* ⚠ Aviso de margem de erro */}
+          <div className="flex items-start gap-2.5 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 mb-5">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--warning))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-semibold text-warning">Margem de erro ~8s.</span>{" "}
+              Considere que até 8 segundos dos valores acima podem ser atribuídos a variações de rede, cold start do Railway ou instabilidade momentânea da API Gemini — não ao processamento real da IA.
+            </p>
+          </div>
+
+          {/* Gráfico por dia */}
           {byDay.some((d) => d.avgMs > 0) && (
-            <div className="mb-6">
+            <div className="mb-5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Média por Dia da Semana</p>
               <div className="flex items-end gap-1.5 h-16 bg-muted/40 rounded-xl px-3 pt-2 pb-1">
                 {byDay.map((d, i) => (
@@ -68,7 +102,7 @@ const LatencyCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: n
                       className="w-full rounded-t transition-all"
                       style={{
                         height: d.avgMs > 0 ? `${Math.max((d.avgMs / dayMax) * 40, 4)}px` : 0,
-                        background: d.avgMs <= 1500 ? "hsl(var(--chart-green))" : d.avgMs <= 3000 ? "hsl(var(--warning))" : "hsl(var(--destructive))",
+                        background: barColor(d.avgMs),
                         opacity: 0.85,
                       }}
                     />
@@ -79,6 +113,7 @@ const LatencyCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: n
             </div>
           )}
 
+          {/* Legenda */}
           <div className="flex items-center justify-center gap-8">
             {legend.map((l) => (
               <div key={l.label} className="flex items-center gap-2">
