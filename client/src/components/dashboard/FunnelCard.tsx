@@ -73,9 +73,10 @@ const FunnelCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: nu
               const prev = steps[i - 1];
               const isEmpty = step.count === 0;
 
-              // Largura da barra: proporcional ao volume do step 1 (referência de escala)
-              const width = top > 0 && step.count > 0
-                ? Math.max(2, (step.count / top) * 100)
+              // Escala logarítmica: log(50)/log(1893) = 53% (visível) vs linear 2,6% (invisível)
+              // Preserva a ordem relativa mas mantém todas as barras legíveis.
+              const logWidth = top > 0 && step.count > 0
+                ? Math.max(4, (Math.log(step.count + 1) / Math.log(top + 1)) * 100)
                 : 0;
 
               // Taxa de conversão do STEP ANTERIOR para este
@@ -129,7 +130,7 @@ const FunnelCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: nu
                     ) : (
                       <div
                         className="h-full rounded-lg transition-all duration-1000 ease-out"
-                        style={{ width: `${width}%`, backgroundColor: color }}
+                        style={{ width: `${logWidth}%`, backgroundColor: color }}
                       />
                     )}
                   </div>

@@ -1166,9 +1166,8 @@ export const lcStorage = {
       // Total: todos os chats do período
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE 1=1 ${cw}`)) as any,
 
-      // Escalado p/ Humano: qualquer chat que teve pelo menos 1 mensagem de um agente humano.
-      // Usa lc_messages com sender='agent' — captura chats históricos mesmo após serem fechados.
-      // status='human_active' falha porque chats encerrados mudam de status.
+      // Escalado p/ Humano: qualquer chat que teve mensagem de um agente humano (sender='agent').
+      // Captura histórico mesmo após chats encerrados (status muda, mensagens ficam).
       db.execute(sql.raw(`
         SELECT COUNT(DISTINCT ch.id)::int AS c
         FROM lc_chats ch
@@ -1176,21 +1175,28 @@ export const lcStorage = {
         WHERE 1=1 ${cw}
       `)) as any,
 
-      // Abandono: chats que ainda estão 'open' (não resolvidos, não encerrados, não em humano)
-      // e cuja última mensagem do visitante tem mais de 2 horas — saiu sem concluir.
+      // Abandono (Opção B): visitante conversou mas saiu antes de fornecer dados de contato.
+      // Critérios:
+      //   1. Teve ao menos 1 mensagem do visitante (conversa começou)
+      //   2. NÃO capturou nome nem telefone (não virou lead qualificado)
+      //   3. NÃO foi escalado para humano (esses são contados em 'Escalado')
       db.execute(sql.raw(`
-        SELECT COUNT(*)::int AS c
+        SELECT COUNT(DISTINCT ch.id)::int AS c
         FROM lc_chats ch
-        WHERE ch.status = 'open' ${cw}
-          AND NOT EXISTS (
-            SELECT 1 FROM lc_messages m
-            WHERE m."chatId" = ch.id
-              AND m.sender = 'visitor'
-              AND m."sentAt"::timestamptz >= NOW() - INTERVAL '2 hours'
-          )
+        INNER JOIN lc_visitors v ON v.id = ch."visitorId"
+        WHERE 1=1 ${cw}
+          -- Conversa teve ao menos 1 mensagem do visitante
           AND EXISTS (
+            SELECT 1 FROM lc_messages m
+            WHERE m."chatId" = ch.id AND m.sender = 'visitor'
+          )
+          -- Dados de contato NÃO foram capturados
+          AND v."posVendaNome" IS NULL
+          AND v."posVendaTelefone" IS NULL
+          -- Não foi escalado para humano (evita dupla contagem)
+          AND NOT EXISTS (
             SELECT 1 FROM lc_messages m2
-            WHERE m2."chatId" = ch.id AND m2.sender = 'visitor'
+            WHERE m2."chatId" = ch.id AND m2.sender = 'agent'
           )
       `)) as any,
     ]);
