@@ -138,6 +138,19 @@ export const lcStorage = {
     return (await this.getVisitorById(id))!;
   },
 
+  /** Localiza um visitante pelo telefone (compara apenas dígitos para tolerar máscaras) */
+  async getVisitorByPhone(phone: string): Promise<LcVisitor | null> {
+    const digitsOnly = phone.replace(/\D/g, "");
+    if (!digitsOnly) return null;
+    // Busca últimos 9 dígitos para tolerar DDI/DDD diferente
+    const suffix = digitsOnly.slice(-9);
+    const rows = await db.execute(
+      sql.raw(`SELECT * FROM lc_visitors WHERE regexp_replace("posVendaTelefone", '[^0-9]', '', 'g') LIKE '%${suffix}' ORDER BY "lastSeenAt" DESC LIMIT 1`)
+    ) as any;
+    const data = rows?.rows ?? rows ?? [];
+    return Array.isArray(data) && data.length > 0 ? (data[0] as LcVisitor) : null;
+  },
+
   async updateVisitor(id: string, data: Partial<LcVisitor>): Promise<LcVisitor | null> {
     const existing = await this.getVisitorById(id);
     if (!existing) return null;

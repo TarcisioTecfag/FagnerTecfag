@@ -73,6 +73,7 @@ import {
   createVtexCheckout,
   type VtexCheckoutRequest,
 } from "./vtexService.js";
+import { lcStorage } from "../livechat/livechatStorage.js";
 
 export { getSchedule, setSchedule };
 
@@ -416,6 +417,24 @@ async function processContact(session: ContactSession, combinedMessage: string):
             // Strip markdown WhatsApp da mensagem de checkout
             .replace(/\*([^*]+)\*/g, "$1")   // *negrito* → texto
             .replace(/_([^_]+)_/g, "$1");     // _itálico_ → texto
+
+          // ★ ATUALIZA PURCHASE INTENT SCORE = 100 no visitante do LiveChat
+          // (fire-and-forget — não bloqueia envio da mensagem)
+          (async () => {
+            try {
+              const phone = req.phone || session.contactPhone || "";
+              const visitor = phone ? await lcStorage.getVisitorByPhone(phone) : null;
+              if (visitor) {
+                await lcStorage.updatePurchaseIntentScore(visitor.id, 100);
+                await lcStorage.updateVisitorPipeline(visitor.id, "finalizado_com_venda");
+                deps.emitLog(`[${contactId}] 📊 LiveChat: purchaseIntentScore=100 + pipeline=finalizado_com_venda para visitor ${visitor.id}`, "SUCCESS");
+              } else {
+                deps.emitLog(`[${contactId}] ⚠️ LiveChat: visitante não encontrado pelo telefone "${phone}" — score não atualizado`, "WARN");
+              }
+            } catch (scoreErr: any) {
+              deps.emitLog(`[${contactId}] ⚠️ Erro ao atualizar purchaseIntentScore: ${scoreErr.message}`, "WARN");
+            }
+          })();
         } else {
           deps.emitLog(`[${contactId}] ❌ Falha ao criar checkout: ${result.error}`, "ERROR");
           // Remove a tag e avisa o cliente
