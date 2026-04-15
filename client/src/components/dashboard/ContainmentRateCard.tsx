@@ -9,9 +9,6 @@ const CustomTooltip = ({ active, payload }: any) => {
       <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-lg">
         <p className="text-sm font-semibold text-card-foreground">{d.icon} {d.name}</p>
         <p className="text-sm text-muted-foreground">{d.value} chats</p>
-        {d.isContained && (
-          <p className="text-xs text-success mt-1">✓ Sem intervenção humana</p>
-        )}
       </div>
     );
   }
@@ -32,25 +29,19 @@ const ContainmentRateCard = ({ period = "14d", delay = 0 }: { period?: string; d
     totalChats: number; containmentRate: number;
   }>(`/api/livechat/stats/containment?${qs}`);
 
-  const ai        = data?.aiResolved      ?? 0;
-  const human     = data?.humanEscalated  ?? 0;
-  const abandoned = data?.abandoned       ?? 0;
-  const total     = data?.totalChats      ?? 0;
+  // aiResolved já inclui os abandonados (somados no backend)
+  const ai    = data?.aiResolved      ?? 0;
+  const human = data?.humanEscalated  ?? 0;
+  const total = data?.totalChats      ?? 0;
+  const rate  = data?.containmentRate ?? 0;
 
-  // Taxa vem do backend: (IA + Abandonado) / Total
-  const rate = data?.containmentRate ?? 0;
-
-  // Donut: 3 segmentos — os 2 primeiros são "contidos" (sem humano), o 3º é escalado
   const chartData = [
-    { name: "Resolvido pela IA",      value: ai,        icon: "🤖", color: "hsl(217, 91%, 60%)",  isContained: true  },
-    { name: "Saiu sem precisar ajuda",value: abandoned,  icon: "🚪", color: "hsl(217, 91%, 75%)",  isContained: true  },
-    { name: "Escalado p/ Humano",     value: human,      icon: "👤", color: "hsl(48,  96%, 53%)",  isContained: false },
+    { name: "Resolvido pela IA",  value: ai,    icon: "🤖", color: "hsl(217, 91%, 60%)" },
+    { name: "Escalado p/ Humano", value: human, icon: "👤", color: "hsl(48,  96%, 53%)" },
   ];
 
-  const benchCls   = rate >= 80 ? "bg-success/10 text-success"           : rate >= 60 ? "bg-warning/10 text-warning"         : "bg-destructive/10 text-destructive";
-  const benchLabel = rate >= 80 ? "✓ Ótimo"                              : rate >= 60 ? "⚠ Atenção"                           : "✕ Crítico";
-
-  const contained = ai + abandoned;
+  const benchCls   = rate >= 80 ? "bg-success/10 text-success"     : rate >= 60 ? "bg-warning/10 text-warning"     : "bg-destructive/10 text-destructive";
+  const benchLabel = rate >= 80 ? "✓ Ótimo"                        : rate >= 60 ? "⚠ Atenção"                      : "✕ Crítico";
 
   return (
     <DashboardCard
@@ -66,12 +57,12 @@ const ContainmentRateCard = ({ period = "14d", delay = 0 }: { period?: string; d
         </div>
       ) : (
         <div className="flex flex-col lg:flex-row items-center gap-10">
-          {/* Donut */}
+          {/* Donut — 2 segmentos: IA vs Humano */}
           <div className="relative w-52 h-52 shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={total > 0 ? chartData.filter(d => d.value > 0) : [{ name: "Vazio", value: 1, icon: "", color: "hsl(var(--muted))", isContained: false }]}
+                  data={total > 0 ? chartData.filter(d => d.value > 0) : [{ name: "Vazio", value: 1, icon: "", color: "hsl(var(--muted))" }]}
                   cx="50%" cy="50%" innerRadius={65} outerRadius={90}
                   dataKey="value" strokeWidth={2} stroke="hsl(var(--card))"
                   startAngle={90} endAngle={-270}
@@ -92,38 +83,28 @@ const ContainmentRateCard = ({ period = "14d", delay = 0 }: { period?: string; d
 
           {/* Legend */}
           <div className="flex-1 w-full">
-            <div className="space-y-4 mb-6">
+            <div className="space-y-5 mb-6">
               {chartData.map((item) => (
                 <div key={item.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                    <div>
-                      <span className="text-sm font-medium text-card-foreground">{item.icon} {item.name}</span>
-                      {item.isContained && (
-                        <span className="ml-2 text-[10px] text-muted-foreground">(contido)</span>
-                      )}
-                    </div>
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="text-sm font-medium text-card-foreground">{item.icon} {item.name}</span>
                   </div>
                   <span className="text-lg font-bold text-card-foreground">{item.value}</span>
                 </div>
               ))}
             </div>
 
-            <div className="pt-4 border-t border-border space-y-3">
-              {/* Barra: azul escuro = resolvido IA | azul claro = abandonado | amarelo = humano */}
+            <div className="pt-5 border-t border-border space-y-2">
+              {/* Barra proporcional IA vs Humano */}
               {total > 0 && (
                 <div className="h-2.5 w-full rounded-full overflow-hidden bg-muted flex">
-                  <div className="h-full transition-all duration-700" style={{ width: `${Math.round((ai / total) * 100)}%`,        backgroundColor: "hsl(217, 91%, 60%)" }} />
-                  <div className="h-full transition-all duration-700" style={{ width: `${Math.round((abandoned / total) * 100)}%`, backgroundColor: "hsl(217, 91%, 75%)" }} />
-                  <div className="h-full transition-all duration-700" style={{ width: `${Math.round((human / total) * 100)}%`,     backgroundColor: "hsl(48,  96%, 53%)" }} />
+                  <div className="h-full transition-all duration-700" style={{ width: `${rate}%`,       backgroundColor: "hsl(217, 91%, 60%)" }} />
+                  <div className="h-full transition-all duration-700" style={{ width: `${100 - rate}%`, backgroundColor: "hsl(48, 96%, 53%)" }} />
                 </div>
               )}
-
               <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-sm text-muted-foreground">Total analisados</span>
-                  <span className="text-xs text-muted-foreground ml-2">({contained} contidos / {human} escalados)</span>
-                </div>
+                <span className="text-sm text-muted-foreground">Total de chats analisados</span>
                 <div className="flex items-center gap-3">
                   <span className="text-2xl font-bold text-card-foreground">{total.toLocaleString("pt-BR")}</span>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${benchCls}`}>{benchLabel}</span>

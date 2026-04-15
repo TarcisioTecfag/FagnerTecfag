@@ -1201,18 +1201,16 @@ export const lcStorage = {
       `)) as any,
     ]);
     const total = g(totalR), human = g(humanR), abandoned = g(abandonedR);
-    // Resolvido pela IA = chats sem intervenção humana e sem abandono
-    const ai = Math.max(0, total - human - abandoned);
-    // Containment rate CORRETO:
-    //   Abandono = visitante saiu sozinho, IA nunca precisou de humano → CONTIDO
-    //   Taxa = (IA resolvido + Abandonado) / Total = "% que não precisou de humano"
-    const contained = ai + abandoned;
+    // Abandonado = visitante saiu sozinho sem precisar de humano
+    // → soma direto em aiResolved para o grafico mostrar apenas 2 segmentos
+    const aiBase = Math.max(0, total - human - abandoned);
+    const ai = aiBase + abandoned; // IA + abandonados = tudo que nao precisou de humano
     return {
       aiResolved: ai,
       humanEscalated: human,
-      abandoned,
+      abandoned: 0,          // zero: ja absorvido em aiResolved
       totalChats: total,
-      containmentRate: total > 0 ? Math.round((contained / total) * 100) : 0,
+      containmentRate: total > 0 ? Math.round((ai / total) * 100) : 0,
     };
   },
 
