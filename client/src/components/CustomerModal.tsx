@@ -222,6 +222,10 @@ export function CustomerModal({
   const scoreHighlight: "red" | "amber" | "emerald" | undefined =
     intentScore >= 60 ? "emerald" : intentScore >= 30 ? "amber" : intentScore >= 1 ? undefined : undefined;
 
+  // Tempo total na sessão (soma do timeSpent de todos os pageviews)
+  const totalSessionSeconds = pageviews.reduce((acc, pv) => acc + (pv.timeSpent ?? 0), 0);
+  const totalSessionTime = totalSessionSeconds > 0 ? fmtTime(totalSessionSeconds) : "--";
+
   // Funnel / Pipeline label
   const funnelLabel = (visitor.pipelineStage ?? "novo_atendimento").replace(/_/g, " ");
 
@@ -235,7 +239,7 @@ export function CustomerModal({
 
       {/* Modal */}
       <div
-        className={`relative w-full max-w-4xl bg-background rounded-2xl shadow-2xl max-h-[90vh] flex flex-col transition-all duration-300 min-h-0 ${isClosing ? "opacity-0 scale-95" : "animate-scale-in"}`}
+        className={`relative w-full max-w-5xl bg-background rounded-2xl shadow-2xl max-h-[90vh] flex flex-col transition-all duration-300 min-h-0 ${isClosing ? "opacity-0 scale-95" : "animate-scale-in"}`}
       >
         {/* ── Header ───────────────────────────────────────────────────── */}
         <div className="relative bg-gradient-to-br from-brand to-brand-dark px-8 pt-6 pb-8 animate-fade-in">
@@ -287,7 +291,7 @@ export function CustomerModal({
 
         {/* ── Stats Row ────────────────────────────────────────────────── */}
         <div className="px-8 -mt-4 relative z-10">
-          <div className="grid grid-cols-4 gap-3 bg-background rounded-xl border border-border shadow-sm p-2">
+          <div className="grid grid-cols-5 gap-3 bg-background rounded-xl border border-border shadow-sm p-2">
             <StatCard icon={Activity}     label="Páginas"  value={visitor.totalPages}    delay={150} />
             <StatCard icon={MessageSquare} label="Chats"   value={visitor.totalChats}    delay={250} />
             <StatCard
@@ -303,6 +307,12 @@ export function CustomerModal({
               value={intentScore}
               delay={450}
               highlight={scoreHighlight}
+            />
+            <StatCard
+              icon={Clock}
+              label="Tempo"
+              value={totalSessionTime}
+              delay={550}
             />
           </div>
         </div>
