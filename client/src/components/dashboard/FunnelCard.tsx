@@ -24,12 +24,18 @@ const FunnelCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: nu
   }>(`/api/livechat/stats/funnel?${qs}`);
 
   const steps = data?.steps ?? [];
-  const top = steps[0]?.count ?? 0;
+  const top = steps[0]?.count ?? 0;        // volume total (escala)
+  const bottom = steps[steps.length - 1];  // último step
+
+  // Taxa de conversão total: primeiro → último
+  const overallRate = top > 0 && bottom?.count > 0
+    ? ((bottom.count / top) * 100).toFixed(1)
+    : null;
 
   return (
     <DashboardCard
       title="Funil de Conversão do Chat"
-      subtitle="Sessão → Lead no CRM — onde ocorre a queda"
+      subtitle="Onde o visitante abandona antes de virar lead"
       icon={<FunnelIcon />}
       iconBg="bg-chart-purple/10"
       delay={delay}
@@ -41,65 +47,96 @@ const FunnelCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: nu
       ) : steps.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-12">Sem dados para o período.</p>
       ) : (
-        <div className="space-y-5">
-          {steps.map((step, i) => {
-            // Largura: proporcional ao primeiro passo, mínimo 2% se count > 0
-            const width = top > 0 && step.count > 0
-              ? Math.max(2, (step.count / top) * 100)
-              : 0;
+        <>
+          {/* Resumo no topo: o que realmente importa */}
+          <div className="flex items-center gap-6 mb-6 pb-5 border-b border-border">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Volume Total</p>
+              <p className="text-2xl font-bold text-card-foreground">{top.toLocaleString("pt-BR")}</p>
+              <p className="text-xs text-muted-foreground">sessões no período</p>
+            </div>
+            {overallRate && (
+              <>
+                <div className="text-muted-foreground/30 text-xl">→</div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Conversão Final</p>
+                  <p className="text-2xl font-bold" style={{ color: "hsl(142, 71%, 45%)" }}>{overallRate}%</p>
+                  <p className="text-xs text-muted-foreground">sessão → lead no CRM</p>
+                </div>
+              </>
+            )}
+          </div>
 
-            const prev = steps[i - 1];
-            // Exibe badge de queda só quando ambos os passos têm dados reais
-            const drop = prev && prev.count > 0 && step.count > 0
-              ? -Math.round(((prev.count - step.count) / prev.count) * 100)
-              : null;
+          {/* Steps: foco nas QUEDAS entre etapas, não no % da etapa 1 */}
+          <div className="space-y-4">
+            {steps.map((step, i) => {
+              const prev = steps[i - 1];
+              const isEmpty = step.count === 0;
 
-            const color = COLORS[i] ?? "hsl(220, 10%, 55%)";
-            const isEmpty = step.count === 0;
+              // Largura da barra: proporcional ao volume do step 1 (referência de escala)
+              const width = top > 0 && step.count > 0
+                ? Math.max(2, (step.count / top) * 100)
+                : 0;
 
-            return (
-              <div key={step.label} className={isEmpty ? "opacity-50" : ""}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-xs font-bold text-muted-foreground">
-                      {i + 1}
-                    </span>
-                    <span className="text-sm font-medium text-card-foreground">{step.label}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {/* Badge de queda: só aparece quando há dados válidos nos dois passos */}
-                    {drop !== null && drop < 0 && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">
-                        {drop}%
+              // Taxa de conversão do STEP ANTERIOR para este (o que realmente importa)
+              const conversionFromPrev = prev && prev.count > 0 && step.count > 0
+                ? Math.round((step.count / prev.count) * 100)
+                : null;
+
+              // Queda (negativo = perda)
+              const drop = prev && prev.count > 0 && step.count > 0
+                ? -Math.round(((prev.count - step.count) / prev.count) * 100)
+                : null;
+
+              const color = COLORS[i] ?? "hsl(220, 10%, 55%)";
+
+              return (
+                <div key={step.label} className={isEmpty ? "opacity-40" : ""}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold"
+                        style={{ backgroundColor: isEmpty ? "hsl(220,10%,88%)" : color + "22", color: isEmpty ? "hsl(220,10%,60%)" : color }}>
+                        {i + 1}
                       </span>
+                      <span className="text-sm font-medium text-card-foreground">{step.label}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Queda relativa ao passo anterior — a métrica útil */}
+                      {i > 0 && drop !== null && drop < 0 && (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">
+                          {drop}% do anterior
+                        </span>
+                      )}
+                      {/* Taxa de aproveitamento desse passo */}
+                      {i > 0 && conversionFromPrev !== null && (
+                        <span className="text-[11px] text-muted-foreground">
+                          ({conversionFromPrev}% converteram)
+                        </span>
+                      )}
+                      <span className={`text-base font-bold min-w-[52px] text-right ${isEmpty ? "text-muted-foreground" : "text-card-foreground"}`}>
+                        {isEmpty ? "—" : step.count.toLocaleString("pt-BR")}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="relative h-7 w-full rounded-lg bg-muted overflow-hidden">
+                    {isEmpty ? (
+                      <div className="h-full w-full flex items-center px-3">
+                        <span className="text-xs text-muted-foreground/40 italic">sem dados</span>
+                      </div>
+                    ) : (
+                      <div
+                        className="h-full rounded-lg transition-all duration-1000 ease-out"
+                        style={{ width: `${width}%`, backgroundColor: color }}
+                      />
                     )}
-                    <span className={`text-base font-bold min-w-[60px] text-right ${isEmpty ? "text-muted-foreground" : "text-card-foreground"}`}>
-                      {isEmpty ? "—" : step.count.toLocaleString("pt-BR")}
-                    </span>
                   </div>
                 </div>
-                {/* Barra de progresso com cor explícita via inline style */}
-                <div className="relative h-9 w-full rounded-lg bg-muted overflow-hidden">
-                  {isEmpty ? (
-                    // Barra vazia com padrão tracejado para indicar dado ausente
-                    <div className="h-full w-full flex items-center px-3">
-                      <span className="text-xs text-muted-foreground/50 italic">sem dados</span>
-                    </div>
-                  ) : (
-                    <div
-                      className="h-full rounded-lg transition-all duration-1000 ease-out flex items-center justify-end pr-3"
-                      style={{ width: `${width}%`, backgroundColor: color }}
-                    >
-                      {width > 12 && (
-                        <span className="text-xs font-bold text-white">{step.pct}%</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </DashboardCard>
   );
