@@ -178,8 +178,9 @@ export function isObviousNoise(message: string): { isNoise: boolean; reply: stri
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const GEMINI_CHAT_MODEL = "gemini-3.1-pro-preview";
-const GEMINI_BASE       = "https://generativelanguage.googleapis.com/v1beta";
+const GEMINI_CHAT_MODEL          = "gemini-3.1-pro-preview";
+const GEMINI_FALLBACK_MODEL      = "gemini-2.5-pro"; // Fallback imediato quando o primário retorna 503
+const GEMINI_BASE                = "https://generativelanguage.googleapis.com/v1beta";
 
 // ─── In-memory chat sessions (histórico por chat) ─────────────────────────────
 
@@ -825,67 +826,86 @@ async function getRagDocuments(): Promise<{ id: string; name: string; content: s
   } catch { return []; }
 }
 
-// ─── Gemini request com retry (anti-congelamento) ────────────────────────────
-// Tentativas: 1ª imediata (25s timeout), 2ª após 5s (25s timeout)
-// TIMEOUT REDUZIDO: 120s era muito alto — causava "digitando para sempre" no chat
-
-const LIVECHAT_RETRY_DELAYS = [3_000, 6_000, 10_000]; // 3 tentativas: 3s, 6s, 10s
+// ─── Gemini request com fallback de modelo ──────────────────────────────────
+// Estratégia:
+//   1. Tenta o modelo PRIMÁRIO (gemini-3.1-pro-preview) UMA vez (45s timeout)
+//   2. Se retornar 503 UNAVAILABLE → chama IMEDIATAMENTE o modelo FALLBACK (gemini-2.5-pro)
+//   3. O fallback tem UMA tentativa extra (30s timeout)
+//   4. Se ambos falharem, lança erro limpo — sem JSON exposto ao visitante
+//
+// Racional: HTTP 503 com "status: UNAVAILABLE" é diagnóstico definitivo de sobrecarga.
+// Retryar no mesmo modelo sobrecarregado desperdiça tempo (~16s sem resultado).
+// A troca imediata para gemini-2.5-pro resolve em ~1-2s adicionais.
 
 async function geminiRequest(url: string, payload: object): Promise<any> {
-  let lastErr: any;
+  const apiKey = url.split("key=")[1] ?? "";
 
-  for (let attempt = 0; attempt <= LIVECHAT_RETRY_DELAYS.length; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(45_000), // Tempo elevado (45s) para o modelo 3.1 pensar em cenários complexos
-      });
+  // ── Tentativa 1: Modelo primário ───────────────────────────────────────────
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(45_000),
+    });
 
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        // Log completo do erro do Gemini (era truncado em 200 chars o que escondia o problema real)
-        console.error(`[LiveChat AI][GEMINI ERROR] HTTP ${res.status}`);
-        console.error(`[LiveChat AI][GEMINI ERROR] Body completo: ${body.slice(0, 2000)}`);
-        console.error(`[LiveChat AI][GEMINI ERROR] URL usada: ${url.replace(/key=([^&]+)/, 'key=HIDDEN')}`);
-        console.error(`[LiveChat AI][GEMINI ERROR] Payload preview: ${JSON.stringify(payload).slice(0, 800)}`);
-        const err = new Error(`Gemini HTTP ${res.status}: ${body.slice(0, 500)}`);
-        // 429 (rate limit) é retryable — espera e tenta de novo
-        if (res.status === 429) {
-          if (attempt < LIVECHAT_RETRY_DELAYS.length) {
-            console.warn(`[LiveChat AI] Rate limit 429 — retry ${attempt + 1} em ${LIVECHAT_RETRY_DELAYS[attempt] / 1000}s...`);
-            await new Promise((r) => setTimeout(r, LIVECHAT_RETRY_DELAYS[attempt]));
-            lastErr = err;
-            continue;
-          }
-          throw err;
-        }
-        // Outros 4xx (400, 401, 403...) não devem ser tentados novamente
-        if (/Gemini HTTP 4\d\d/.test(err.message)) throw err;
-        if (attempt < LIVECHAT_RETRY_DELAYS.length) {
-          console.warn(`[LiveChat AI] Tentativa ${attempt + 1} falhou (${res.status}), retry em ${LIVECHAT_RETRY_DELAYS[attempt] / 1000}s...`);
-          await new Promise((r) => setTimeout(r, LIVECHAT_RETRY_DELAYS[attempt]));
-          lastErr = err;
-          continue;
-        }
-        throw err;
-      }
+    if (res.ok) return await res.json();
 
-      return await res.json();
-    } catch (err: any) {
-      lastErr = err;
-      const isRetryable = /AbortError|fetch failed|ETIMEDOUT|ECONNRESET|503|overloaded|TimeoutError|timeout/i.test(err?.message ?? "") || /TimeoutError/i.test(err?.name ?? "");
-      if (isRetryable && attempt < LIVECHAT_RETRY_DELAYS.length) {
-        console.warn(`[LiveChat AI] Erro retryable (tentativa ${attempt + 1}): ${err.message}`);
-        await new Promise((r) => setTimeout(r, LIVECHAT_RETRY_DELAYS[attempt]));
-        continue;
-      }
-      break;
+    const body = await res.text().catch(() => "");
+    console.error(`[LiveChat AI][GEMINI ERROR] HTTP ${res.status}`);
+    console.error(`[LiveChat AI][GEMINI ERROR] Body completo: ${body.slice(0, 2000)}`);
+    console.error(`[LiveChat AI][GEMINI ERROR] URL usada: ${url.replace(/key=([^&]+)/, 'key=HIDDEN')}`);
+    console.error(`[LiveChat AI][GEMINI ERROR] Payload preview: ${JSON.stringify(payload).slice(0, 800)}`);
+
+    // 4xx (exceto 429) não são retryáveis — lança imediatamente
+    if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+      throw new Error(`Gemini HTTP ${res.status} (não retryável)`);
+    }
+
+    // 503 / 429 / 5xx → aciona fallback
+    console.warn(`[LiveChat AI] ⚡ Modelo primário retornou ${res.status} — acionando fallback para ${GEMINI_FALLBACK_MODEL}...`);
+  } catch (primaryErr: any) {
+    // Erros de rede/timeout do modelo primário → aciona fallback
+    if (/AbortError|fetch failed|ETIMEDOUT|ECONNRESET|TimeoutError|timeout/i.test(primaryErr?.message ?? "") ||
+        /TimeoutError/i.test(primaryErr?.name ?? "") ||
+        // Erro 4xx não retryável — relança direto sem fallback
+        /HTTP 4\d\d \(não retryável\)/.test(primaryErr?.message ?? "")) {
+      if (/HTTP 4\d\d \(não retryável\)/.test(primaryErr?.message ?? "")) throw primaryErr;
+      console.warn(`[LiveChat AI] ⚡ Modelo primário lançou erro (${primaryErr.message}) — acionando fallback para ${GEMINI_FALLBACK_MODEL}...`);
+    } else {
+      // Erro inesperado no primário — relança sem fallback
+      throw primaryErr;
     }
   }
 
-  throw lastErr;
+  // ── Tentativa 2: Modelo fallback (1 tentativa, 30s timeout) ───────────────
+  const fallbackUrl = `${GEMINI_BASE}/models/${GEMINI_FALLBACK_MODEL}:generateContent?key=${apiKey}`;
+  console.log(`[LiveChat AI][FALLBACK] Chamando ${GEMINI_FALLBACK_MODEL}...`);
+
+  try {
+    const fallbackRes = await fetch(fallbackUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (fallbackRes.ok) {
+      console.log(`[LiveChat AI][FALLBACK] ✅ ${GEMINI_FALLBACK_MODEL} respondeu com sucesso.`);
+      return await fallbackRes.json();
+    }
+
+    const fallbackBody = await fallbackRes.text().catch(() => "");
+    console.error(`[LiveChat AI][FALLBACK] HTTP ${fallbackRes.status} — fallback também falhou. Body: ${fallbackBody.slice(0, 500)}`);
+    throw new Error(`Gemini indisponível (primário e fallback falharam — status ${fallbackRes.status})`);
+  } catch (fallbackErr: any) {
+    // Garante que a mensagem de erro nunca contém JSON exposto
+    const safeMsg = /Gemini indisponível/.test(fallbackErr?.message ?? "") || /AbortError|fetch failed|ETIMEDOUT|ECONNRESET|TimeoutError/i.test(fallbackErr?.message ?? "")
+      ? "Gemini indisponível (servidores sobrecarregados)"
+      : "Gemini indisponível";
+    console.error(`[LiveChat AI][FALLBACK] ❌ Falha total: ${fallbackErr?.message}`);
+    throw new Error(safeMsg);
+  }
 }
 
 // ─── Processar mensagem do visitante ──────────────────────────────────────────
