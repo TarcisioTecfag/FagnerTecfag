@@ -55,6 +55,14 @@ import {
   Target,
 } from "lucide-react";
 import { CustomerModal } from "@/components/CustomerModal";
+import ActivationRateCard    from "../components/dashboard/ActivationRateCard";
+import ContainmentRateCard   from "../components/dashboard/ContainmentRateCard";
+import LatencyCard           from "../components/dashboard/LatencyCard";
+import UnhandledIntentsCard  from "../components/dashboard/UnhandledIntentsCard";
+import RetentionCohortCard   from "../components/dashboard/RetentionCohortCard";
+import FunnelCard            from "../components/dashboard/FunnelCard";
+import LeadScoringCard       from "../components/dashboard/LeadScoringCard";
+import PreChatPagesCard      from "../components/dashboard/PreChatPagesCard";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -2914,7 +2922,7 @@ function LiveChat() {
         )}
 
         {/* ─── Tab: Estatísticas (Melhoria 4) */}
-        {activeTab === "stats" && <StatsTab dateFrom={dateFilterActive ? dateFrom : undefined} dateTo={dateFilterActive ? dateTo : undefined} />}
+        {activeTab === "stats" && <StatsTab />}
       </div>
 
       {/* ══════════════ FILTER MODAL ══════════════ */}
@@ -3426,599 +3434,81 @@ function LiveChat() {
   );
 }
 
-// ─── Stats Dashboard — Hook Utilitário ──────────────────────────────────────────
-function useStatsData<T>(url: string): { data: T | null; loading: boolean } {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setData(null);
-    fetch(url, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (!cancelled) { setData(d); setLoading(false); } })
-      .catch(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [url]);
-  return { data, loading };
-}
 
-// ─── Card Shell comum ─────────────────────────────────────────────────────────
-function CardShell({ title, subtitle, icon, gradient, children, loading }: {
-  title: string; subtitle: string; icon: React.ReactNode;
-  gradient: string; children: React.ReactNode; loading?: boolean;
-}) {
-  return (
-    <div className="bg-white rounded-2xl border border-zinc-200/60 shadow-sm p-5 flex flex-col gap-4" style={{ minHeight: 240 }}>
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ background: gradient }}>
-          {icon}
-        </div>
-        <div>
-          <h3 className="text-sm font-bold text-zinc-800 leading-snug">{title}</h3>
-          <p className="text-[10px] text-zinc-400 leading-snug">{subtitle}</p>
-        </div>
-      </div>
-      {loading ? (
-        <div className="flex-1 space-y-3 py-1">
-          {[85, 65, 75].map((w, i) => (
-            <div key={i} className="h-3.5 rounded-full bg-zinc-100 animate-pulse" style={{ width: `${w}%` }} />
-          ))}
-        </div>
-      ) : children}
-    </div>
-  );
-}
-
-// ─── Benchmark Badge ──────────────────────────────────────────────────────────
-function BenchBadge({ value, lo, hi }: { value: number; lo: number; hi: number }) {
-  const { label, cls } = value >= hi
-    ? { label: '✓ Ótimo',    cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
-    : value >= lo
-    ? { label: '⚠ Atenção',  cls: 'text-amber-700 bg-amber-50 border-amber-200' }
-    : { label: '✕ Crítico',  cls: 'text-red-700 bg-red-50 border-red-200' };
-  return (
-    <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${cls}`}>{label}</span>
-  );
-}
-
-// ─── Card #1: Taxa de Ativação ────────────────────────────────────────────────
-function ActivationRateCard({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) {
-  const qs = new URLSearchParams();
-  if (dateFrom) qs.set('dateFrom', dateFrom);
-  if (dateTo)   qs.set('dateTo', dateTo);
-  const { data, loading } = useStatsData<{
-    totalSessions: number; chatActivated: number; activationRate: number;
-    trend: { date: string; rate: number }[];
-  }>(`/api/livechat/stats/activation-rate${qs.toString() ? '?' + qs : ''}`);
-
-  const trend = data?.trend ?? [];
-  const maxRate = Math.max(...trend.map(t => t.rate), 1);
-  return (
-    <CardShell title="Taxa de Ativação do Chat" subtitle="Visitantes que interagem com o Fagner" gradient="linear-gradient(135deg,#f59e0b,#d97706)" icon={<Zap className="w-4 h-4 text-white" />} loading={loading}>
-      {data && (<>
-        <div className="flex items-end justify-between gap-2">
-          <div>
-            <p className="text-4xl font-black text-zinc-800 leading-none">
-              {data.activationRate}<span className="text-xl text-zinc-400">%</span>
-            </p>
-            <p className="text-[11px] text-zinc-400 mt-1">
-              {data.chatActivated.toLocaleString('pt-BR')} ativados de {data.totalSessions.toLocaleString('pt-BR')} sessões
-            </p>
-          </div>
-          <BenchBadge value={data.activationRate} lo={8} hi={15} />
-        </div>
-        {trend.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Últimos 14 dias</p>
-            <div className="flex items-end gap-0.5 h-12 bg-zinc-50 rounded-xl p-2">
-              {trend.map((t, i) => {
-                const h = Math.max((t.rate / maxRate) * 32, 2);
-                const bg = t.rate >= 15 ? '#22c55e' : t.rate >= 8 ? '#f59e0b' : '#ef4444';
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center justify-end h-full" title={`${t.date}: ${t.rate}%`}>
-                    <div className="w-full rounded-t" style={{ height: h, background: bg, opacity: 0.85 }} />
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex justify-between mt-1">
-              <span className="text-[9px] text-zinc-300">{trend[0]?.date?.slice(5)}</span>
-              <span className="text-[9px] text-zinc-300">{trend[trend.length - 1]?.date?.slice(5)}</span>
-            </div>
-          </div>
-        )}
-        <div className="grid grid-cols-3 gap-1.5 text-center">
-          {[
-            { r: '< 8%',   label: 'Crítico',    c: '#ef4444' },
-            { r: '8–15%',  label: 'Aceitável',  c: '#f59e0b' },
-            { r: '> 15%',  label: 'Excelente',  c: '#22c55e' },
-          ].map(b => (
-            <div key={b.r} className="rounded-lg py-1.5" style={{ background: `${b.c}18` }}>
-              <p className="text-[10px] font-bold" style={{ color: b.c }}>{b.r}</p>
-              <p className="text-[9px]" style={{ color: b.c, opacity: 0.7 }}>{b.label}</p>
-            </div>
-          ))}
-        </div>
-      </>)}
-    </CardShell>
-  );
-}
-
-// ─── Card #2: AI Containment Rate ─────────────────────────────────────────────
-function ContainmentRateCard({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) {
-  const qs = new URLSearchParams();
-  if (dateFrom) qs.set('dateFrom', dateFrom);
-  if (dateTo)   qs.set('dateTo', dateTo);
-  const { data, loading } = useStatsData<{
-    aiResolved: number; humanEscalated: number; abandoned: number;
-    totalChats: number; containmentRate: number;
-  }>(`/api/livechat/stats/containment${qs.toString() ? '?' + qs : ''}`);
-
-  const total = data?.totalChats ?? 0;
-  const ai = data?.aiResolved ?? 0;
-  const human = data?.humanEscalated ?? 0;
-  const abandoned = data?.abandoned ?? 0;
-  const R = 34, CX = 42, CY = 42, CIRC = 2 * Math.PI * R;
-  const aiOff = total > 0 ? (ai / total) * CIRC : 0;
-  const humOff = total > 0 ? (human / total) * CIRC : 0;
-  return (
-    <CardShell title="AI Containment Rate" subtitle="Quanto o Fagner resolve sem escalar" gradient="linear-gradient(135deg,#6366f1,#8b5cf6)" icon={<Bot className="w-4 h-4 text-white" />} loading={loading}>
-      {data && (<>
-        <div className="flex items-center gap-5">
-          <div className="relative flex-shrink-0">
-            <svg width="84" height="84" className="-rotate-90">
-              <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="9" />
-              {/* Abandoned (cinza) */}
-              {abandoned > 0 && (
-                <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e2e8f0" strokeWidth="9"
-                  strokeDasharray={`${(abandoned / total) * CIRC} ${CIRC}`}
-                  strokeDashoffset={-(aiOff + humOff)} />
-              )}
-              {/* Human (amber) */}
-              {human > 0 && (
-                <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f59e0b" strokeWidth="9"
-                  strokeDasharray={`${humOff} ${CIRC}`} strokeDashoffset={-aiOff} />
-              )}
-              {/* AI (violet) */}
-              {ai > 0 && (
-                <circle cx={CX} cy={CY} r={R} fill="none" stroke="#6366f1" strokeWidth="9"
-                  strokeDasharray={`${aiOff} ${CIRC}`} />
-              )}
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-lg font-black text-zinc-800">{data.containmentRate}%</span>
-              <span className="text-[9px] text-zinc-400">IA</span>
-            </div>
-          </div>
-          <div className="space-y-2.5 flex-1 min-w-0">
-            {[
-              { label: '🤖 Resolvido pela IA',  count: ai,        color: '#6366f1' },
-              { label: '👤 Escalado p/ Humano', count: human,     color: '#f59e0b' },
-              { label: '👻 Abandono',            count: abandoned, color: '#94a3b8' },
-            ].map(item => (
-              <div key={item.label} className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color }} />
-                  <span className="text-[11px] text-zinc-600 truncate">{item.label}</span>
-                </div>
-                <span className="text-[11px] font-bold text-zinc-700 flex-shrink-0">{item.count.toLocaleString('pt-BR')}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
-          <span className="text-[11px] text-zinc-500">Total de chats analisados</span>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-black text-zinc-700">{total.toLocaleString('pt-BR')}</span>
-            <BenchBadge value={data.containmentRate} lo={60} hi={80} />
-          </div>
-        </div>
-      </>)}
-    </CardShell>
-  );
-}
-
-// ─── Card #3: Latência P95 ────────────────────────────────────────────────────
-function LatencyCard({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) {
-  const qs = new URLSearchParams();
-  if (dateFrom) qs.set('dateFrom', dateFrom);
-  if (dateTo)   qs.set('dateTo', dateTo);
-  const { data, loading } = useStatsData<{
-    p50: number; p90: number; p95: number; avgMs: number;
-    byDay: { day: number; label: string; avgMs: number }[];
-  }>(`/api/livechat/stats/ai-latency${qs.toString() ? '?' + qs : ''}`);
-
-  const fmtMs = (ms: number) => ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
-  const latCol = (ms: number) => ms <= 1500 ? '#22c55e' : ms <= 3000 ? '#f59e0b' : '#ef4444';
-  const byDay = data?.byDay ?? [];
-  const dayMax = Math.max(...byDay.map(d => d.avgMs), 1);
-  return (
-    <CardShell title="Latência P95 do Fagner" subtitle="Tempo de resposta da IA — calculado via sentAt" gradient="linear-gradient(135deg,#0ea5e9,#0284c7)" icon={<Clock className="w-4 h-4 text-white" />} loading={loading}>
-      {data && (<>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: 'P50 (Mediana)', value: data.p50 },
-            { label: 'P90',           value: data.p90 },
-            { label: 'P95 (Pior 5%)', value: data.p95 },
-          ].map(item => (
-            <div key={item.label} className="rounded-xl p-3 text-center" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-              <p className="text-[9px] text-zinc-400 mb-1 leading-tight">{item.label}</p>
-              <p className="text-xl font-black leading-none" style={{ color: latCol(item.value) }}>
-                {fmtMs(item.value)}
-              </p>
-            </div>
-          ))}
-        </div>
-        {byDay.some(d => d.avgMs > 0) && (
-          <div>
-            <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Média por Dia da Semana</p>
-            <div className="flex items-end gap-1 h-16 bg-zinc-50 rounded-xl px-2 pt-2 pb-1">
-              {byDay.map((d, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-0.5 h-full justify-end" title={`${d.label}: ${fmtMs(d.avgMs)}`}>
-                  <div className="w-full rounded-t" style={{
-                    height: d.avgMs > 0 ? `${Math.max((d.avgMs / dayMax) * 40, 4)}px` : 0,
-                    background: latCol(d.avgMs),
-                    opacity: 0.85
-                  }} />
-                  <span className="text-[8px] text-zinc-400">{d.label.slice(0, 3)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="flex items-center gap-3">
-          {[
-            { c: '#22c55e', label: '≤1.5s Rápido' },
-            { c: '#f59e0b', label: '1.5–3s Médio' },
-            { c: '#ef4444', label: '>3s Lento' },
-          ].map(l => (
-            <div key={l.label} className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm" style={{ background: l.c }} />
-              <span className="text-[9px] text-zinc-400">{l.label}</span>
-            </div>
-          ))}
-        </div>
-      </>)}
-    </CardShell>
-  );
-}
-
-// ─── Card #4: Mapa de Intents Não Atendidos ───────────────────────────────────
-function UnhandledIntentsCard() {
-  const { data, loading } = useStatsData<{ category: string; count: number; samples: string[] }[]>(
-    '/api/livechat/stats/unhandled-intents?limit=10'
-  );
-  const items = Array.isArray(data) ? data : [];
-  const maxCount = Math.max(...items.map(i => i.count), 1);
-  return (
-    <CardShell title="Mapa de Intents Não Atendidos" subtitle="Tópicos onde o Fagner falhou — últimos 30 dias" gradient="linear-gradient(135deg,#dc2626,#991b1b)" icon={<AlertTriangle className="w-4 h-4 text-white" />} loading={loading}>
-      {items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center flex-1 py-4 text-center">
-          <Activity className="w-10 h-10 mb-2 text-zinc-200" />
-          <p className="text-xs font-semibold text-zinc-400">Nenhum intent não atendido registrado ainda.</p>
-          <p className="text-[10px] text-zinc-300 mt-1 max-w-[180px] leading-relaxed">
-            Os fallbacks do Fagner serão capturados automaticamente aqui.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {items.map((item, i) => (
-            <div key={i}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-semibold text-zinc-700 truncate flex-1 mr-2">{item.category}</span>
-                <span className="text-[10px] font-bold text-red-600 flex-shrink-0 bg-red-50 px-1.5 py-0.5 rounded">{item.count}x</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
-                <div className="h-full rounded-full bg-gradient-to-r from-red-500 to-orange-400"
-                  style={{ width: `${(item.count / maxCount) * 100}%`, transition: 'width 0.7s ease' }} />
-              </div>
-              {item.samples?.[0] && (
-                <p className="text-[9px] text-zinc-400 italic mt-0.5 truncate">
-                  Ex: &ldquo;{item.samples[0].slice(0, 70)}&rdquo;
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </CardShell>
-  );
-}
-
-// ─── Card #5: Coorte de Retenção Semanal ──────────────────────────────────────
-function CohortRetentionCard() {
-  const { data, loading } = useStatsData<{
-    cohortWeek: string;
-    data: { weekOffset: number; retentionPct: number; count: number }[];
-  }[]>('/api/livechat/stats/cohort?weeks=8');
-  const cohorts = Array.isArray(data) ? data.slice(-6) : [];
-  const maxOffset = Math.max(...cohorts.flatMap(c => c.data.map(d => d.weekOffset)), 4);
-  const weeks = Math.min(maxOffset + 1, 6);
-
-  function retColors(pct: number): { bg: string; fg: string } {
-    if (pct >= 50) return { bg: '#dcfce7', fg: '#15803d' };
-    if (pct >= 25) return { bg: '#fef9c3', fg: '#854d0e' };
-    if (pct >= 10) return { bg: '#fee2e2', fg: '#991b1b' };
-    return { bg: '#f1f5f9', fg: '#94a3b8' };
-  }
-  return (
-    <CardShell title="Coorte de Retenção Semanal" subtitle="Visitantes que retornam por semana de aquisição" gradient="linear-gradient(135deg,#0891b2,#0e7490)" icon={<Users className="w-4 h-4 text-white" />} loading={loading}>
-      {cohorts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center flex-1 py-4 text-center">
-          <Users className="w-10 h-10 mb-2 text-zinc-200" />
-          <p className="text-xs font-semibold text-zinc-400">Dados insuficientes</p>
-          <p className="text-[10px] text-zinc-300 mt-1">Requer múltiplas semanas de histórico de sessões.</p>
-        </div>
-      ) : (<>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[10px] border-separate border-spacing-0.5">
-            <thead>
-              <tr>
-                <th className="text-left text-zinc-400 font-semibold pb-1 pr-2 text-[10px]">Coorte</th>
-                {Array.from({ length: weeks }, (_, i) => (
-                  <th key={i} className="text-center text-zinc-400 font-semibold pb-1 px-0.5 w-9 text-[10px]">S{i}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {cohorts.map((cohort, ci) => (
-                <tr key={ci}>
-                  <td className="text-zinc-500 pr-2 py-0.5 whitespace-nowrap">{cohort.cohortWeek?.slice(5) ?? '—'}</td>
-                  {Array.from({ length: weeks }, (_, wi) => {
-                    const cell = cohort.data.find(d => d.weekOffset === wi);
-                    const pct = cell?.retentionPct ?? (wi === 0 ? 100 : null);
-                    const { bg, fg } = retColors(pct ?? 0);
-                    return (
-                      <td key={wi} className="text-center py-0.5 px-0.5">
-                        {pct !== null ? (
-                          <div className="rounded text-center px-0.5 py-0.5 font-bold text-[9px]" style={{ background: bg, color: fg }}>
-                            {pct}%
-                          </div>
-                        ) : (
-                          <div className="rounded text-center px-0.5 py-0.5 text-[9px] text-zinc-200">—</div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {[
-            { label: '≥50% Ótimo',   bg: '#dcfce7', fg: '#15803d' },
-            { label: '≥25% Bom',     bg: '#fef9c3', fg: '#854d0e' },
-            { label: '≥10% Regular', bg: '#fee2e2', fg: '#991b1b' },
-          ].map(l => (
-            <div key={l.label} className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded" style={{ background: l.bg }} />
-              <span className="text-[9px] font-semibold" style={{ color: l.fg }}>{l.label}</span>
-            </div>
-          ))}
-        </div>
-      </>)}
-    </CardShell>
-  );
-}
-
-// ─── Card #6: Funil de Conversão do Chat ──────────────────────────────────────
-function ConversionFunnelCard({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) {
-  const qs = new URLSearchParams();
-  if (dateFrom) qs.set('dateFrom', dateFrom);
-  if (dateTo)   qs.set('dateTo', dateTo);
-  const { data, loading } = useStatsData<{
-    steps: { label: string; count: number; pct: number }[];
-  }>(`/api/livechat/stats/funnel${qs.toString() ? '?' + qs : ''}`);
-
-  const steps = data?.steps ?? [];
-  const GRADIENTS = [
-    'linear-gradient(90deg,#6366f1,#8b5cf6)',
-    'linear-gradient(90deg,#3b82f6,#60a5fa)',
-    'linear-gradient(90deg,#0ea5e9,#38bdf8)',
-    'linear-gradient(90deg,#10b981,#34d399)',
-    'linear-gradient(90deg,#f59e0b,#fbbf24)',
-  ];
-  const top = steps[0]?.count ?? 0;
-  return (
-    <CardShell title="Funil de Conversão do Chat" subtitle="Sessão → Lead no CRM — onde ocorre a queda" gradient="linear-gradient(135deg,#2563eb,#1d4ed8)" icon={<Target className="w-4 h-4 text-white" />} loading={loading}>
-      {steps.length === 0 ? (
-        <p className="text-xs text-zinc-400 text-center py-6">Sem dados no período.</p>
-      ) : (
-        <div className="space-y-2">
-          {steps.map((step, i) => {
-            const width = top > 0 ? (step.count / top) * 100 : 0;
-            const drop = i > 0 && steps[i - 1].count > 0
-              ? -Math.round(((steps[i - 1].count - step.count) / steps[i - 1].count) * 100)
-              : 0;
-            return (
-              <div key={i}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-zinc-700">{step.label}</span>
-                  <div className="flex items-center gap-2">
-                    {i > 0 && drop < 0 && (
-                      <span className="text-[9px] font-bold text-red-500">{drop}%</span>
-                    )}
-                    <span className="text-[11px] font-bold text-zinc-800">{step.count.toLocaleString('pt-BR')}</span>
-                  </div>
-                </div>
-                <div className="h-7 rounded-lg bg-zinc-100 overflow-hidden">
-                  <div className="h-full rounded-lg relative transition-all duration-700"
-                    style={{ width: `${width}%`, background: GRADIENTS[i] }}>
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white font-bold">
-                      {step.pct}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </CardShell>
-  );
-}
-
-// ─── Card #7: Lead Scoring Distribution ───────────────────────────────────────
-function LeadScoringCard({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) {
-  const qs = new URLSearchParams();
-  if (dateFrom) qs.set('dateFrom', dateFrom);
-  if (dateTo)   qs.set('dateTo', dateTo);
-  const { data, loading } = useStatsData<{
-    hot: number; warm: number; cold: number; total: number;
-    hotTrend: { date: string; count: number }[];
-  }>(`/api/livechat/stats/lead-scoring${qs.toString() ? '?' + qs : ''}`);
-
-  const total = data?.total ?? 1;
-  const trend = data?.hotTrend ?? [];
-  const tMax = Math.max(...trend.map(t => t.count), 1);
-  return (
-    <CardShell title="Distribuição de Lead Scoring" subtitle="Qualidade dos leads gerados pelo Fagner" gradient="linear-gradient(135deg,#dc2626,#f97316)" icon={<TrendingUp className="w-4 h-4 text-white" />} loading={loading}>
-      {data && (<>
-        <div className="space-y-3">
-          {[
-            { label: '🔥 Leads Quentes', count: data.hot,  bar: 'from-red-500 to-orange-400',   tc: '#dc2626', bg: '#fee2e2' },
-            { label: '🌡️ Leads Mornos',  count: data.warm, bar: 'from-amber-400 to-yellow-300', tc: '#b45309', bg: '#fef9c3' },
-            { label: '🧊 Visitantes',     count: data.cold, bar: 'from-slate-300 to-slate-200',  tc: '#64748b', bg: '#f1f5f9' },
-          ].map(item => {
-            const pct = total > 0 ? Math.round((item.count / total) * 100) : 0;
-            return (
-              <div key={item.label}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-zinc-700">{item.label}</span>
-                  <span className="text-[11px] font-bold" style={{ color: item.tc }}>
-                    {item.count.toLocaleString('pt-BR')} <span className="text-zinc-400 font-normal">({pct}%)</span>
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-zinc-100 overflow-hidden">
-                  <div className={`h-full rounded-full bg-gradient-to-r ${item.bar}`}
-                    style={{ width: `${pct}%`, transition: 'width 0.7s ease' }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {trend.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Leads Quentes — 30 dias</p>
-            <div className="flex items-end gap-0.5 h-10 bg-red-50 rounded-xl px-2 pt-1.5 pb-1">
-              {trend.map((t, i) => (
-                <div key={i} className="flex-1 h-full flex items-end justify-center" title={`${t.date}: ${t.count}`}>
-                  <div className="w-full rounded-t"
-                    style={{ height: `${Math.max((t.count / tMax) * 28, 2)}px`, background: 'linear-gradient(to top,#dc2626,#f97316)', opacity: 0.8 }} />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="flex justify-between items-center pt-2 border-t border-zinc-100">
-          <span className="text-[10px] text-zinc-400">Total de visitantes no período</span>
-          <span className="text-sm font-black text-zinc-700">{total.toLocaleString('pt-BR')}</span>
-        </div>
-      </>)}
-    </CardShell>
-  );
-}
-
-// ─── Card #8: Páginas Pré-Chat ────────────────────────────────────────────────
-function PreChatAnalyticsCard() {
-  const [loaded, setLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<{ topPages: { url: string; pageTitle: string | null; count: number }[] } | null>(null);
-
-  const load = () => {
-    if (loaded) return;
-    setLoading(true);
-    fetch('/api/livechat/stats/pre-chat-pages?limit=8', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { setData(d); setLoaded(true); setLoading(false); })
-      .catch(() => setLoading(false));
-  };
-
-  const pages = data?.topPages ?? [];
-  const maxCount = pages[0]?.count ?? 1;
-  return (
-    <CardShell title="Páginas Pré-Chat" subtitle="URLs mais visitadas antes do 1º chat" gradient="linear-gradient(135deg,#7c3aed,#a78bfa)" icon={<MousePointer className="w-4 h-4 text-white" />} loading={loading}>
-      {!loaded && !loading ? (
-        <div className="flex flex-col items-center justify-center flex-1 py-4">
-          <MousePointer className="w-8 h-8 text-zinc-200 mb-3" />
-          <button onClick={load}
-            className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#a78bfa)' }}>
-            Carregar dados
-          </button>
-          <p className="text-[10px] text-zinc-400 mt-2">Query pesada — carregue sob demanda</p>
-        </div>
-      ) : pages.length === 0 ? (
-        <p className="text-xs text-zinc-400 text-center py-6">Sem dados suficientes ainda.</p>
-      ) : (
-        <div className="space-y-2.5">
-          {pages.slice(0, 7).map((page, i) => {
-            const pct = Math.round((page.count / maxCount) * 100);
-            const label = page.pageTitle || page.url.replace(/^https?:\/\/[^/]+/, '').slice(0, 45) || page.url;
-            return (
-              <div key={i}>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[11px] text-zinc-700 font-medium truncate flex-1 mr-2">{label}</span>
-                  <span className="text-[10px] font-bold text-violet-600 flex-shrink-0">{page.count}x</span>
-                </div>
-                <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-400"
-                    style={{ width: `${pct}%`, transition: 'width 0.7s ease' }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </CardShell>
-  );
-}
+const PERIODS = [
+  { label: "7 dias",  value: "7d"  },
+  { label: "14 dias", value: "14d" },
+  { label: "30 dias", value: "30d" },
+];
 
 // ─── StatsTab — Container Principal ───────────────────────────────────────────
-function StatsTab({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) {
+function StatsTab() {
+  const [period, setPeriod] = useState("14d");
+
   return (
-    <div className="h-full overflow-y-auto p-1 space-y-6 animate-tab-enter">
-
-      {/* ── Seção: Saúde da Plataforma ── */}
-      <div>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="h-px flex-1 bg-gradient-to-r from-zinc-200 to-transparent" />
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 border border-zinc-200/80">
-            <Activity className="w-3.5 h-3.5 text-zinc-500" />
-            <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Saúde da Plataforma</span>
-          </div>
-          <div className="h-px flex-1 bg-gradient-to-l from-zinc-200 to-transparent" />
+    <div className="h-full overflow-y-auto animate-tab-enter">
+      {/* Period Selector */}
+      <div className="flex items-center justify-between mb-8 px-1">
+        <div>
+          <h2 className="text-lg font-bold text-zinc-800">Estatísticas do Site</h2>
+          <p className="text-sm text-zinc-400 mt-0.5">Live Chat — Monitoramento do Fagner</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <ActivationRateCard dateFrom={dateFrom} dateTo={dateTo} />
-          <ContainmentRateCard dateFrom={dateFrom} dateTo={dateTo} />
-          <LatencyCard dateFrom={dateFrom} dateTo={dateTo} />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <UnhandledIntentsCard />
-          <CohortRetentionCard />
-        </div>
-      </div>
-
-      {/* ── Seção: Sucesso do Cliente ── */}
-      <div>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="h-px flex-1 bg-gradient-to-r from-zinc-200 to-transparent" />
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 border border-zinc-200/80">
-            <TrendingUp className="w-3.5 h-3.5 text-zinc-500" />
-            <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Sucesso do Cliente</span>
-          </div>
-          <div className="h-px flex-1 bg-gradient-to-l from-zinc-200 to-transparent" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <ConversionFunnelCard dateFrom={dateFrom} dateTo={dateTo} />
-          <LeadScoringCard dateFrom={dateFrom} dateTo={dateTo} />
-          <PreChatAnalyticsCard />
+        <div className="flex items-center gap-2">
+          {PERIODS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => setPeriod(p.value)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                period === p.value
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
+      <div className="space-y-10 pb-8 px-1">
+        {/* ── Seção: Saúde da Plataforma ── */}
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <div className="h-1 w-6 rounded-full bg-primary" />
+            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Saúde da Plataforma</h3>
+          </div>
+          <div className="space-y-6">
+            <ActivationRateCard  period={period} delay={0}   />
+            <ContainmentRateCard period={period} delay={100} />
+            <LatencyCard         period={period} delay={200} />
+          </div>
+        </section>
+
+        {/* ── Seção: Conversão & Leads ── */}
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <div className="h-1 w-6 rounded-full" style={{ background: "hsl(var(--chart-purple))" }} />
+            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Conversão &amp; Leads</h3>
+          </div>
+          <div className="space-y-6">
+            <FunnelCard      period={period} delay={0}   />
+            <LeadScoringCard period={period} delay={100} />
+            <PreChatPagesCard               delay={200} />
+          </div>
+        </section>
+
+        {/* ── Seção: Comportamento & Retenção ── */}
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <div className="h-1 w-6 rounded-full" style={{ background: "hsl(var(--chart-green))" }} />
+            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Comportamento &amp; Retenção</h3>
+          </div>
+          <div className="space-y-6">
+            <UnhandledIntentsCard delay={0}   />
+            <RetentionCohortCard  delay={100} />
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

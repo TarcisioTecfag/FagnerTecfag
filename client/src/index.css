@@ -81,6 +81,18 @@
   --warning: 38 92% 55%;
   --warning-foreground: 0 0% 100%;
 
+  --info: 217 91% 60%;
+  --info-foreground: 0 0% 100%;
+
+  /* ── Chart palette (Dashboard de Estatísticas) ─ */
+  --chart-purple: 255 70% 55%;
+  --chart-orange: 20 90% 55%;
+  --chart-green:  142 69% 42%;
+  --chart-blue:   217 91% 60%;
+  --chart-red:    0 72% 55%;
+  --chart-yellow: 45 93% 58%;
+  --chart-pink:   330 80% 60%;
+
   /* ── Sidebar dark-red theme ────────────────────── */
   --sidebar-background: 0 100% 5%;
   --sidebar-foreground: 0 80% 90%;
