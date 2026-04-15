@@ -516,67 +516,145 @@ export interface VtexCheckoutResult {
 
 /**
  * Cria um carrinho real na VTEX via Checkout API pública.
- * 1. Cria orderForm vazio
- * 2. Adiciona o produto (skuId)
+ *
+ * IMPORTANTE: A API de checkout da VTEX é baseada em sessão (cookies).
+ * As etapas precisam compartilhar os cookies retornados pelo servidor VTEX.
+ *
+ * Fluxo:
+ * 1. Cria orderForm vazio → coleta cookies de sessão
+ * 2. Adiciona o produto (com os cookies)
  * 3. Pré-preenche perfil do cliente
  * 4. Pré-preenche endereço de entrega
- * Retorna a URL de checkout com o orderFormId real.
  */
 export async function createVtexCheckout(req: VtexCheckoutRequest): Promise<VtexCheckoutResult> {
   const CHECKOUT_BASE = `${VTEX_STORE_URL}/api/checkout/pub/orderForms`;
   const qty = req.quantity ?? 1;
   const cleanCep = req.cep.replace(/\D/g, "");
+  // skuId deve ser numérico para a VTEX (ex: "336", não "FL1500A")
+  const skuId = req.skuId?.replace(/\D/g, "") || req.skuId;
+
+  console.log(`[VTEX Checkout] Iniciando criação de carrinho — SKU: ${skuId} x${qty} | Cliente: ${req.clientName}`);
+
+  // ── Helper: extrai cookies de Set-Cookie header ─────────────────────────────
+  function extractCookies(res: Response): string {
+    // Node.js fetch retorna múltiplos Set-Cookie como string separada por ", "
+    // mas alguns valores de cookie também têm ", " nos atributos Expires=...
+    // Usamos o getHeader raw para ser mais seguro
+    const raw = res.headers.get("set-cookie") ?? "";
+    if (!raw) return "";
+    // Normaliza: remove os atributos e junta apenas nome=valor
+    const cookies = raw.split(/,(?=[^;]+=[^;]+)/).map(c => {
+      const parts = c.trim().split(";");
+      return parts[0].trim(); // só o nome=valor
+    });
+    return cookies.join("; ");
+  }
 
   try {
-    // ── 1. Cria orderForm vazio ───────────────────────────────────────────────
-    const createRes = await fetchWithRetry(CHECKOUT_BASE, {
+    // ── 1. Cria orderForm vazio e coleta cookies de sessão ────────────────────
+    let sessionCookies = "";
+
+    const createRawRes = await fetch(CHECKOUT_BASE, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "User-Agent": "TecfagFagnerBot/1.0",
+        "User-Agent": "Mozilla/5.0 TecfagFagnerBot/2.0",
       },
       body: JSON.stringify({}),
-    }, 3, 8000);
+      signal: AbortSignal.timeout(10_000),
+    });
 
-    if (!createRes) {
-      return { success: false, error: "Não foi possível criar o orderForm na VTEX (sem resposta)" };
+    if (!createRawRes.ok && createRawRes.status !== 201) {
+      const errBody = await createRawRes.text().catch(() => "");
+      console.error(`[VTEX Checkout] Criação falhou: HTTP ${createRawRes.status} — ${errBody.slice(0, 200)}`);
+      return { success: false, error: `VTEX criação falhou: ${createRawRes.status}` };
     }
 
-    const orderForm = await createRes.json();
+    // Cookies da sessão VTEX — ESSENCIAIS para os próximos passos
+    sessionCookies = extractCookies(createRawRes);
+    console.log(`[VTEX Checkout] Cookies de sessão: ${sessionCookies ? sessionCookies.slice(0, 80) + "..." : "(nenhum)"}`);
+
+    const orderForm = await createRawRes.json();
     const orderFormId: string = orderForm?.orderFormId;
 
     if (!orderFormId) {
       console.error("[VTEX Checkout] Resposta sem orderFormId:", JSON.stringify(orderForm).slice(0, 300));
       return { success: false, error: "VTEX não retornou orderFormId" };
     }
-
-    console.log(`[VTEX Checkout] orderForm criado: ${orderFormId}`);
+    console.log(`[VTEX Checkout] ✅ orderForm criado: ${orderFormId}`);
 
     // ── 2. Adiciona o produto ao carrinho ────────────────────────────────────
-    const addItemRes = await fetchWithRetry(
-      `${CHECKOUT_BASE}/${orderFormId}/items`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "User-Agent": "TecfagFagnerBot/1.0",
-        },
-        body: JSON.stringify({
-          orderItems: [{ id: req.skuId, quantity: qty, seller: "1" }],
-        }),
-      },
-      3, 8000
-    );
+    let itemAdded = false;
 
-    if (!addItemRes) {
-      console.warn(`[VTEX Checkout] Falha ao adicionar item ${req.skuId} ao orderForm ${orderFormId}`);
-      // Retorna o link mesmo sem o produto — melhor do que não ter link
+    if (skuId) {
+      const itemBody = JSON.stringify({
+        orderItems: [{ id: skuId, quantity: qty, seller: "1" }],
+      });
+
+      const commonHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 TecfagFagnerBot/2.0",
+        ...(sessionCookies ? { "Cookie": sessionCookies } : {}),
+      };
+
+      // Tentativa 1: POST /items (padrão público V2)
+      try {
+        const addRes1 = await fetch(`${CHECKOUT_BASE}/${orderFormId}/items`, {
+          method: "POST",
+          headers: commonHeaders,
+          body: itemBody,
+          signal: AbortSignal.timeout(10_000),
+        });
+
+        const addData1 = await addRes1.json().catch(() => ({}));
+        const count1 = addData1?.items?.length ?? 0;
+        console.log(`[VTEX Checkout] POST /items → HTTP ${addRes1.status} — items: ${count1}`);
+
+        if (count1 > 0) {
+          itemAdded = true;
+          // Atualiza cookies (VTEX pode retornar novos)
+          const newCookies = extractCookies(addRes1);
+          if (newCookies) sessionCookies = newCookies;
+        } else if (!addRes1.ok) {
+          console.warn(`[VTEX Checkout] POST /items body: ${JSON.stringify(addData1).slice(0, 200)}`);
+        }
+      } catch (e1: any) {
+        console.warn(`[VTEX Checkout] POST /items falhou: ${e1.message}`);
+      }
+
+      // Tentativa 2: PATCH /items/update (legacy V1)
+      if (!itemAdded) {
+        try {
+          const addRes2 = await fetch(`${CHECKOUT_BASE}/${orderFormId}/items/update`, {
+            method: "PATCH",
+            headers: commonHeaders,
+            body: itemBody,
+            signal: AbortSignal.timeout(10_000),
+          });
+
+          const addData2 = await addRes2.json().catch(() => ({}));
+          const count2 = addData2?.items?.length ?? 0;
+          console.log(`[VTEX Checkout] PATCH /items/update → HTTP ${addRes2.status} — items: ${count2}`);
+
+          if (count2 > 0) {
+            itemAdded = true;
+            const newCookies = extractCookies(addRes2);
+            if (newCookies) sessionCookies = newCookies;
+          }
+        } catch (e2: any) {
+          console.warn(`[VTEX Checkout] PATCH /items/update falhou: ${e2.message}`);
+        }
+      }
+
+      if (!itemAdded) {
+        console.error(`[VTEX Checkout] ❌ Produto ${skuId} NÃO foi adicionado ao carrinho ${orderFormId}`);
+      } else {
+        console.log(`[VTEX Checkout] ✅ Produto ${skuId} adicionado!`);
+      }
     } else {
-      const addedData = await addItemRes.json();
-      const itemCount = addedData?.items?.length ?? 0;
-      console.log(`[VTEX Checkout] ${itemCount} item(s) adicionado(s) ao carrinho ${orderFormId}`);
+      console.warn("[VTEX Checkout] skuId ausente — carrinho criado sem produto");
     }
 
     // ── 3. Pré-preenche perfil do cliente ────────────────────────────────────
@@ -586,22 +664,28 @@ export async function createVtexCheckout(req: VtexCheckoutRequest): Promise<Vtex
       lastName: req.clientName.split(" ").slice(1).join(" ") || "",
       phone: req.phone.replace(/\D/g, ""),
     };
-    if (req.cpf)  profileBody.document   = req.cpf.replace(/\D/g, "");
-    if (req.cnpj) profileBody.corporateDocument = req.cnpj.replace(/\D/g, "");
+    if (req.cpf)  profileBody.document            = req.cpf.replace(/\D/g, "");
+    if (req.cnpj) profileBody.corporateDocument   = req.cnpj.replace(/\D/g, "");
 
-    await fetchWithRetry(
-      `${CHECKOUT_BASE}/${orderFormId}/attachments/clientProfileData`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "User-Agent": "TecfagFagnerBot/1.0",
-        },
-        body: JSON.stringify(profileBody),
-      },
-      2, 6000
-    );
+    try {
+      const profileRes = await fetch(
+        `${CHECKOUT_BASE}/${orderFormId}/attachments/clientProfileData`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 TecfagFagnerBot/2.0",
+            ...(sessionCookies ? { "Cookie": sessionCookies } : {}),
+          },
+          body: JSON.stringify(profileBody),
+          signal: AbortSignal.timeout(8_000),
+        }
+      );
+      console.log(`[VTEX Checkout] Profile → HTTP ${profileRes.status}`);
+    } catch (ep: any) {
+      console.warn(`[VTEX Checkout] Profile falhou: ${ep.message}`);
+    }
 
     // ── 4. Pré-preenche endereço de entrega ──────────────────────────────────
     if (cleanCep.length === 8) {
@@ -620,29 +704,35 @@ export async function createVtexCheckout(req: VtexCheckoutRequest): Promise<Vtex
         logisticsInfo: [],
       };
 
-      await fetchWithRetry(
-        `${CHECKOUT_BASE}/${orderFormId}/attachments/shippingData`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "TecfagFagnerBot/1.0",
-          },
-          body: JSON.stringify(shippingBody),
-        },
-        2, 6000
-      );
+      try {
+        const shippingRes = await fetch(
+          `${CHECKOUT_BASE}/${orderFormId}/attachments/shippingData`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+              "User-Agent": "Mozilla/5.0 TecfagFagnerBot/2.0",
+              ...(sessionCookies ? { "Cookie": sessionCookies } : {}),
+            },
+            body: JSON.stringify(shippingBody),
+            signal: AbortSignal.timeout(8_000),
+          }
+        );
+        console.log(`[VTEX Checkout] Shipping → HTTP ${shippingRes.status}`);
+      } catch (es: any) {
+        console.warn(`[VTEX Checkout] Shipping falhou: ${es.message}`);
+      }
     }
 
     const checkoutUrl = `${VTEX_STORE_URL}/checkout?orderFormId=${orderFormId}`;
-    console.log(`[VTEX Checkout] ✅ Carrinho pronto: ${checkoutUrl}`);
+    console.log(`[VTEX Checkout] ✅ Link pronto (produto ${itemAdded ? "✓" : "✗ não adicionado"}): ${checkoutUrl}`);
 
     // Log no banco
     storage.createVtexLog({
       type: "link_sent",
-      description: `Checkout criado para ${req.clientName} (${req.email}) — SKU ${req.skuId} x${qty}`,
-      product: req.skuId,
+      description: `Checkout ${itemAdded ? "completo" : "sem produto"} para ${req.clientName} — SKU ${skuId} x${qty}`,
+      product: skuId || "desconhecido",
     }).catch(() => {});
 
     return { success: true, checkoutUrl, orderFormId };
@@ -652,3 +742,4 @@ export async function createVtexCheckout(req: VtexCheckoutRequest): Promise<Vtex
     return { success: false, error: err.message };
   }
 }
+
