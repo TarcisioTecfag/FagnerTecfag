@@ -1165,18 +1165,37 @@ export const lcStorage = {
     const [totalR, humanR, abandonedR] = await Promise.all([
       // Total: todos os chats do período
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE 1=1 ${cw}`)) as any,
-      // Escalado p/ Humano: operador clicou em "Assumir" → status passou para human_active
-      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE status = 'human_active' ${cw}`)) as any,
-      // Abandono: visitante abriu o chat mas nunca enviou uma mensagem (entrou e saiu sem interagir)
+
+      // Escalado p/ Humano: qualquer chat que teve pelo menos 1 mensagem de um agente humano.
+      // Usa lc_messages com sender='agent' — captura chats históricos mesmo após serem fechados.
+      // status='human_active' falha porque chats encerrados mudam de status.
       db.execute(sql.raw(`
-        SELECT COUNT(*)::int AS c FROM lc_chats c
-        WHERE NOT EXISTS (
-          SELECT 1 FROM lc_messages m WHERE m."chatId" = c.id AND m.sender = 'visitor'
-        ) ${cw}
+        SELECT COUNT(DISTINCT ch.id)::int AS c
+        FROM lc_chats ch
+        INNER JOIN lc_messages m ON m."chatId" = ch.id AND m.sender = 'agent'
+        WHERE 1=1 ${cw}
+      `)) as any,
+
+      // Abandono: chats que ainda estão 'open' (não resolvidos, não encerrados, não em humano)
+      // e cuja última mensagem do visitante tem mais de 2 horas — saiu sem concluir.
+      db.execute(sql.raw(`
+        SELECT COUNT(*)::int AS c
+        FROM lc_chats ch
+        WHERE ch.status = 'open' ${cw}
+          AND NOT EXISTS (
+            SELECT 1 FROM lc_messages m
+            WHERE m."chatId" = ch.id
+              AND m.sender = 'visitor'
+              AND m."sentAt"::timestamptz >= NOW() - INTERVAL '2 hours'
+          )
+          AND EXISTS (
+            SELECT 1 FROM lc_messages m2
+            WHERE m2."chatId" = ch.id AND m2.sender = 'visitor'
+          )
       `)) as any,
     ]);
     const total = g(totalR), human = g(humanR), abandoned = g(abandonedR);
-    // Resolvido pela IA = total - escalado - abandonado (Fagner completou sem intervenção)
+    // Resolvido pela IA = chats sem intervenção humana e sem abandono
     const ai = Math.max(0, total - human - abandoned);
     return {
       aiResolved: ai,
