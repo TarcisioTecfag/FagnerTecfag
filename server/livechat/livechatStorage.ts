@@ -1215,47 +1215,70 @@ export const lcStorage = {
       : dateFrom ? `AND c."startedAt"::timestamptz >= '${dateFrom}T00:00:00Z'`
       : dateTo   ? `AND c."startedAt"::timestamptz <= '${dateTo}T23:59:59Z'`
       : '';
+    // ─── Lógica correta de latência ──────────────────────────────────────────
+    // Para medir o tempo de resposta da IA, precisamos:
+    //   1. Olhar TODAS as mensagens de um chat (visitor + ai + agent)
+    //   2. Para cada mensagem 'visitor', pegar a PRÓXIMA mensagem no chat
+    //   3. Se essa próxima mensagem é da IA → a diferença é a latência
+    //
+    // BUG CORRIGIDO: a versão anterior filtrava WHERE sender='visitor' ANTES
+    // da janela LEAD, então LEAD só enxergava a próxima mensagem do visitante
+    // (nunca a resposta da IA), resultando em 0ms.
     const percR = await db.execute(sql.raw(`
-      WITH pairs AS (
+      WITH all_msgs AS (
+        -- Todas as mensagens do período, sem filtro de sender
         SELECT
-          m."sentAt"::timestamptz AS visitor_at,
-          LEAD(m."sentAt"::timestamptz) OVER (PARTITION BY m."chatId" ORDER BY m."sentAt") AS ai_at,
-          LEAD(m.sender)             OVER (PARTITION BY m."chatId" ORDER BY m."sentAt") AS next_sender
+          m."sentAt"::timestamptz                                                    AS msg_at,
+          m.sender,
+          LEAD(m."sentAt"::timestamptz) OVER (PARTITION BY m."chatId" ORDER BY m."sentAt"::timestamptz) AS next_at,
+          LEAD(m.sender)               OVER (PARTITION BY m."chatId" ORDER BY m."sentAt"::timestamptz) AS next_sender
         FROM lc_messages m
         INNER JOIN lc_chats c ON c.id = m."chatId"
-        WHERE m.sender = 'visitor' ${cw}
+        WHERE 1=1 ${cw}
       ),
       latencies AS (
-        SELECT EXTRACT(EPOCH FROM (ai_at - visitor_at)) * 1000 AS ms
-        FROM pairs
-        WHERE next_sender = 'ai' AND ai_at IS NOT NULL
-          AND EXTRACT(EPOCH FROM (ai_at - visitor_at)) BETWEEN 0.3 AND 90
+        -- Filtra só as linhas onde: mensagem atual é do visitante E a próxima é da IA
+        SELECT EXTRACT(EPOCH FROM (next_at - msg_at)) * 1000 AS ms
+        FROM all_msgs
+        WHERE sender = 'visitor'
+          AND next_sender = 'ai'
+          AND next_at IS NOT NULL
+          -- Intervalo razoável: 100ms a 120s (considera respostas lentas do Gemini)
+          AND EXTRACT(EPOCH FROM (next_at - msg_at)) BETWEEN 0.1 AND 120
       )
       SELECT
         COALESCE(PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY ms), 0)::int AS p50,
         COALESCE(PERCENTILE_CONT(0.9)  WITHIN GROUP (ORDER BY ms), 0)::int AS p90,
         COALESCE(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY ms), 0)::int AS p95,
-        COALESCE(AVG(ms), 0)::int AS avg_ms
+        COALESCE(AVG(ms), 0)::int AS avg_ms,
+        COUNT(*)::int AS sample_count
       FROM latencies
     `)) as any;
     const row = (percR?.rows ?? percR)?.[0] ?? {};
+    // Por dia da semana (sem filtro de data para ter volume suficiente)
     const dayR = await db.execute(sql.raw(`
-      WITH pairs AS (
+      WITH all_msgs AS (
         SELECT
-          m."sentAt"::timestamptz AS visitor_at,
-          LEAD(m."sentAt"::timestamptz) OVER (PARTITION BY m."chatId" ORDER BY m."sentAt") AS ai_at,
-          LEAD(m.sender)             OVER (PARTITION BY m."chatId" ORDER BY m."sentAt") AS next_sender
-        FROM lc_messages m WHERE m.sender = 'visitor'
+          m."sentAt"::timestamptz                                                    AS msg_at,
+          m.sender,
+          LEAD(m."sentAt"::timestamptz) OVER (PARTITION BY m."chatId" ORDER BY m."sentAt"::timestamptz) AS next_at,
+          LEAD(m.sender)               OVER (PARTITION BY m."chatId" ORDER BY m."sentAt"::timestamptz) AS next_sender
+        FROM lc_messages m
+        WHERE m."sentAt"::timestamptz >= NOW() - INTERVAL '30 days'
       ),
       latencies AS (
         SELECT
-          EXTRACT(EPOCH FROM (ai_at - visitor_at)) * 1000 AS ms,
-          EXTRACT(DOW FROM visitor_at)::int AS dow
-        FROM pairs
-        WHERE next_sender = 'ai' AND ai_at IS NOT NULL
-          AND EXTRACT(EPOCH FROM (ai_at - visitor_at)) BETWEEN 0.3 AND 90
+          EXTRACT(EPOCH FROM (next_at - msg_at)) * 1000 AS ms,
+          EXTRACT(DOW FROM msg_at)::int AS dow
+        FROM all_msgs
+        WHERE sender = 'visitor'
+          AND next_sender = 'ai'
+          AND next_at IS NOT NULL
+          AND EXTRACT(EPOCH FROM (next_at - msg_at)) BETWEEN 0.1 AND 120
       )
-      SELECT dow AS day, AVG(ms)::int AS avg_ms FROM latencies GROUP BY dow ORDER BY dow
+      SELECT dow AS day, AVG(ms)::int AS avg_ms, COUNT(*) AS samples
+      FROM latencies
+      GROUP BY dow ORDER BY dow
     `)) as any;
     const dayRows = dayR?.rows ?? dayR ?? [];
     const DAYS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
@@ -1263,7 +1286,13 @@ export const lcStorage = {
       const found = Array.isArray(dayRows) ? dayRows.find((r: any) => Number(r.day) === d) : null;
       return { day: d, label, avgMs: found ? Number(found.avg_ms) : 0 };
     });
-    return { p50: Number(row.p50 ?? 0), p90: Number(row.p90 ?? 0), p95: Number(row.p95 ?? 0), avgMs: Number(row.avg_ms ?? 0), byDay };
+    return {
+      p50:    Number(row.p50    ?? 0),
+      p90:    Number(row.p90    ?? 0),
+      p95:    Number(row.p95    ?? 0),
+      avgMs:  Number(row.avg_ms ?? 0),
+      byDay,
+    };
   },
 
   async getUnhandledIntents(limit = 15): Promise<{ category: string; count: number; samples: string[] }[]> {
