@@ -1102,6 +1102,274 @@ export const lcStorage = {
     `));
   },
 
+  // ── Dashboard Analytics Avançadas — 8 Métricas ─────────────────────────────
+
+  async getActivationRateStats(dateFrom?: string, dateTo?: string): Promise<{
+    totalSessions: number;
+    chatActivated: number;
+    activationRate: number;
+    trend: { date: string; rate: number }[];
+  }> {
+    const dw = dateFrom && dateTo
+      ? `AND "firstSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND "firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : dateFrom ? `AND "firstSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z'`
+      : dateTo   ? `AND "firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : '';
+    const g = (r: any) => Number(r?.rows?.[0]?.c ?? r?.[0]?.c ?? 0);
+    const [totalR, activatedR] = await Promise.all([
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE 1=1 ${dw}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(DISTINCT v.id)::int AS c FROM lc_visitors v INNER JOIN lc_chats c ON c."visitorId" = v.id WHERE 1=1 ${dw.replace(/"firstSeenAt"/g, 'v."firstSeenAt"')}`)) as any,
+    ]);
+    const total = g(totalR), activated = g(activatedR);
+    const trendR = await db.execute(sql.raw(`
+      SELECT
+        DATE_TRUNC('day', v."firstSeenAt"::timestamptz)::date::text AS date,
+        COUNT(DISTINCT v.id)::int AS total,
+        COUNT(DISTINCT c."visitorId")::int AS activated
+      FROM lc_visitors v
+      LEFT JOIN lc_chats c ON c."visitorId" = v.id
+      WHERE v."firstSeenAt"::timestamptz >= NOW() - INTERVAL '14 days'
+      GROUP BY 1 ORDER BY 1 ASC
+    `)) as any;
+    const trendRows = trendR?.rows ?? trendR ?? [];
+    return {
+      totalSessions: total,
+      chatActivated: activated,
+      activationRate: total > 0 ? Math.round((activated / total) * 100) : 0,
+      trend: Array.isArray(trendRows) ? trendRows.map((r: any) => ({
+        date: r.date,
+        rate: Number(r.total) > 0 ? Math.round((Number(r.activated) / Number(r.total)) * 100) : 0,
+      })) : [],
+    };
+  },
+
+  async getContainmentRate(dateFrom?: string, dateTo?: string): Promise<{
+    aiResolved: number;
+    humanEscalated: number;
+    abandoned: number;
+    totalChats: number;
+    containmentRate: number;
+  }> {
+    const cw = dateFrom && dateTo
+      ? `AND "startedAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND "startedAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : dateFrom ? `AND "startedAt"::timestamptz >= '${dateFrom}T00:00:00Z'`
+      : dateTo   ? `AND "startedAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : '';
+    const g = (r: any) => Number(r?.rows?.[0]?.c ?? r?.[0]?.c ?? 0);
+    const [totalR, aiR, humanR] = await Promise.all([
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE 1=1 ${cw}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "needsHuman" = 'false' AND "aiHandled" = 'true' ${cw}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE ("needsHuman" = 'true' OR status = 'human_active') ${cw}`)) as any,
+    ]);
+    const total = g(totalR), ai = g(aiR), human = g(humanR);
+    return {
+      aiResolved: ai,
+      humanEscalated: human,
+      abandoned: Math.max(0, total - ai - human),
+      totalChats: total,
+      containmentRate: total > 0 ? Math.round((ai / total) * 100) : 0,
+    };
+  },
+
+  async getAiLatencyStats(dateFrom?: string, dateTo?: string): Promise<{
+    p50: number; p90: number; p95: number; avgMs: number;
+    byDay: { day: number; label: string; avgMs: number }[];
+  }> {
+    const cw = dateFrom && dateTo
+      ? `AND c."startedAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND c."startedAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : dateFrom ? `AND c."startedAt"::timestamptz >= '${dateFrom}T00:00:00Z'`
+      : dateTo   ? `AND c."startedAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : '';
+    const percR = await db.execute(sql.raw(`
+      WITH pairs AS (
+        SELECT
+          m."sentAt"::timestamptz AS visitor_at,
+          LEAD(m."sentAt"::timestamptz) OVER (PARTITION BY m."chatId" ORDER BY m."sentAt") AS ai_at,
+          LEAD(m.sender)             OVER (PARTITION BY m."chatId" ORDER BY m."sentAt") AS next_sender
+        FROM lc_messages m
+        INNER JOIN lc_chats c ON c.id = m."chatId"
+        WHERE m.sender = 'visitor' ${cw}
+      ),
+      latencies AS (
+        SELECT EXTRACT(EPOCH FROM (ai_at - visitor_at)) * 1000 AS ms
+        FROM pairs
+        WHERE next_sender = 'ai' AND ai_at IS NOT NULL
+          AND EXTRACT(EPOCH FROM (ai_at - visitor_at)) BETWEEN 0.3 AND 90
+      )
+      SELECT
+        COALESCE(PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY ms), 0)::int AS p50,
+        COALESCE(PERCENTILE_CONT(0.9)  WITHIN GROUP (ORDER BY ms), 0)::int AS p90,
+        COALESCE(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY ms), 0)::int AS p95,
+        COALESCE(AVG(ms), 0)::int AS avg_ms
+      FROM latencies
+    `)) as any;
+    const row = (percR?.rows ?? percR)?.[0] ?? {};
+    const dayR = await db.execute(sql.raw(`
+      WITH pairs AS (
+        SELECT
+          m."sentAt"::timestamptz AS visitor_at,
+          LEAD(m."sentAt"::timestamptz) OVER (PARTITION BY m."chatId" ORDER BY m."sentAt") AS ai_at,
+          LEAD(m.sender)             OVER (PARTITION BY m."chatId" ORDER BY m."sentAt") AS next_sender
+        FROM lc_messages m WHERE m.sender = 'visitor'
+      ),
+      latencies AS (
+        SELECT
+          EXTRACT(EPOCH FROM (ai_at - visitor_at)) * 1000 AS ms,
+          EXTRACT(DOW FROM visitor_at)::int AS dow
+        FROM pairs
+        WHERE next_sender = 'ai' AND ai_at IS NOT NULL
+          AND EXTRACT(EPOCH FROM (ai_at - visitor_at)) BETWEEN 0.3 AND 90
+      )
+      SELECT dow AS day, AVG(ms)::int AS avg_ms FROM latencies GROUP BY dow ORDER BY dow
+    `)) as any;
+    const dayRows = dayR?.rows ?? dayR ?? [];
+    const DAYS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    const byDay = DAYS.map((label, d) => {
+      const found = Array.isArray(dayRows) ? dayRows.find((r: any) => Number(r.day) === d) : null;
+      return { day: d, label, avgMs: found ? Number(found.avg_ms) : 0 };
+    });
+    return { p50: Number(row.p50 ?? 0), p90: Number(row.p90 ?? 0), p95: Number(row.p95 ?? 0), avgMs: Number(row.avg_ms ?? 0), byDay };
+  },
+
+  async getUnhandledIntents(limit = 15): Promise<{ category: string; count: number; samples: string[] }[]> {
+    try {
+      const result = await db.execute(sql.raw(`
+        SELECT "category", COUNT(*)::int AS count,
+          ARRAY_AGG("rawMessage" ORDER BY "createdAt" DESC) AS samples
+        FROM lc_unhandled_intents
+        WHERE "createdAt" >= NOW() - INTERVAL '30 days'
+        GROUP BY "category" ORDER BY count DESC LIMIT ${limit}
+      `)) as any;
+      const rows = result?.rows ?? result ?? [];
+      return Array.isArray(rows)
+        ? rows.map((r: any) => ({
+            category: r.category ?? 'outro',
+            count: Number(r.count),
+            samples: Array.isArray(r.samples) ? r.samples.slice(0, 3) : [],
+          }))
+        : [];
+    } catch { return []; }
+  },
+
+  async recordUnhandledIntent(data: { visitorId?: string; chatId?: string; rawMessage: string; category: string }): Promise<void> {
+    try {
+      await db.execute(sql.raw(`
+        INSERT INTO lc_unhandled_intents ("visitorId","chatId","rawMessage","category","createdAt")
+        VALUES (
+          '${(data.visitorId ?? '').replace(/'/g,"''")}',
+          '${(data.chatId ?? '').replace(/'/g,"''")}',
+          '${(data.rawMessage ?? '').slice(0,500).replace(/'/g,"''")}',
+          '${(data.category ?? 'outro').replace(/'/g,"''")}',
+          NOW()
+        )
+      `));
+    } catch { /* tabela pode ainda não existir */ }
+  },
+
+  async getCohortRetention(weeks = 8): Promise<{
+    cohortWeek: string;
+    data: { weekOffset: number; retentionPct: number; count: number }[];
+  }[]> {
+    const result = await db.execute(sql.raw(`
+      WITH cohorts AS (
+        SELECT
+          "cookieId",
+          DATE_TRUNC('week', "firstSeenAt"::timestamptz)::date AS cohort_week,
+          DATE_TRUNC('week', "lastSeenAt"::timestamptz)::date  AS active_week
+        FROM lc_visitors
+        WHERE "firstSeenAt"::timestamptz >= NOW() - INTERVAL '${weeks} weeks'
+      ),
+      sizes AS (
+        SELECT cohort_week, COUNT(DISTINCT "cookieId")::int AS sz
+        FROM cohorts GROUP BY cohort_week
+      ),
+      activity AS (
+        SELECT
+          cohort_week,
+          ((active_week - cohort_week) / 7)::int AS wo,
+          COUNT(DISTINCT "cookieId")::int AS au
+        FROM cohorts GROUP BY cohort_week, wo
+      )
+      SELECT
+        a.cohort_week::text,
+        a.wo AS week_offset,
+        a.au AS active_users,
+        LEAST(ROUND(a.au::numeric / NULLIF(s.sz, 0) * 100), 100)::int AS retention_pct
+      FROM activity a
+      JOIN sizes s ON s.cohort_week = a.cohort_week
+      WHERE a.wo >= 0
+      ORDER BY a.cohort_week ASC, a.wo ASC
+      LIMIT 200
+    `)) as any;
+    const rows = result?.rows ?? result ?? [];
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    const grouped: Record<string, { weekOffset: number; retentionPct: number; count: number }[]> = {};
+    for (const r of rows) {
+      const w = String(r.cohort_week ?? '');
+      if (!grouped[w]) grouped[w] = [];
+      grouped[w].push({ weekOffset: Number(r.week_offset), retentionPct: Number(r.retention_pct), count: Number(r.active_users) });
+    }
+    return Object.entries(grouped).map(([cohortWeek, data]) => ({ cohortWeek, data }));
+  },
+
+  async getConversionFunnel(dateFrom?: string, dateTo?: string): Promise<{
+    steps: { label: string; count: number; pct: number }[];
+  }> {
+    const dw = dateFrom && dateTo
+      ? `AND "firstSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND "firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : dateFrom ? `AND "firstSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z'`
+      : dateTo   ? `AND "firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : '';
+    const g = (r: any) => Number(r?.rows?.[0]?.c ?? r?.[0]?.c ?? 0);
+    const [s1, s2, s3, s4, s5] = await Promise.all([
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE 1=1 ${dw}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(DISTINCT ce."visitorId")::int AS c FROM lc_click_events ce INNER JOIN lc_visitors v ON v.id = ce."visitorId" WHERE ce."clickType" = 'chat_open' ${dw.replace(/"firstSeenAt"/g,'v."firstSeenAt"')}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(DISTINCT v.id)::int AS c FROM lc_visitors v INNER JOIN lc_chats ch ON ch."visitorId" = v.id WHERE 1=1 ${dw.replace(/"firstSeenAt"/g,'v."firstSeenAt"')}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE "posVendaNome" IS NOT NULL ${dw}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE "rdCrmDealId" IS NOT NULL ${dw}`)) as any,
+    ]);
+    const total = g(s1);
+    const steps = [
+      { label: 'Sessão Iniciada',  count: total },
+      { label: 'Chat Aberto',      count: g(s2) },
+      { label: '1ª Mensagem',      count: g(s3) },
+      { label: 'Dados Capturados', count: g(s4) },
+      { label: 'Lead no CRM',      count: g(s5) },
+    ];
+    return { steps: steps.map(s => ({ ...s, pct: total > 0 ? Math.round((s.count / total) * 100) : 0 })) };
+  },
+
+  async getLeadScoringDistribution(dateFrom?: string, dateTo?: string): Promise<{
+    hot: number; warm: number; cold: number; total: number;
+    hotTrend: { date: string; count: number }[];
+  }> {
+    const dw = dateFrom && dateTo
+      ? `AND "lastSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND "lastSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : dateFrom ? `AND "lastSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z'`
+      : dateTo   ? `AND "lastSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : '';
+    const g = (r: any) => Number(r?.rows?.[0]?.c ?? r?.[0]?.c ?? 0);
+    const [hotR, warmR, totalR, trendR] = await Promise.all([
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE category = 'lead_hot' ${dw}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE category = 'lead_warm' ${dw}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE 1=1 ${dw}`)) as any,
+      db.execute(sql.raw(`
+        SELECT DATE_TRUNC('day', "lastSeenAt"::timestamptz)::date::text AS date, COUNT(*)::int AS count
+        FROM lc_visitors
+        WHERE category = 'lead_hot' AND "lastSeenAt"::timestamptz >= NOW() - INTERVAL '30 days'
+        GROUP BY 1 ORDER BY 1 ASC
+      `)) as any,
+    ]);
+    const hot = g(hotR), warm = g(warmR), total = g(totalR);
+    const trendRows = trendR?.rows ?? trendR ?? [];
+    return {
+      hot, warm, cold: Math.max(0, total - hot - warm), total,
+      hotTrend: Array.isArray(trendRows)
+        ? trendRows.map((r: any) => ({ date: r.date, count: Number(r.count) }))
+        : [],
+    };
+  },
+
 };
 
 /**
@@ -1200,6 +1468,18 @@ export async function ensureLiveChatSchema(): Promise<void> {
       "elementText" TEXT,
       "clickType" TEXT NOT NULL DEFAULT 'custom',
       "clickedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `));
+
+  // Cria tabela de intents não atendidos (fallbacks do Fagner)
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS lc_unhandled_intents (
+      id SERIAL PRIMARY KEY,
+      "visitorId" TEXT,
+      "chatId" TEXT,
+      "rawMessage" TEXT,
+      "category" TEXT NOT NULL DEFAULT 'outro',
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `));
 

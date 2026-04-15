@@ -641,6 +641,57 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
+  // ── Analytics Avançadas — Dashboard de Estatísticas ───────────────────────────
+
+  router.get('/stats/activation-rate', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+      return res.json(await lcStorage.getActivationRateStats(dateFrom, dateTo));
+    } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
+  });
+
+  router.get('/stats/containment', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+      return res.json(await lcStorage.getContainmentRate(dateFrom, dateTo));
+    } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
+  });
+
+  router.get('/stats/ai-latency', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+      return res.json(await lcStorage.getAiLatencyStats(dateFrom, dateTo));
+    } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
+  });
+
+  router.get('/stats/unhandled-intents', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 15;
+      return res.json(await lcStorage.getUnhandledIntents(limit));
+    } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
+  });
+
+  router.get('/stats/cohort', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const weeks = parseInt(req.query.weeks as string) || 8;
+      return res.json(await lcStorage.getCohortRetention(weeks));
+    } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
+  });
+
+  router.get('/stats/funnel', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+      return res.json(await lcStorage.getConversionFunnel(dateFrom, dateTo));
+    } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
+  });
+
+  router.get('/stats/lead-scoring', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+      return res.json(await lcStorage.getLeadScoringDistribution(dateFrom, dateTo));
+    } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
+  });
+
   // Mount all routes under /api/livechat
   app.use("/api/livechat", router);
 
