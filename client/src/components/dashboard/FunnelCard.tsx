@@ -1,13 +1,17 @@
 import DashboardCard from "./DashboardCard";
 import { useStatsData, periodToDates } from "./useStatsData";
 
+// Paleta HSL explícita para garantir renderização correta quando tokens CSS não resolvem
 const COLORS = [
-  "bg-chart-purple", "bg-chart-blue", "bg-chart-orange",
-  "bg-success", "bg-warning",
+  "hsl(262, 83%, 58%)",  // purple
+  "hsl(217, 91%, 60%)",  // blue
+  "hsl(35, 95%, 55%)",   // orange
+  "hsl(142, 71%, 45%)",  // green (success)
+  "hsl(48, 96%, 53%)",   // yellow (warning)
 ];
 
 const FunnelIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--chart-purple))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(262, 83%, 58%)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
   </svg>
 );
@@ -39,14 +43,22 @@ const FunnelCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: nu
       ) : (
         <div className="space-y-5">
           {steps.map((step, i) => {
-            const width = top > 0 ? (step.count / top) * 100 : 0;
+            // Largura: proporcional ao primeiro passo, mínimo 2% se count > 0
+            const width = top > 0 && step.count > 0
+              ? Math.max(2, (step.count / top) * 100)
+              : 0;
+
             const prev = steps[i - 1];
-            const drop = prev && prev.count > 0
+            // Exibe badge de queda só quando ambos os passos têm dados reais
+            const drop = prev && prev.count > 0 && step.count > 0
               ? -Math.round(((prev.count - step.count) / prev.count) * 100)
               : null;
 
+            const color = COLORS[i] ?? "hsl(220, 10%, 55%)";
+            const isEmpty = step.count === 0;
+
             return (
-              <div key={step.label}>
+              <div key={step.label} className={isEmpty ? "opacity-50" : ""}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <span className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-xs font-bold text-muted-foreground">
@@ -55,25 +67,34 @@ const FunnelCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: nu
                     <span className="text-sm font-medium text-card-foreground">{step.label}</span>
                   </div>
                   <div className="flex items-center gap-3">
+                    {/* Badge de queda: só aparece quando há dados válidos nos dois passos */}
                     {drop !== null && drop < 0 && (
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">
                         {drop}%
                       </span>
                     )}
-                    <span className="text-base font-bold text-card-foreground min-w-[60px] text-right">
-                      {step.count.toLocaleString("pt-BR")}
+                    <span className={`text-base font-bold min-w-[60px] text-right ${isEmpty ? "text-muted-foreground" : "text-card-foreground"}`}>
+                      {isEmpty ? "—" : step.count.toLocaleString("pt-BR")}
                     </span>
                   </div>
                 </div>
+                {/* Barra de progresso com cor explícita via inline style */}
                 <div className="relative h-9 w-full rounded-lg bg-muted overflow-hidden">
-                  <div
-                    className={`h-full rounded-lg ${COLORS[i] ?? "bg-muted-foreground/30"} transition-all duration-1000 ease-out flex items-center justify-end pr-3`}
-                    style={{ width: `${Math.max(width, step.count > 0 ? 1.5 : 0)}%` }}
-                  >
-                    {width > 10 && (
-                      <span className="text-xs font-bold text-primary-foreground">{step.pct}%</span>
-                    )}
-                  </div>
+                  {isEmpty ? (
+                    // Barra vazia com padrão tracejado para indicar dado ausente
+                    <div className="h-full w-full flex items-center px-3">
+                      <span className="text-xs text-muted-foreground/50 italic">sem dados</span>
+                    </div>
+                  ) : (
+                    <div
+                      className="h-full rounded-lg transition-all duration-1000 ease-out flex items-center justify-end pr-3"
+                      style={{ width: `${width}%`, backgroundColor: color }}
+                    >
+                      {width > 12 && (
+                        <span className="text-xs font-bold text-white">{step.pct}%</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );

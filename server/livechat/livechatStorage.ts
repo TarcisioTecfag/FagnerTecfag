@@ -1156,16 +1156,26 @@ export const lcStorage = {
       : dateTo   ? `AND "startedAt"::timestamptz <= '${dateTo}T23:59:59Z'`
       : '';
     const g = (r: any) => Number(r?.rows?.[0]?.c ?? r?.[0]?.c ?? 0);
-    const [totalR, aiR, humanR] = await Promise.all([
+    const [totalR, humanR, abandonedR] = await Promise.all([
+      // Total: todos os chats do período
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE 1=1 ${cw}`)) as any,
-      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE "needsHuman" = 'false' AND "aiHandled" = 'true' ${cw}`)) as any,
-      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE ("needsHuman" = 'true' OR status = 'human_active') ${cw}`)) as any,
+      // Escalado p/ Humano: operador clicou em "Assumir" → status passou para human_active
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_chats WHERE status = 'human_active' ${cw}`)) as any,
+      // Abandono: visitante abriu o chat mas nunca enviou uma mensagem (entrou e saiu sem interagir)
+      db.execute(sql.raw(`
+        SELECT COUNT(*)::int AS c FROM lc_chats c
+        WHERE NOT EXISTS (
+          SELECT 1 FROM lc_messages m WHERE m."chatId" = c.id AND m.sender = 'visitor'
+        ) ${cw}
+      `)) as any,
     ]);
-    const total = g(totalR), ai = g(aiR), human = g(humanR);
+    const total = g(totalR), human = g(humanR), abandoned = g(abandonedR);
+    // Resolvido pela IA = total - escalado - abandonado (Fagner completou sem intervenção)
+    const ai = Math.max(0, total - human - abandoned);
     return {
       aiResolved: ai,
       humanEscalated: human,
-      abandoned: Math.max(0, total - ai - human),
+      abandoned,
       totalChats: total,
       containmentRate: total > 0 ? Math.round((ai / total) * 100) : 0,
     };

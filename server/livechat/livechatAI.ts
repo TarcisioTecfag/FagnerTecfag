@@ -196,6 +196,19 @@ interface ChatAISession {
 
 const aiSessions = new Map<string, ChatAISession>();
 
+// ─── AbortController por chatId (permite cancelar Gemini ao "Assumir") ──────────
+const activeGenerations = new Map<string, AbortController>();
+
+/** Cancela o fetch Gemini em andamento para o chatId (chamado quando operador assume) */
+export function cancelGeneration(chatId: string): void {
+  const ctrl = activeGenerations.get(chatId);
+  if (ctrl) {
+    ctrl.abort();
+    activeGenerations.delete(chatId);
+    console.log(`[LiveChat AI] 🛑 Geração cancelada para chat ${chatId} (operador assumiu)`);
+  }
+}
+
 /**
  * Salva o contexto de produto na sessão do Gemini para que Fagner
  * possa responder qualquer pergunta técnica subsequente sem
@@ -839,16 +852,21 @@ async function getRagDocuments(): Promise<{ id: string; name: string; content: s
 //   - Responde em ~1-3s vs 10-45s do 3.1-pro-preview sob carga
 //   - gemini-2.5-pro é também preview — mesma fragilidade do primário
 
-async function geminiRequest(url: string, payload: object): Promise<any> {
+async function geminiRequest(url: string, payload: object, externalSignal?: AbortSignal): Promise<any> {
   const apiKey = url.split("key=")[1] ?? "";
 
-  // ── Tentativa 1: Modelo primário ───────────────────────────────────────────
+  // Combina o signal externo (cancel do operador) com o timeout da requisição
+  const makeSignal = (timeoutMs: number) =>
+    externalSignal
+      ? AbortSignal.any([externalSignal, AbortSignal.timeout(timeoutMs)])
+      : AbortSignal.timeout(timeoutMs);
+
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(20_000), // 20s: falha rápida — se 3.1-pro não respondeu em 20s, o fallback resolve mais rápido
+      signal: makeSignal(20_000),
     });
 
     if (res.ok) return await res.json();
@@ -889,7 +907,7 @@ async function geminiRequest(url: string, payload: object): Promise<any> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(25_000), // 25s: gemini-2.0-flash é muito mais rápido, raramente precisa de mais
+      signal: makeSignal(25_000),
     });
 
     if (fallbackRes.ok) {
@@ -907,6 +925,9 @@ async function geminiRequest(url: string, payload: object): Promise<any> {
       : "Gemini indisponível";
     console.error(`[LiveChat AI][FALLBACK] ❌ Falha total: ${fallbackErr?.message}`);
     throw new Error(safeMsg);
+  } finally {
+    // Limpa o controller ao finalizar (sucesso ou erro)
+    activeGenerations.delete(chatId);
   }
 }
 
@@ -1305,8 +1326,12 @@ export async function processVisitorMessage(
     }
   }
 
+  // Registra AbortController para que o operador possa cancelar via "Assumir"
+  const abortCtrl = new AbortController();
+  activeGenerations.set(chatId, abortCtrl);
+
   try {
-    const data = await geminiRequest(url, payload);
+    const data = await geminiRequest(url, payload, abortCtrl.signal);
 
     const raw: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "(sem resposta)";
     const promptTokens: number = data?.usageMetadata?.promptTokenCount ?? 0;
@@ -1360,6 +1385,11 @@ export async function processVisitorMessage(
     // Return raw (with outcome tags) so livechatWs can detect outcome, but clean reply for the visitor message
     return { reply: raw, needsHuman, tokens: totalTokens };
   } catch (err: any) {
+    // Se foi cancelado pelo operador, retorna silenciosamente sem log de erro
+    if (err?.name === 'AbortError' || /aborted/i.test(err?.message ?? '')) {
+      console.log(`[LiveChat AI] 🛑 Chat ${chatId}: Gemini cancelado pelo operador.`);
+      return { reply: '', needsHuman: false, tokens: 0, isError: true };
+    }
     console.error(`[LiveChat AI][DIAG] ❌ GEMINI FALHOU para chat ${chatId}:`);
     console.error(`[LiveChat AI][DIAG]   Erro: ${err.message}`);
     console.error(`[LiveChat AI][DIAG]   Stack: ${err.stack?.slice(0, 500)}`);

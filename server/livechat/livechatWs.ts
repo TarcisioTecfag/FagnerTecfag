@@ -17,7 +17,7 @@ import { v4 as uuidv4 } from "uuid";
 import { lcStorage } from "./livechatStorage.js";
 import db from "../db.js";
 import { sql } from "drizzle-orm";
-import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, generateProgressiveNote, isObviousNoise, detectStageIntent, generatePosVendaReport, generateMaquinasReport, generatePecasReport, setProductContext } from "./livechatAI.js";
+import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, generateProgressiveNote, isObviousNoise, detectStageIntent, generatePosVendaReport, generateMaquinasReport, generatePecasReport, setProductContext, cancelGeneration } from "./livechatAI.js";
 import { createPosVendaOS, createMaquinasOS, createPecasOS, isRdCrmConfigured } from "./rdCrmService.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 import { buildCart } from "./vtexCheckoutService.js";
@@ -1296,6 +1296,30 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     visitorId: currentVisitorId,
                     message: "Fagner precisa de ajuda nesta conversa!",
                   });
+
+                  // Grava o intent não atendido para o "Mapa de Intents Não Atendidos"
+                  // Categoriza a mensagem do visitante por palavras-chave
+                  const intentMsg = data.content?.slice(0, 300) ?? '';
+                  const categorizeIntent = (msg: string): string => {
+                    const m = msg.toLowerCase();
+                    if (/garantia|assistência|técnico|manutenção|defeito|quebr|dano/.test(m))   return 'Garantia / Assistência Técnica';
+                    if (/prazo|entrega|frete|envio|chegou|rastreio|transportadora/.test(m))      return 'Prazo de Entrega / Frete';
+                    if (/preço|valor|desconto|promoção|custo|orçamento/.test(m))                return 'Preço / Orçamento';
+                    if (/parcela|crédito|boleto|pix|pagamento|financiamento/.test(m))           return 'Forma de Pagamento';
+                    if (/voltagem|energia|elétrico|tensão|amper|watt/.test(m))                  return 'Especificação Elétrica';
+                    if (/dimensão|tamanho|peso|altura|largura|comprimento/.test(m))             return 'Dimensões / Especificações';
+                    if (/nota fiscal|nfe|danfe|xml|faturamento|cnpj/.test(m))                   return 'Nota Fiscal / Faturamento';
+                    if (/personaliz|customiz|adapt|modific|especial/.test(m))                   return 'Personalização / Adaptação';
+                    if (/peça|reposição|substitui|reparo|conserto/.test(m))                     return 'Peças de Reposição';
+                    if (/catálogo|manual|documentação|especificação técnica/.test(m))           return 'Documentação Técnica';
+                    return 'Outros';
+                  };
+                  lcStorage.recordUnhandledIntent({
+                    visitorId: currentVisitorId,
+                    chatId: chat.id,
+                    rawMessage: intentMsg,
+                    category: categorizeIntent(intentMsg),
+                  }).catch(() => {});
                 }
 
                 // Detectar desfecho usando rawReply (ainda contém as tags originais)
@@ -2347,6 +2371,10 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 operatorName = "Atendente";
               }
             }
+
+            // Cancela imediatamente qualquer geração Gemini em andamento para este chat
+            // (evita que Fagner entregue resposta após o operador ter assumido)
+            cancelGeneration(chatToTake.id);
 
             await lcStorage.updateChat(chatToTake.id, {
               status: "human_active",
