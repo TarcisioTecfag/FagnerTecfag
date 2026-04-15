@@ -105,9 +105,18 @@ const LeadScoringCard = ({ period = "14d", delay = 0 }: { period?: string; delay
               ) : (
                 <div className="h-7 rounded-lg bg-muted/50" />
               )}
-              <div className="flex justify-between mt-3">
-                <span className="text-sm text-muted-foreground">Total de visitantes no período</span>
-                <span className="text-lg font-bold text-card-foreground">{total.toLocaleString("pt-BR")}</span>
+              <div className="mt-3 pt-3 border-t border-border">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm text-muted-foreground">Total de visitantes no período</span>
+                  <span className="text-lg font-bold text-card-foreground">{(data?.total ?? 0).toLocaleString("pt-BR")}</span>
+                </div>
+                {/* Barra roxa 100% — representa o universo total de visitantes */}
+                <div className="h-3 w-full rounded-full overflow-hidden bg-muted">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{ width: "100%", background: "hsl(262, 83%, 58%)" }}
+                  />
+                </div>
               </div>
             </div>
           </div>

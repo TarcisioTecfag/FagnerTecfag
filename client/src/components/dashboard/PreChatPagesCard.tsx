@@ -50,23 +50,25 @@ const PreChatPagesCard = ({ delay = 0 }: { delay?: number }) => {
       ) : pages.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-12">Sem dados suficientes ainda.</p>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {pages.slice(0, 7).map((page, i) => {
-            const pct = Math.round((page.count / maxVisits) * 100);
+            const pct = maxVisits > 0 ? Math.round((page.count / maxVisits) * 100) : 0;
             const label = page.pageTitle || page.url.replace(/^https?:\/\/[^/]+/, "").slice(0, 60) || page.url;
             return (
-              <div key={i} className="group hover:bg-muted/50 rounded-lg p-2 -mx-2 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div key={i} className="group hover:bg-muted/50 rounded-lg px-2 py-1.5 transition-colors">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
                     <span className="text-xs font-bold text-muted-foreground w-5 text-center shrink-0">#{i + 1}</span>
                     <span className="text-sm text-card-foreground truncate">{label}</span>
                   </div>
-                  <span className="text-sm font-bold text-card-foreground ml-4 shrink-0">{page.count}×</span>
+                  {/* Número real de visitas, sem × */}
+                  <span className="text-sm font-bold text-card-foreground ml-3 shrink-0">{page.count.toLocaleString("pt-BR")}</span>
                 </div>
-                <div className="ml-8 h-2.5 w-full rounded-full bg-muted overflow-hidden">
+                {/* Barra contida dentro do card — overflow-hidden garante que não vaze */}
+                <div className="ml-7 h-2 w-full max-w-full rounded-full bg-muted overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${pct}%`, background: BAR_COLORS[i % BAR_COLORS.length] }}
+                    style={{ width: `${pct}%`, backgroundColor: BAR_COLORS[i % BAR_COLORS.length] }}
                   />
                 </div>
               </div>

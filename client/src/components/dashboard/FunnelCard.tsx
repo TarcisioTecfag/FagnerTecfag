@@ -78,13 +78,14 @@ const FunnelCard = ({ period = "14d", delay = 0 }: { period?: string; delay?: nu
                 ? Math.max(2, (step.count / top) * 100)
                 : 0;
 
-              // Taxa de conversão do STEP ANTERIOR para este (o que realmente importa)
-              const conversionFromPrev = prev && prev.count > 0 && step.count > 0
+              // Taxa de conversão do STEP ANTERIOR para este
+              // Só exibe se step <= prev (funil real — sem dados inconsistentes)
+              const conversionFromPrev = prev && prev.count > 0 && step.count > 0 && step.count <= prev.count
                 ? Math.round((step.count / prev.count) * 100)
                 : null;
 
-              // Queda (negativo = perda)
-              const drop = prev && prev.count > 0 && step.count > 0
+              // Queda (negativo = perda) — só se fizer sentido no funil
+              const drop = prev && prev.count > 0 && step.count > 0 && step.count <= prev.count
                 ? -Math.round(((prev.count - step.count) / prev.count) * 100)
                 : null;
 
