@@ -1108,7 +1108,7 @@ export const lcStorage = {
     totalSessions: number;
     chatActivated: number;
     activationRate: number;
-    trend: { date: string; rate: number }[];
+    trend: { date: string; rate: number; total: number; activated: number }[];
   }> {
     const dw = dateFrom && dateTo
       ? `AND "firstSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND "firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
@@ -1121,14 +1121,18 @@ export const lcStorage = {
       db.execute(sql.raw(`SELECT COUNT(DISTINCT v.id)::int AS c FROM lc_visitors v INNER JOIN lc_chats c ON c."visitorId" = v.id WHERE 1=1 ${dw.replace(/"firstSeenAt"/g, 'v."firstSeenAt"')}`)) as any,
     ]);
     const total = g(totalR), activated = g(activatedR);
+    // Trend diário — respeita o filtro de período selecionado pelo usuário
+    const trendWhere = dateFrom && dateTo
+      ? `v."firstSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND v."firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : `v."firstSeenAt"::timestamptz >= NOW() - INTERVAL '14 days'`;
     const trendR = await db.execute(sql.raw(`
       SELECT
         DATE_TRUNC('day', v."firstSeenAt"::timestamptz)::date::text AS date,
-        COUNT(DISTINCT v.id)::int AS total,
-        COUNT(DISTINCT c."visitorId")::int AS activated
+        COUNT(DISTINCT v.id)::int                                    AS total,
+        COUNT(DISTINCT c."visitorId")::int                          AS activated
       FROM lc_visitors v
       LEFT JOIN lc_chats c ON c."visitorId" = v.id
-      WHERE v."firstSeenAt"::timestamptz >= NOW() - INTERVAL '14 days'
+      WHERE ${trendWhere}
       GROUP BY 1 ORDER BY 1 ASC
     `)) as any;
     const trendRows = trendR?.rows ?? trendR ?? [];
@@ -1137,8 +1141,10 @@ export const lcStorage = {
       chatActivated: activated,
       activationRate: total > 0 ? Math.round((activated / total) * 100) : 0,
       trend: Array.isArray(trendRows) ? trendRows.map((r: any) => ({
-        date: r.date,
-        rate: Number(r.total) > 0 ? Math.round((Number(r.activated) / Number(r.total)) * 100) : 0,
+        date:      r.date,
+        total:     Number(r.total ?? 0),
+        activated: Number(r.activated ?? 0),
+        rate:      Number(r.total) > 0 ? Math.round((Number(r.activated) / Number(r.total)) * 100) : 0,
       })) : [],
     };
   },

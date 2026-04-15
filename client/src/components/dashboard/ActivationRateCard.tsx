@@ -8,12 +8,25 @@ const getColor = (rate: number) =>
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload?.length) {
     const d = payload[0].payload;
+    const sessions  = d.total     ?? 0;
+    const activated = d.activated ?? 0;
     return (
-      <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-lg">
-        <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
-        <p className="text-sm text-card-foreground">Taxa: <span className="font-bold">{d.rate}%</span></p>
-        <p className="text-sm text-card-foreground">Sessões: <span className="font-bold">{d.total ?? d.sessions}</span></p>
-        <p className="text-sm text-card-foreground">Ativados: <span className="font-bold">{d.activated}</span></p>
+      <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-lg min-w-[160px]">
+        <p className="text-xs font-semibold text-muted-foreground mb-2">{label}</p>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm text-muted-foreground">Taxa</span>
+            <span className="text-sm font-bold text-card-foreground">{d.rate}%</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm text-muted-foreground">Sessões</span>
+            <span className="text-sm font-bold text-card-foreground">{sessions.toLocaleString("pt-BR")}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm text-muted-foreground">Ativados</span>
+            <span className="text-sm font-bold" style={{ color: "hsl(142,71%,45%)" }}>{activated.toLocaleString("pt-BR")}</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -31,7 +44,7 @@ const ActivationRateCard = ({ period = "14d", delay = 0 }: { period?: string; de
   const qs = new URLSearchParams({ dateFrom, dateTo });
   const { data, loading } = useStatsData<{
     totalSessions: number; chatActivated: number; activationRate: number;
-    trend: { date: string; rate: number; total?: number; activated: number }[];
+    trend: { date: string; rate: number; total: number; activated: number }[];
   }>(`/api/livechat/stats/activation-rate?${qs}`);
 
   const trend = (data?.trend ?? []).map((t) => ({
