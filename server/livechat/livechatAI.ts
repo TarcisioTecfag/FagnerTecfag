@@ -179,7 +179,7 @@ export function isObviousNoise(message: string): { isNoise: boolean; reply: stri
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const GEMINI_CHAT_MODEL          = "gemini-3.1-pro-preview";
-const GEMINI_FALLBACK_MODEL      = "gemini-2.0-flash"; // Fallback GA estável (não preview) — muito menor chance de 503
+const GEMINI_FALLBACK_MODEL      = "gemini-2.5-flash"; // Fallback Stable GA (confirmado docs 15/04/2026) — baixa latência, anti-throttle
 const GEMINI_BASE                = "https://generativelanguage.googleapis.com/v1beta";
 
 // ─── In-memory chat sessions (histórico por chat) ─────────────────────────────
