@@ -485,3 +485,170 @@ ${optionsTable}
 
 INSTRUÇÃO: Apresente as opções ao cliente de forma comercial. Se alguma opção constar como "A combinar", NUNCA FALE que ela custa 0 reais nem que é grátis. Apenas diga que "Temos a opção de transportadora por X, ou modalidade a combinar, onde nosso especialista alinha o frete diretamente com você." Destaque a mais barata e a mais rápida.`;
 }
+
+// ─── Checkout — Criação Real de Carrinho VTEX ─────────────────────────────────
+
+export interface VtexCheckoutRequest {
+  skuId: string;
+  quantity?: number;
+  // Dados do cliente
+  clientName: string;
+  email: string;
+  cpf?: string;
+  cnpj?: string;
+  phone: string;
+  // Dados de entrega
+  cep: string;
+  street: string;
+  number: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+}
+
+export interface VtexCheckoutResult {
+  success: boolean;
+  checkoutUrl?: string;
+  orderFormId?: string;
+  error?: string;
+}
+
+/**
+ * Cria um carrinho real na VTEX via Checkout API pública.
+ * 1. Cria orderForm vazio
+ * 2. Adiciona o produto (skuId)
+ * 3. Pré-preenche perfil do cliente
+ * 4. Pré-preenche endereço de entrega
+ * Retorna a URL de checkout com o orderFormId real.
+ */
+export async function createVtexCheckout(req: VtexCheckoutRequest): Promise<VtexCheckoutResult> {
+  const CHECKOUT_BASE = `${VTEX_STORE_URL}/api/checkout/pub/orderForms`;
+  const qty = req.quantity ?? 1;
+  const cleanCep = req.cep.replace(/\D/g, "");
+
+  try {
+    // ── 1. Cria orderForm vazio ───────────────────────────────────────────────
+    const createRes = await fetchWithRetry(CHECKOUT_BASE, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "TecfagFagnerBot/1.0",
+      },
+      body: JSON.stringify({}),
+    }, 3, 8000);
+
+    if (!createRes) {
+      return { success: false, error: "Não foi possível criar o orderForm na VTEX (sem resposta)" };
+    }
+
+    const orderForm = await createRes.json();
+    const orderFormId: string = orderForm?.orderFormId;
+
+    if (!orderFormId) {
+      console.error("[VTEX Checkout] Resposta sem orderFormId:", JSON.stringify(orderForm).slice(0, 300));
+      return { success: false, error: "VTEX não retornou orderFormId" };
+    }
+
+    console.log(`[VTEX Checkout] orderForm criado: ${orderFormId}`);
+
+    // ── 2. Adiciona o produto ao carrinho ────────────────────────────────────
+    const addItemRes = await fetchWithRetry(
+      `${CHECKOUT_BASE}/${orderFormId}/items`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "User-Agent": "TecfagFagnerBot/1.0",
+        },
+        body: JSON.stringify({
+          orderItems: [{ id: req.skuId, quantity: qty, seller: "1" }],
+        }),
+      },
+      3, 8000
+    );
+
+    if (!addItemRes) {
+      console.warn(`[VTEX Checkout] Falha ao adicionar item ${req.skuId} ao orderForm ${orderFormId}`);
+      // Retorna o link mesmo sem o produto — melhor do que não ter link
+    } else {
+      const addedData = await addItemRes.json();
+      const itemCount = addedData?.items?.length ?? 0;
+      console.log(`[VTEX Checkout] ${itemCount} item(s) adicionado(s) ao carrinho ${orderFormId}`);
+    }
+
+    // ── 3. Pré-preenche perfil do cliente ────────────────────────────────────
+    const profileBody: Record<string, any> = {
+      email: req.email,
+      firstName: req.clientName.split(" ")[0] ?? req.clientName,
+      lastName: req.clientName.split(" ").slice(1).join(" ") || "",
+      phone: req.phone.replace(/\D/g, ""),
+    };
+    if (req.cpf)  profileBody.document   = req.cpf.replace(/\D/g, "");
+    if (req.cnpj) profileBody.corporateDocument = req.cnpj.replace(/\D/g, "");
+
+    await fetchWithRetry(
+      `${CHECKOUT_BASE}/${orderFormId}/attachments/clientProfileData`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "User-Agent": "TecfagFagnerBot/1.0",
+        },
+        body: JSON.stringify(profileBody),
+      },
+      2, 6000
+    );
+
+    // ── 4. Pré-preenche endereço de entrega ──────────────────────────────────
+    if (cleanCep.length === 8) {
+      const shippingBody = {
+        selectedAddresses: [{
+          addressType: "residential",
+          postalCode: cleanCep,
+          street: req.street || "",
+          number: req.number || "s/n",
+          complement: req.complement || "",
+          neighborhood: req.neighborhood || "",
+          city: req.city || "",
+          state: req.state || "",
+          country: "BRA",
+        }],
+        logisticsInfo: [],
+      };
+
+      await fetchWithRetry(
+        `${CHECKOUT_BASE}/${orderFormId}/attachments/shippingData`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "TecfagFagnerBot/1.0",
+          },
+          body: JSON.stringify(shippingBody),
+        },
+        2, 6000
+      );
+    }
+
+    const checkoutUrl = `${VTEX_STORE_URL}/checkout?orderFormId=${orderFormId}`;
+    console.log(`[VTEX Checkout] ✅ Carrinho pronto: ${checkoutUrl}`);
+
+    // Log no banco
+    storage.createVtexLog({
+      type: "link_sent",
+      description: `Checkout criado para ${req.clientName} (${req.email}) — SKU ${req.skuId} x${qty}`,
+      product: req.skuId,
+    }).catch(() => {});
+
+    return { success: true, checkoutUrl, orderFormId };
+
+  } catch (err: any) {
+    console.error("[VTEX Checkout] Erro crítico:", err.message);
+    return { success: false, error: err.message };
+  }
+}

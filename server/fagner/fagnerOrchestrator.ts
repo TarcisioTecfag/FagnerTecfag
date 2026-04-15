@@ -70,9 +70,14 @@ import {
   searchProduct,
   detectMachineIntent,
   formatVtexContextForGemini,
+  createVtexCheckout,
+  type VtexCheckoutRequest,
 } from "./vtexService.js";
 
 export { getSchedule, setSchedule };
+
+// ─── Regex da tag de checkout ─────────────────────────────────────────────────
+const VTEX_CHECKOUT_TAG_REGEX = /\[VTEX_CHECKOUT_REQUEST:({[^\]]+})\]/;
 
 // ─── Tipos do webhook ─────────────────────────────────────────────────────────
 
@@ -376,8 +381,70 @@ async function processContact(session: ContactSession, combinedMessage: string):
       if (detected) setFlow(session, detected.flow, detected.sub);
     }
 
-    // ── 9. Split humanizado e envio ───────────────────────────────────────
-    const parts = splitHumanized(response);
+    // ── 9. Processa tag de checkout VTEX ────────────────────────────────
+    let processedResponse = response;
+    const checkoutTagMatch = response.match(VTEX_CHECKOUT_TAG_REGEX);
+    if (checkoutTagMatch) {
+      deps.emitLog(`[${contactId}] 🛒 VTEX_CHECKOUT_REQUEST detectado — criando carrinho real...`, "INFO");
+      try {
+        const checkoutData = JSON.parse(checkoutTagMatch[1]) as Record<string, any>;
+
+        // Mescla com dados da sessão como fallback
+        const req: VtexCheckoutRequest = {
+          skuId:      String(checkoutData.skuId ?? session.productNotes[0] ?? ""),
+          quantity:   Number(checkoutData.qty ?? 1),
+          clientName: String(checkoutData.name ?? session.flowData.clientName ?? "Cliente"),
+          email:      String(checkoutData.email ?? ""),
+          cpf:        checkoutData.cpf  ? String(checkoutData.cpf)  : session.flowData.clientCpf,
+          cnpj:       checkoutData.cnpj ? String(checkoutData.cnpj) : session.flowData.clientCnpj,
+          phone:      String(checkoutData.phone ?? session.contactPhone ?? ""),
+          cep:        String(checkoutData.cep ?? ""),
+          street:     String(checkoutData.street ?? ""),
+          number:     String(checkoutData.number ?? "s/n"),
+          complement: checkoutData.complement ? String(checkoutData.complement) : undefined,
+          city:       checkoutData.city  ? String(checkoutData.city)  : undefined,
+          state:      checkoutData.state ? String(checkoutData.state) : undefined,
+        };
+
+        const result = await createVtexCheckout(req);
+
+        if (result.success && result.checkoutUrl) {
+          deps.emitLog(`[${contactId}] ✅ Checkout criado: ${result.checkoutUrl}`, "SUCCESS");
+          // Remove a tag e injeta o link real
+          processedResponse = processedResponse
+            .replace(VTEX_CHECKOUT_TAG_REGEX, result.checkoutUrl)
+            // Strip markdown WhatsApp da mensagem de checkout
+            .replace(/\*([^*]+)\*/g, "$1")   // *negrito* → texto
+            .replace(/_([^_]+)_/g, "$1");     // _itálico_ → texto
+        } else {
+          deps.emitLog(`[${contactId}] ❌ Falha ao criar checkout: ${result.error}`, "ERROR");
+          // Remove a tag e avisa o cliente
+          processedResponse = processedResponse.replace(
+            VTEX_CHECKOUT_TAG_REGEX,
+            "[aguarde, estou gerando o link...]"
+          );
+          // Envia mensagem de erro amigável após
+          await sendMessage(contactId, "Tive um probleminha técnico ao gerar o link de pagamento. Já notifiquei nossa equipe e vou te passar o link em instantes. 🙏");
+        }
+      } catch (checkoutErr: any) {
+        deps.emitLog(`[${contactId}] ❌ Erro ao parsear VTEX_CHECKOUT_REQUEST: ${checkoutErr.message}`, "ERROR");
+        processedResponse = processedResponse.replace(VTEX_CHECKOUT_TAG_REGEX, "");
+      }
+    } else {
+      // Mesmo sem checkout, remove formatação markdown da resposta (asteriscos/underscores)
+      processedResponse = processedResponse
+        .replace(/\*\*([^*]+)\*\*/g, "$1")  // **negrito** → texto
+        .replace(/\*([^*]+)\*/g, "$1")      // *negrito* → texto
+        .replace(/_([^_]+)_/g, "$1");        // _itálico_ → texto
+    }
+
+    // ── 9b. Strip de tag interna VTEX_CHECKOUT_REQUEST remanescente ─────
+    processedResponse = processedResponse
+      .replace(/\[VTEX_CHECKOUT_REQUEST[^\]]*\]/gi, "")
+      .trim();
+
+    // ── 9c. Split humanizado e envio ─────────────────────────────────────
+    const parts = splitHumanized(processedResponse);
     await sendWithDelay(contactId, parts);
 
     // ── 10. Detecta finalização ──────────────────────────────────────────
