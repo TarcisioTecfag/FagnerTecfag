@@ -1432,10 +1432,14 @@ export const lcStorage = {
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE category = 'lead_warm' ${dwLast}`)) as any,
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE 1=1 ${dwLast}`)) as any,
       db.execute(sql.raw(`
-        SELECT DATE_TRUNC('day', "lastSeenAt"::timestamptz)::date::text AS date, COUNT(*)::int AS count
+        SELECT
+          -- lastSeenAt é TEXT: usa SUBSTRING para extrair apenas YYYY-MM-DD
+          -- mais robusto que ::timestamptz quando o formato pode variar
+          SUBSTRING("lastSeenAt", 1, 10) AS date,
+          COUNT(*)::int AS count
         FROM lc_visitors
         WHERE category IN ('lead_hot','customer')
-          AND "lastSeenAt"::timestamptz >= NOW() - INTERVAL '30 days'
+          AND "lastSeenAt" >= TO_CHAR(NOW() - INTERVAL '30 days', 'YYYY-MM-DD')
         GROUP BY 1 ORDER BY 1 ASC
       `)) as any,
     ]);

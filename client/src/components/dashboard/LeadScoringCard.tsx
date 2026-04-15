@@ -91,7 +91,7 @@ const LeadScoringCard = ({ period = "14d", delay = 0 }: { period?: string; delay
 
             <div className="pt-5 border-t border-border">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Leads Quentes — 30 Dias</h4>
-              {trend.length > 0 ? (
+              {trend.some(t => t.count > 0) ? (
                 <div className="flex items-end gap-0.5 h-10 bg-muted/40 rounded-lg px-2 pt-1.5 pb-1">
                   {trend.map((t, i) => (
                     <div key={i} className="flex-1 h-full flex items-end" title={`${t.date}: ${t.count}`}>
