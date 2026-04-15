@@ -1344,29 +1344,45 @@ export const lcStorage = {
     hotTrend: { date: string; count: number }[];
   }> {
     const dw = dateFrom && dateTo
+      ? `AND "firstSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND "firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : dateFrom ? `AND "firstSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z'`
+      : dateTo   ? `AND "firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : '';
+    // Para os totais usamos lastSeenAt (atividade recente)
+    const dwLast = dateFrom && dateTo
       ? `AND "lastSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND "lastSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
       : dateFrom ? `AND "lastSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z'`
       : dateTo   ? `AND "lastSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
       : '';
     const g = (r: any) => Number(r?.rows?.[0]?.c ?? r?.[0]?.c ?? 0);
     const [hotR, warmR, totalR, trendR] = await Promise.all([
-      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE category = 'lead_hot' ${dw}`)) as any,
-      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE category = 'lead_warm' ${dw}`)) as any,
-      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE 1=1 ${dw}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE category = 'lead_hot' ${dwLast}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE category = 'lead_warm' ${dwLast}`)) as any,
+      db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE 1=1 ${dwLast}`)) as any,
       db.execute(sql.raw(`
-        SELECT DATE_TRUNC('day', "lastSeenAt"::timestamptz)::date::text AS date, COUNT(*)::int AS count
+        SELECT DATE_TRUNC('day', "firstSeenAt"::timestamptz)::date::text AS date, COUNT(*)::int AS count
         FROM lc_visitors
-        WHERE category = 'lead_hot' AND "lastSeenAt"::timestamptz >= NOW() - INTERVAL '30 days'
+        WHERE category IN ('lead_hot','customer')
+          AND "firstSeenAt"::timestamptz >= NOW() - INTERVAL '30 days'
         GROUP BY 1 ORDER BY 1 ASC
       `)) as any,
     ]);
     const hot = g(hotR), warm = g(warmR), total = g(totalR);
-    const trendRows = trendR?.rows ?? trendR ?? [];
+    const trendRows: { date: string; count: number }[] = (trendR?.rows ?? trendR ?? [])
+      .map((r: any) => ({ date: String(r.date ?? ''), count: Number(r.count ?? 0) }));
+
+    // Preenche dias sem dados com 0 para garantir sparkline contínua (30 dias)
+    const filledTrend: { date: string; count: number }[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const found = trendRows.find(r => r.date === key);
+      filledTrend.push({ date: key, count: found?.count ?? 0 });
+    }
+
     return {
       hot, warm, cold: Math.max(0, total - hot - warm), total,
-      hotTrend: Array.isArray(trendRows)
-        ? trendRows.map((r: any) => ({ date: r.date, count: Number(r.count) }))
-        : [],
+      hotTrend: filledTrend,
     };
   },
 
