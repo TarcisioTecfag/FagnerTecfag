@@ -1603,18 +1603,44 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     broadcastToAgents({
                       type: "VISITOR_MAQUINAS_UPDATED",
                       visitorId: currentVisitorId,
-                      maqData,
+                      maquinasData: maqData, // FIX: frontend lê "maquinasData", não "maqData"
                     });
                     console.log(`[LiveChat] Dados de máquinas salvos e broadcast feito para visitante ${currentVisitorId}`);
 
-                    // CNPJ data
+                    // CNPJ data — tenta carregar do cache do banco primeiro
                     if (maqData.cnpjCpf) {
                       const cv = await lcStorage.getVisitorById(currentVisitorId);
                       if (cv?.posVendaCnpjData) {
+                        // Cache disponível — usa direto
                         const pj = typeof cv.posVendaCnpjData === 'string' ? JSON.parse(cv.posVendaCnpjData) : cv.posVendaCnpjData;
                         maqData.cnpjData = pj;
+                      } else {
+                        // FIX Bug 1: cache ausente — busca razão social na CNPJ.ws para criar empresa correta no CRM
+                        const docDigits = maqData.cnpjCpf.replace(/\D/g, '');
+                        if (docDigits.length === 14) {
+                          try {
+                            const cnpjRes = await fetch(`https://publica.cnpj.ws/cnpj/${docDigits}`, { signal: AbortSignal.timeout(6000) });
+                            if (cnpjRes.ok) {
+                              const cnpjJson = await cnpjRes.json();
+                              maqData.cnpjData = {
+                                nome:      cnpjJson.razao_social ?? maqData.nome,
+                                fantasia:  cnpjJson.estabelecimento?.nome_fantasia ?? undefined,
+                                cnpj:      docDigits,
+                                municipio: cnpjJson.estabelecimento?.cidade?.nome ?? undefined,
+                                uf:        cnpjJson.estabelecimento?.estado?.sigla ?? undefined,
+                                bairro:    cnpjJson.estabelecimento?.bairro ?? undefined,
+                              };
+                              console.log(`[LiveChat] CNPJ lookup (fallback pré-CRM): ${maqData.cnpjData.nome}`);
+                              // Persiste no banco para sessões futuras
+                              await lcStorage.updateVisitorPosVendaData(currentVisitorId, { cnpjData: maqData.cnpjData }).catch(() => {});
+                            }
+                          } catch (cnpjErr: any) {
+                            console.warn(`[LiveChat] CNPJ lookup fallback falhou: ${cnpjErr.message} — empresa criada pelo nome do cliente`);
+                          }
+                        }
                       }
                     }
+
 
                     // ── Criar deal no RD Station CRM funil MÁQUINAS 2.0 ──
                     if (isRdCrmConfigured()) {

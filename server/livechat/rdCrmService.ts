@@ -765,16 +765,22 @@ async function upsertContact(posVenda: PosVendaData, organizationId?: string | n
       if (Array.isArray(byDoc) && byDoc.length > 0) {
         const existingId = byDoc[0].id;
         console.log(`[RD CRM] Contato existente (por doc): ${existingId}`);
-        // Atualiza organização e email se estiverem faltando
-        const needsEmailUpdate = posVenda.email && (!byDoc[0].emails || byDoc[0].emails.length === 0);
-        const needsOrgUpdate = organizationId && !byDoc[0].organization_id;
-        if (needsEmailUpdate || needsOrgUpdate) {
+        // FIX: sempre sobrescreve email, nome e organização quando o cliente informou novos dados
+        const existingEmail = byDoc[0].emails?.[0]?.email ?? '';
+        const existingName  = (byDoc[0].name ?? '').toLowerCase().trim();
+        const newEmail = posVenda.email?.trim().toLowerCase() ?? '';
+        const newName  = posVenda.nome?.trim().toLowerCase() ?? '';
+        const needsEmailUpdate = newEmail && newEmail !== existingEmail;
+        const needsNameUpdate  = newName  && newName  !== existingName;
+        const needsOrgUpdate   = organizationId && !byDoc[0].organization_id;
+        if (needsEmailUpdate || needsNameUpdate || needsOrgUpdate) {
           const updatePayload: Record<string, any> = {};
-          if (needsEmailUpdate) updatePayload.emails = [{ email: posVenda.email!.trim().toLowerCase() }];
-          if (needsOrgUpdate) updatePayload.organization_id = organizationId;
+          if (needsEmailUpdate) updatePayload.emails          = [{ email: newEmail }];
+          if (needsNameUpdate)  updatePayload.name             = posVenda.nome;
+          if (needsOrgUpdate)   updatePayload.organization_id  = organizationId;
           try {
             await rdRequest("PUT", `/contacts/${existingId}`, updatePayload);
-            console.log(`[RD CRM] Contato ${existingId} atualizado (email/empresa).`);
+            console.log(`[RD CRM] Contato ${existingId} atualizado (email/nome/empresa).`);
           } catch (e: any) { console.warn(`[RD CRM] Falha ao atualizar contato ${existingId}:`, e.message); }
         }
         return existingId;
@@ -788,16 +794,22 @@ async function upsertContact(posVenda: PosVendaData, organizationId?: string | n
     if (Array.isArray(byPhone) && byPhone.length > 0) {
       const existingId = byPhone[0].id;
       console.log(`[RD CRM] Contato existente (por telefone): ${existingId}`);
-      // Atualiza email se estiver faltando no contato existente
-      const needsEmailUpdate = posVenda.email && (!byPhone[0].emails || byPhone[0].emails.length === 0);
-      const needsOrgUpdate = organizationId && !byPhone[0].organization_id;
-      if (needsEmailUpdate || needsOrgUpdate) {
+      // FIX: sempre sobrescreve email, nome e organização quando o cliente informou novos dados
+      const existingEmail = byPhone[0].emails?.[0]?.email ?? '';
+      const existingName  = (byPhone[0].name ?? '').toLowerCase().trim();
+      const newEmail = posVenda.email?.trim().toLowerCase() ?? '';
+      const newName  = posVenda.nome?.trim().toLowerCase() ?? '';
+      const needsEmailUpdate = newEmail && newEmail !== existingEmail;
+      const needsNameUpdate  = newName  && newName  !== existingName;
+      const needsOrgUpdate   = organizationId && !byPhone[0].organization_id;
+      if (needsEmailUpdate || needsNameUpdate || needsOrgUpdate) {
         const updatePayload: Record<string, any> = {};
-        if (needsEmailUpdate) updatePayload.emails = [{ email: posVenda.email!.trim().toLowerCase() }];
-        if (needsOrgUpdate) updatePayload.organization_id = organizationId;
+        if (needsEmailUpdate) updatePayload.emails          = [{ email: newEmail }];
+        if (needsNameUpdate)  updatePayload.name             = posVenda.nome;
+        if (needsOrgUpdate)   updatePayload.organization_id  = organizationId;
         try {
           await rdRequest("PUT", `/contacts/${existingId}`, updatePayload);
-          console.log(`[RD CRM] Contato ${existingId} atualizado (email/empresa).`);
+          console.log(`[RD CRM] Contato ${existingId} atualizado (email/nome/empresa).`);
         } catch (e: any) { console.warn(`[RD CRM] Falha ao atualizar contato:`, e.message); }
       }
       return existingId;
