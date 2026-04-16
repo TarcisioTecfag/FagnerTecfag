@@ -1516,6 +1516,9 @@ registerLiveChatRoutes(app);
 const wssLiveChat = new WebSocketServer({ noServer: true });
 initLiveChatWs(httpServer, wssLiveChat);
 
+// Importa health check do Gemini (lazy — evita import circular)
+import { initGeminiHealthCheck } from "./livechat/livechatAI.js";
+
 httpServer.on("upgrade", (req, socket, head) => {
   const url = req.url ?? "";
   if (url === "/ws/logs") {
@@ -1605,6 +1608,8 @@ httpServer.listen(PORT, HOST, () => {
       console.log("[INIT] FollowUpLoop OK");
       emitLog("Fagner online e pronto para receber atendimentos 🤖", "SUCCESS");
       console.log("[INIT] ✅ Servidor completamente inicializado e aguardando requests");
+      // Health check: detecta Gemini 503 no startup e ativa modo degradado imediatamente
+      initGeminiHealthCheck().catch(() => {});
     } catch (e) {
       console.error("❌ Erro ao inicializar orquestrador:", e);
     }

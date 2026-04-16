@@ -274,7 +274,47 @@ const activeGenerations = new Map<string, AbortController>();
 // Quando o Gemini (primário + fallback) falha com 503, ativamos este flag
 // por 10 minutos. Nesse período todas as mensagens vão direto ao Claude
 // sem desperdiçar tempo nos timeouts do Gemini (evita o problema de 6min).
+//
+// FORCE_CLAUDE=1 (env var) — Bypass total do Gemini durante outages prolongados.
+// Setar no Railway para ativar imediatamente sem esperar o ciclo automático.
 let geminiDegradedUntil: number = 0; // timestamp em ms — 0 = modo normal
+
+/** Retorna true se o sistema deve pular Gemini e ir direto ao Claude */
+function shouldUseClaude(): boolean {
+  if (process.env.FORCE_CLAUDE === '1' || process.env.FORCE_CLAUDE === 'true') return true;
+  return Date.now() < geminiDegradedUntil;
+}
+
+/**
+ * Health check no startup: faz uma requisição mínima ao Gemini.
+ * Se retornar 503, ativa modo degradado imediatamente.
+ * Chamado no server/index.ts após inicialização.
+ */
+export async function initGeminiHealthCheck(): Promise<void> {
+  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_AI_KEY ?? '';
+  if (!apiKey || !process.env.ANTHROPIC_API_KEY) return; // só faz sentido se Claude está configurado
+  try {
+    const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // Payload mínimo: 1 token de entrada
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
+        generationConfig: { maxOutputTokens: 1 },
+      }),
+      signal: AbortSignal.timeout(6_000),
+    });
+    if (res.status === 503 || res.status === 429) {
+      geminiDegradedUntil = Date.now() + 10 * 60 * 1000;
+      console.warn(`[LiveChat AI] 🟡 STARTUP HEALTH CHECK: Gemini ${res.status} — modo degradado ativado por 10min. Claude será usado.`);
+    } else {
+      console.log(`[LiveChat AI] ✅ STARTUP HEALTH CHECK: Gemini OK (${res.status}).`);
+    }
+  } catch (e: any) {
+    console.warn(`[LiveChat AI] ⚠️ STARTUP HEALTH CHECK: falha (${e.message}) — assumindo Gemini OK.`);
+  }
+}
 
 /** Cancela o fetch Gemini em andamento para o chatId (chamado quando operador assume) */
 export function cancelGeneration(chatId: string): void {
@@ -955,7 +995,7 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: makeSignal(20_000),
+      signal: makeSignal(8_000), // 8s: 503 responde em <500ms, não precisa de 20s
     });
 
     if (res.ok) return await res.json();
@@ -971,25 +1011,21 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
       throw new Error(`Gemini HTTP ${res.status} (não retryável)`);
     }
 
-    // 503 / 429 / 5xx → retry com backoff antes de acionar fallback
-    // Tenta 2x com delay (2s, 4s) para suavizar picos transientes de 503
-    for (const retryDelay of [2000, 4000]) {
-      await new Promise(r => setTimeout(r, retryDelay));
-      console.warn(`[LiveChat AI] Retry primário após ${retryDelay}ms (status ${res.status})...`);
-      try {
-        const retryRes = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: makeSignal(20_000),
-        });
-        if (retryRes.ok) {
-          console.log(`[LiveChat AI] ✅ Retry primário bem-sucedido após ${retryDelay}ms.`);
-          return await retryRes.json();
-        }
-        if (retryRes.status >= 400 && retryRes.status < 500 && retryRes.status !== 429) break; // 4xx → desiste
-      } catch { /* timeout/network no retry — segue para fallback */ }
-    }
+    // 503 / 429 / 5xx → 1 retry rápido antes de acionar fallback
+    // (pico transitório pode resolver em <2s; outage prolongado vai falhar rápido)
+    await new Promise(r => setTimeout(r, 1500));
+    try {
+      const retryRes = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: makeSignal(8_000),
+      });
+      if (retryRes.ok) {
+        console.log(`[LiveChat AI] ✅ Retry primário bem-sucedido.`);
+        return await retryRes.json();
+      }
+    } catch { /* timeout no retry — segue para fallback */ }
 
     console.warn(`[LiveChat AI] ⚡ Modelo primário esgotou retries (status ${res.status}) — acionando fallback para ${GEMINI_FALLBACK_MODEL}...`);
   } catch (primaryErr: any) {
@@ -1015,7 +1051,7 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: makeSignal(25_000),
+      signal: makeSignal(8_000), // 8s: flash também retorna 503 em <1s durante outage
     });
 
     if (fallbackRes.ok) {
@@ -1435,11 +1471,12 @@ export async function processVisitorMessage(
   const abortCtrl = new AbortController();
   activeGenerations.set(chatId, abortCtrl);
 
-  // ─── Modo Degradado: ir direto ao Claude se Gemini está sabidamente sobrecarregado ──
-  const isGeminiDegraded = Date.now() < geminiDegradedUntil;
+  // ─── Modo Degradado / FORCE_CLAUDE: ir direto ao Claude se Gemini está sabidamente sobrecarregado ──
+  const isGeminiDegraded = shouldUseClaude();
   if (isGeminiDegraded && process.env.ANTHROPIC_API_KEY) {
-    const remainMin = Math.ceil((geminiDegradedUntil - Date.now()) / 60000);
-    console.warn(`[LiveChat AI] 🟡 MODO DEGRADADO ATIVO (${remainMin}min restantes) — indo direto ao Claude sem tentar Gemini.`);
+    const forced = process.env.FORCE_CLAUDE === '1';
+    const remainMin = geminiDegradedUntil > 0 ? Math.ceil((geminiDegradedUntil - Date.now()) / 60000) : '∞';
+    console.warn(`[LiveChat AI] 🟡 ${forced ? 'FORCE_CLAUDE ATIVO' : `MODO DEGRADADO (${remainMin}min restantes)`} — indo direto ao Claude.`);
     try {
       const claudeReply = await claudePlanC(systemPrompt, session.history, userMessage);
       session.history.push({ role: "user",  parts: userParts });
