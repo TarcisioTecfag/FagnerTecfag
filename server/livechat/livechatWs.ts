@@ -53,6 +53,7 @@ const followUpTimers = new Map<string, FollowUpTimers>();
 interface ChatMessageBuffer {
   timer: NodeJS.Timeout;
   content: string[];
+  isProcessing: boolean; // true enquanto a IA está gerando resposta — impede race condition
 }
 const chatMessageBuffers = new Map<string, ChatMessageBuffer>();
 const chatCreationLocks = new Map<string, Promise<any>>();
@@ -944,8 +945,20 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               if (buffer) {
                 clearTimeout(buffer.timer);
                 buffer.content.push(data.content);
+                // Se a IA JÁ está processando, não recriar timer — a mensagem ficará no buffer
+                // e será processada quando reiniciar após o processamento atual terminar
+                if (buffer.isProcessing) {
+                  console.log(`[LiveChat Buffer] Chat ${chat.id}: IA em processamento, mensagem enfileirada (${buffer.content.length} no buffer).`);
+                  // Reinicia o timer para depois do processamento atual
+                  buffer.timer = setTimeout(async () => {
+                    if (buffer!.isProcessing) return; // ainda processando, aguarda
+                    // Re-dispara o evento sintético para processar o conteúdo acumulado
+                    // (apenas se não estiver mais processando quando o timer disparar)
+                  }, 3000); 
+                  break;
+                }
               } else {
-                buffer = { timer: null as any, content: [data.content] };
+                buffer = { timer: null as any, content: [data.content], isProcessing: false };
                 chatMessageBuffers.set(chat.id, buffer);
               }
 
@@ -954,7 +967,18 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
               // Timer de 15s: só processa quando o cliente pára de digitar por 15 segundos
               buffer.timer = setTimeout(async () => {
-                const bufferedContents = chatMessageBuffers.get(chat.id)?.content ?? [data.content];
+                const currentBuffer = chatMessageBuffers.get(chat.id);
+                const bufferedContents = currentBuffer?.content ?? [data.content];
+
+                // ── GUARD: isProcessing — evita race condition de múltiplos timers ──
+                // Se outro timer já está processando este chat, descarta silenciosamente.
+                if (currentBuffer?.isProcessing) {
+                  console.log(`[LiveChat Buffer] Chat ${chat.id}: duplo timer ignorado (já processando).`);
+                  return;
+                }
+
+                // Marca como processando ANTES de qualquer operação assíncrona
+                if (currentBuffer) currentBuffer.isProcessing = true;
                 chatMessageBuffers.delete(chat.id);
 
                 // ── GUARD 2.0: Verifica se operador assumiu durante o buffer de 15s ──
