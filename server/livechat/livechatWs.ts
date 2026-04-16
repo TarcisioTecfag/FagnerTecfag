@@ -736,15 +736,31 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                 const aiReply: string = aiResponse?.reply ?? "Vou buscar as informações sobre esse produto para você!";
 
-                // Fragmenta a resposta em balões separados (divide por \n\n)
-                // para que cada parágrafo apareça como mensagem independente no widget
-                const fragments = aiReply
+                // ── Limpeza de tags invisíveis (igual ao pipeline de CHAT_MESSAGE) ──
+                const piqCleanReply = aiReply
+                  .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, "")
+                  .replace(/\[SCORE:\d+\]/gi, "")
+                  .replace(/\[PRODUTO_IDENTIFICADO:[^\]]+\]/gi, "")
+                  .replace(/\[STAGE:[^\]]+\]/gi, "")
+                  .replace(/\[POS_VENDA_DADOS:[\s\S]*?\]/gi, "")
+                  .replace(/\[MAQUINAS_DADOS:[\s\S]*?\]/gi, "")
+                  .replace(/\[PECAS_DADOS:[\s\S]*?\]/gi, "")
+                  .replace(/\[CNPJ_CHECK:[^\]]+\]/gi, "")
+                  .replace(/\[CNPJ_RESULT:[\s\S]*?\]/gi, "")
+                  .replace(/\[CRASH:[^\]]*\]/gi, "")
+                  .trim();
+
+                // Fragmenta a resposta limpa por parágrafos
+                const fragments = piqCleanReply
                   .split(/\n\n+/)
                   .map((f) => f.trim())
                   .filter((f) => f.length > 0);
 
-                // Salva o reply completo no banco (histórico unificado)
-                await lcStorage.createMessage({ chatId: piqChatId, sender: "ai", content: aiReply });
+                // Salva CADA chunk individualmente no banco (não o bloco bruto com tags)
+                // Isso garante que o fromHistory (reconexão) reenvie mensagens limpas e separadas
+                for (const chunk of fragments) {
+                  await lcStorage.createMessage({ chatId: piqChatId, sender: "ai", content: chunk });
+                }
 
                 // Envia cada fragmento para o visitante com delay progressivo (400ms entre eles)
                 for (let i = 0; i < fragments.length; i++) {
