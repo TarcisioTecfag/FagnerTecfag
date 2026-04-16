@@ -179,7 +179,7 @@ export function isObviousNoise(message: string): { isNoise: boolean; reply: stri
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const GEMINI_CHAT_MODEL          = "gemini-3.1-pro-preview";
-const GEMINI_FALLBACK_MODEL      = "gemini-2.5-flash"; // Fallback Stable GA (confirmado docs 15/04/2026) — baixa latência, anti-throttle
+const GEMINI_FALLBACK_MODEL      = "gemini-2.5-flash"; // GA Stable (confirmado docs oficiais Google) — sem sufixo = versão estável
 const GEMINI_BASE                = "https://generativelanguage.googleapis.com/v1beta";
 
 // ─── In-memory chat sessions (histórico por chat) ─────────────────────────────
@@ -877,13 +877,32 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
     console.error(`[LiveChat AI][GEMINI ERROR] URL usada: ${url.replace(/key=([^&]+)/, 'key=HIDDEN')}`);
     console.error(`[LiveChat AI][GEMINI ERROR] Payload preview: ${JSON.stringify(payload).slice(0, 800)}`);
 
-    // 4xx (exceto 429) não são retryáveis — lança imediatamente
+  // 4xx (exceto 429) não são retryáveis — lança imediatamente
     if (res.status >= 400 && res.status < 500 && res.status !== 429) {
       throw new Error(`Gemini HTTP ${res.status} (não retryável)`);
     }
 
-    // 503 / 429 / 5xx → aciona fallback
-    console.warn(`[LiveChat AI] ⚡ Modelo primário retornou ${res.status} — acionando fallback para ${GEMINI_FALLBACK_MODEL}...`);
+    // 503 / 429 / 5xx → retry com backoff antes de acionar fallback
+    // Tenta 2x com delay (2s, 4s) para suavizar picos transientes de 503
+    for (const retryDelay of [2000, 4000]) {
+      await new Promise(r => setTimeout(r, retryDelay));
+      console.warn(`[LiveChat AI] Retry primário após ${retryDelay}ms (status ${res.status})...`);
+      try {
+        const retryRes = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: makeSignal(20_000),
+        });
+        if (retryRes.ok) {
+          console.log(`[LiveChat AI] ✅ Retry primário bem-sucedido após ${retryDelay}ms.`);
+          return await retryRes.json();
+        }
+        if (retryRes.status >= 400 && retryRes.status < 500 && retryRes.status !== 429) break; // 4xx → desiste
+      } catch { /* timeout/network no retry — segue para fallback */ }
+    }
+
+    console.warn(`[LiveChat AI] ⚡ Modelo primário esgotou retries (status ${res.status}) — acionando fallback para ${GEMINI_FALLBACK_MODEL}...`);
   } catch (primaryErr: any) {
     // Erros de rede/timeout do modelo primário → aciona fallback
     if (/AbortError|fetch failed|ETIMEDOUT|ECONNRESET|TimeoutError|timeout/i.test(primaryErr?.message ?? "") ||
@@ -1407,9 +1426,15 @@ export async function processVisitorMessage(
 
     // Gera um log técnico (aparece como "Log Oculto" no admin) + mensagem limpa para o visitante
     const errorTag = `[SYSTEM_ERROR: ${err?.message ?? "erro desconhecido"}]`;
+    const isOverload = /503|sobrecarregados|unavailable|high demand/i.test(err?.message ?? "");
     return {
       reply: errorTag,
-      visitorReply: "Hm, acho que não entendi.",
+      // Mensagem ao visitante:
+      // - Sobrecarga: transparente e consultiva, sem parecer erro do Fagner
+      // - Outros erros: mensagem neutra que não confunde com falta de entendimento
+      visitorReply: isOverload
+        ? "Estou com um pequeno gargalo de resposta agora. Pode repetir sua mensagem em alguns instantes? Fico à disposição! 😊"
+        : "Tive uma instabilidade aqui. Pode repetir o que você disse?",
       needsHuman: false,
       tokens: 0,
       isError: true,
