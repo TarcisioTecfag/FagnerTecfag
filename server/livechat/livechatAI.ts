@@ -1519,17 +1519,12 @@ export async function processVisitorMessage(
 
     // Gera um log técnico (aparece como "Log Oculto" no admin) + mensagem limpa para o visitante
     const errorTag = `[SYSTEM_ERROR: ${err?.message ?? "erro desconhecido"}]`;
-    const isOverload = /503|sobrecarregados|unavailable|high demand/i.test(err?.message ?? "");
     return {
       reply: errorTag,
-      // Mensagem ao visitante:
-      // - Sobrecarga: transparente e consultiva, sem parecer erro do Fagner
-      // - Outros erros: mensagem neutra que não confunde com falta de entendimento
-      visitorReply: isOverload
-        ? "Estou com um pequeno gargalo de resposta agora. Pode repetir sua mensagem em alguns instantes? Fico à disposição! 😊"
-        : "Tive uma instabilidade aqui. Pode repetir o que você disse?",
+      visitorReply: "Hm, não entendi.",
       needsHuman: false,
       tokens: 0,
+
 
       isError: true,
     };
