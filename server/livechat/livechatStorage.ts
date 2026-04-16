@@ -428,6 +428,57 @@ export const lcStorage = {
       .where(eq(lcVisitors.id, visitorId));
   },
 
+  // ── Backfill retroativo: extrai dealIds das notas históricas ─────────────────
+  // Percorre visitantes sem rdCrmDealId e preenche a partir das notas de RD CRM.
+  async backfillRdCrmDealIds(): Promise<{ updated: number; skipped: number; total: number }> {
+    // Busca visitantes com notas que mencionem RD CRM mas sem dealId salvo
+    const rows = await db.execute(sql.raw(`
+      SELECT id, notes
+      FROM lc_visitors
+      WHERE "rdCrmDealId" IS NULL
+        AND notes IS NOT NULL
+        AND notes::text != '[]'
+        AND notes::text ILIKE '%RD CRM%'
+    `)) as any;
+
+    const visitors = rows?.rows ?? (Array.isArray(rows) ? rows : []);
+    let updated = 0;
+    let skipped = 0;
+
+    // Regex: captura o dealId após "ID do Deal:" ou "ID:" nas notas
+    const dealIdRegex = /ID(?:\s+do\s+Deal)?:\s*([a-zA-Z0-9]{5,})/i;
+
+    for (const v of visitors) {
+      let notes: any[] = [];
+      try {
+        notes = Array.isArray(v.notes)
+          ? v.notes
+          : (typeof v.notes === "string" ? JSON.parse(v.notes) : []);
+      } catch { continue; }
+
+      let dealId: string | null = null;
+      for (const note of notes) {
+        const content: string = note?.content ?? note?.text ?? "";
+        if (!content.includes("RD CRM")) continue;
+        const match = content.match(dealIdRegex);
+        if (match?.[1]) { dealId = match[1].trim(); break; }
+      }
+
+      if (dealId) {
+        await db.update(lcVisitors)
+          .set({ rdCrmDealId: dealId })
+          .where(eq(lcVisitors.id, v.id));
+        updated++;
+      } else {
+        skipped++;
+      }
+    }
+
+    console.log(`[LiveChat] ✅ Backfill rdCrmDealId: ${updated} atualizados, ${skipped} sem dealId nas notas`);
+    return { updated, skipped, total: visitors.length };
+  },
+
+
   // ── Negociações Anteriores: busca todos os cards do mesmo cookie (exceto o atual) ──
   async getVisitorHistoryByCookie(cookieId: string, excludeId: string): Promise<LcVisitor[]> {
     return db.select()

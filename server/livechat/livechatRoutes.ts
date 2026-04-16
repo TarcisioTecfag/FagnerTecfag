@@ -1,4 +1,4 @@
-﻿/**
+/**
  * server/livechat/livechatRoutes.ts
  *
  * Rotas REST do Live Chat Ã¢â‚¬â€ /api/livechat/*
@@ -731,6 +731,20 @@ export function registerLiveChatRoutes(app: any): void {
       return res.json(await lcStorage.getLeadScoringDistribution(dateFrom, dateTo));
     } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
   });
+
+  // ── Backfill retroativo de rdCrmDealId (admin only) ─────────────────────────
+  // Varre as notas históricas dos visitantes e preenche rdCrmDealId para que o
+  // funil "Lead no CRM" contabilize os deals criados antes deste fix.
+  router.post('/admin/backfill-crm-deal-ids', requireAuth, async (_req: Request, res: Response) => {
+    try {
+      const result = await (lcStorage as any).backfillRdCrmDealIds();
+      return res.json(result);
+    } catch (err: any) {
+      console.error('[LiveChat] Backfill CRM DealId erro:', err?.message);
+      return res.status(500).json({ message: err?.message ?? 'Erro interno' });
+    }
+  });
+
 
   // â”€â”€ Upload de arquivo pelo agente (para enviar ao cliente) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   router.post("/upload-agent", requireAuth, (req: Request, res: Response, next: NextFunction) => {
