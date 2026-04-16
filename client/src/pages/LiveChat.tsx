@@ -1907,6 +1907,34 @@ function LiveChat() {
                       </div>
                     </div>
                     <div className="flex gap-2 relative">
+                      {/* Botões Ver no CRM e Copiar — visíveis TAMBÉM na aba Arquivados */}
+                      {activeTab === "arquivados" && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const v = allVisitors.find(x => x.id === selectedChat?.visitorId);
+                              if (v) setSelectedVisitor(v);
+                              setActiveTab("crm");
+                            }}
+                            className="h-8 text-xs gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300"
+                          >
+                            <Users className="w-3 h-3" />
+                            Ver no CRM
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCopyHistory}
+                            className="h-8 text-xs gap-1.5 border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300"
+                            title="Copiar todo o histórico desta conversa"
+                          >
+                            📋 Copiar
+                          </Button>
+                        </>
+                      )}
+
                       {/* Botões de ação: ocultos na aba Atenção e Arquivados */}
                       {activeTab !== "atencao" && activeTab !== "arquivados" && (
                         <>
@@ -2097,6 +2125,31 @@ function LiveChat() {
                         </div>
                       </div>
                     )}
+
+                    {/* Card de motivo de encerramento — visível na aba Arquivados */}
+                    {activeTab === "arquivados" && (() => {
+                      const REASON_MAP: Record<string, { label: string; emoji: string; bg: string; border: string; text: string }> = {
+                        sem_resposta:         { label: "Cliente não respondeu mais",   emoji: "⏰", bg: "bg-zinc-50",    border: "border-zinc-200",   text: "text-zinc-600" },
+                        venda_fechada:         { label: "Venda fechada com sucesso",    emoji: "✅", bg: "bg-green-50",   border: "border-green-200",  text: "text-green-700" },
+                        venda_cancelada:       { label: "Venda cancelada",              emoji: "❌", bg: "bg-red-50",     border: "border-red-200",    text: "text-red-700"   },
+                        atendimento_concluido: { label: "Atendimento concluído pela IA",emoji: "🤖", bg: "bg-blue-50",   border: "border-blue-200",   text: "text-blue-700"  },
+                        restarted:             { label: "Reiniciado pelo visitante",   emoji: "🔄", bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700"},
+                        problema_tecnico:      { label: "Problema técnico",            emoji: "⚙️", bg: "bg-amber-50",  border: "border-amber-200",  text: "text-amber-700" },
+                        outro:                 { label: "Outro motivo",                emoji: "📝", bg: "bg-zinc-50",   border: "border-zinc-200",   text: "text-zinc-600"  },
+                      };
+                      const reason = (selectedChat as any).closeReason as string | undefined;
+                      const info = reason ? REASON_MAP[reason] : null;
+                      if (!info && !reason) return null;
+                      return (
+                        <div className={`mb-4 p-4 rounded-xl flex gap-3 ${info?.bg ?? "bg-zinc-50"} border ${info?.border ?? "border-zinc-200"}`}>
+                          <span className="text-2xl">{info?.emoji ?? "📋"}</span>
+                          <div>
+                            <p className={`text-sm font-bold mb-0.5 ${info?.text ?? "text-zinc-600"}`}>Motivo do Encerramento</p>
+                            <p className={`text-sm ${info?.text ?? "text-zinc-500"}`}>{info?.label ?? reason}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {chatMessages.map((msg) => {
                       const isVisitor = msg.sender === "visitor";
                       const isAI = msg.sender === "ai";
