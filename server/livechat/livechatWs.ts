@@ -53,10 +53,13 @@ const followUpTimers = new Map<string, FollowUpTimers>();
 interface ChatMessageBuffer {
   timer: NodeJS.Timeout;
   content: string[];
-  isProcessing: boolean; // true enquanto a IA está gerando resposta — impede race condition
 }
 const chatMessageBuffers = new Map<string, ChatMessageBuffer>();
 const chatCreationLocks = new Map<string, Promise<any>>();
+
+// Set de chatIds atualmente com IA processando — impede race condition de múltiplos timers
+// paralelos (Fagner "conversando sozinho" durante outages lentos do Gemini)
+const chatsBeingProcessed = new Set<string>();
 
 // ─── Contador de mensagens do visitante por chat (para notas progressivas a cada 5) ─
 const visitorMsgCounters = new Map<string, number>();
@@ -945,20 +948,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               if (buffer) {
                 clearTimeout(buffer.timer);
                 buffer.content.push(data.content);
-                // Se a IA JÁ está processando, não recriar timer — a mensagem ficará no buffer
-                // e será processada quando reiniciar após o processamento atual terminar
-                if (buffer.isProcessing) {
-                  console.log(`[LiveChat Buffer] Chat ${chat.id}: IA em processamento, mensagem enfileirada (${buffer.content.length} no buffer).`);
-                  // Reinicia o timer para depois do processamento atual
-                  buffer.timer = setTimeout(async () => {
-                    if (buffer!.isProcessing) return; // ainda processando, aguarda
-                    // Re-dispara o evento sintético para processar o conteúdo acumulado
-                    // (apenas se não estiver mais processando quando o timer disparar)
-                  }, 3000); 
-                  break;
-                }
               } else {
-                buffer = { timer: null as any, content: [data.content], isProcessing: false };
+                buffer = { timer: null as any, content: [data.content] };
                 chatMessageBuffers.set(chat.id, buffer);
               }
 
@@ -967,18 +958,17 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
               // Timer de 15s: só processa quando o cliente pára de digitar por 15 segundos
               buffer.timer = setTimeout(async () => {
-                const currentBuffer = chatMessageBuffers.get(chat.id);
-                const bufferedContents = currentBuffer?.content ?? [data.content];
+                const bufferedContents = chatMessageBuffers.get(chat.id)?.content ?? [data.content];
 
-                // ── GUARD: isProcessing — evita race condition de múltiplos timers ──
-                // Se outro timer já está processando este chat, descarta silenciosamente.
-                if (currentBuffer?.isProcessing) {
+                // ── GUARD: chatsBeingProcessed — evita race condition de múltiplos timers ──
+                // Cenário: Gemini lento (90s timeout) → múltiplos timers criados em paralelo
+                // → todos disparam quando Claude assume → "Fagner conversando sozinho".
+                // Solução: apenas o PRIMEIRO timer a disparar processa; os demais são descartados.
+                if (chatsBeingProcessed.has(chat.id)) {
                   console.log(`[LiveChat Buffer] Chat ${chat.id}: duplo timer ignorado (já processando).`);
                   return;
                 }
-
-                // Marca como processando ANTES de qualquer operação assíncrona
-                if (currentBuffer) currentBuffer.isProcessing = true;
+                chatsBeingProcessed.add(chat.id);
                 chatMessageBuffers.delete(chat.id);
 
                 // ── GUARD 2.0: Verifica se operador assumiu durante o buffer de 15s ──
@@ -2306,6 +2296,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   }
                 } catch {
                   startFollowUpTimers(currentVisitorId, chat.id);
+                } finally {
+                  // SEMPRE libera o lock ao terminar — mesmo em exceção — para não bloquear msgs futuras
+                  chatsBeingProcessed.delete(chat.id);
                 }
               }, 15000); // 15 sec cooldown — Fagner aguarda 15s de silêncio antes de responder
             }
