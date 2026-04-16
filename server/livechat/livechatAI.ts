@@ -182,6 +182,77 @@ const GEMINI_CHAT_MODEL          = "gemini-3.1-pro-preview";
 const GEMINI_FALLBACK_MODEL      = "gemini-2.5-flash"; // GA Stable (confirmado docs oficiais Google) — sem sufixo = versão estável
 const GEMINI_BASE                = "https://generativelanguage.googleapis.com/v1beta";
 
+// ─── Plano C: Claude 3.7 Sonnet (Anthropic) ─────────────────────────────────────
+// Acionado apenas quando AMBOS os modelos Gemini retornam 503/timeout.
+// A chave vem de process.env.ANTHROPIC_API_KEY (configurada no Railway).
+const CLAUDE_MODEL               = "claude-3-7-sonnet-20250219";
+const CLAUDE_API_URL             = "https://api.anthropic.com/v1/messages";
+
+/**
+ * Converte o histórico de sessão Gemini (formato parts[]) para o formato
+ * Anthropic Messages API (content: string). Extrai o system prompt e
+ * converte os turnos user/model → user/assistant.
+ */
+async function claudePlanC(
+  systemPrompt: string,
+  geminiHistory: { role: string; parts: { text: string }[] }[],
+  userMessage: string,
+): Promise<string> {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY não configurada");
+
+  // Converte histórico Gemini (role: "user"|"model") → Anthropic ("user"|"assistant")
+  const messages: { role: "user" | "assistant"; content: string }[] = [];
+  for (const turn of geminiHistory) {
+    const role = turn.role === "model" ? "assistant" : "user";
+    const text = turn.parts.map((p: any) => p.text ?? "").join("").trim();
+    if (!text) continue;
+    // Anthropic exige alternância estrita user/assistant — funde turnos duplicados
+    if (messages.length > 0 && messages[messages.length - 1].role === role) {
+      messages[messages.length - 1].content += "\n" + text;
+    } else {
+      messages.push({ role, content: text });
+    }
+  }
+  // Adiciona a mensagem atual do visitante
+  if (messages.length === 0 || messages[messages.length - 1].role === "assistant") {
+    messages.push({ role: "user", content: userMessage });
+  } else {
+    messages[messages.length - 1].content += "\n" + userMessage;
+  }
+
+  console.log(`[LiveChat AI][PLANO-C] 🟡 Acionando Claude ${CLAUDE_MODEL} com ${messages.length} turn(s)...`);
+
+  const res = await fetch(CLAUDE_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type":      "application/json",
+      "x-api-key":         anthropicKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model:      CLAUDE_MODEL,
+      max_tokens: 1024,
+      system:     systemPrompt,
+      messages,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[LiveChat AI][PLANO-C] ❌ Claude HTTP ${res.status}: ${body.slice(0, 300)}`);
+    throw new Error(`Claude HTTP ${res.status}`);
+  }
+
+  const json = await res.json();
+  const reply = json?.content?.[0]?.text ?? "";
+  if (!reply) throw new Error("Claude retornou resposta vazia");
+
+  console.log(`[LiveChat AI][PLANO-C] ✅ Claude respondeu com sucesso (${reply.length} chars).`);
+  return reply;
+}
+
 // ─── In-memory chat sessions (histórico por chat) ─────────────────────────────
 
 interface ChatAISession {
@@ -1424,6 +1495,28 @@ export async function processVisitorMessage(
     // O histórico permanece como estava antes desta chamada — a próxima
     // mensagem do usuário será adicionada normalmente e o Gemini será tentado de novo
 
+    // ── 🟡 PLANO C: Claude 3.7 Sonnet (Anthropic) ────────────────────────────
+    // Antes de retornar erro ao visitante, tenta o Claude como último recurso.
+    // Só aciona se a API key estiver configurada e o erro for de sobrecarga/timeout.
+    const isGeminiOverload = /503|sobrecarregados|unavailable|high demand|timeout|ETIMEDOUT|AbortError/i.test(err?.message ?? "");
+    if (isGeminiOverload && process.env.ANTHROPIC_API_KEY) {
+      try {
+        const claudeReply = await claudePlanC(
+          systemPrompt,
+          session.history, // histórico Gemini convertido para Anthropic na função
+          userMessage,
+        );
+        // Claude respondeu — integra normalmente ao pipeline
+        session.history.push({ role: "user",  parts: userParts });
+        session.history.push({ role: "model", parts: [{ text: claudeReply }] });
+        if (session.history.length > 40) session.history = session.history.slice(-40);
+        return { reply: claudeReply, needsHuman: false, tokens: 0 };
+      } catch (claudeErr: any) {
+        console.error(`[LiveChat AI][PLANO-C] ❌ Claude também falhou: ${claudeErr.message}`);
+        // Segue para o return de erro padrão abaixo
+      }
+    }
+
     // Gera um log técnico (aparece como "Log Oculto" no admin) + mensagem limpa para o visitante
     const errorTag = `[SYSTEM_ERROR: ${err?.message ?? "erro desconhecido"}]`;
     const isOverload = /503|sobrecarregados|unavailable|high demand/i.test(err?.message ?? "");
@@ -1437,6 +1530,7 @@ export async function processVisitorMessage(
         : "Tive uma instabilidade aqui. Pode repetir o que você disse?",
       needsHuman: false,
       tokens: 0,
+
       isError: true,
     };
   } finally {
