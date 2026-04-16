@@ -428,55 +428,56 @@ export const lcStorage = {
       .where(eq(lcVisitors.id, visitorId));
   },
 
-  // ── Backfill retroativo: extrai dealIds das notas históricas ─────────────────
-  // Percorre visitantes sem rdCrmDealId e preenche a partir das notas de RD CRM.
+  // ── Backfill retroativo: extrai dealIds das notas históricas via SQL puro ────
+  // Usa REGEXP do PostgreSQL para extrair o dealId diretamente no banco.
+  // Padrões suportados:
+  //   "ID do Deal: 123456789"          → captura  123456789
+  //   "/app/deals/123456789"           → captura  123456789  (da URL)
   async backfillRdCrmDealIds(): Promise<{ updated: number; skipped: number; total: number }> {
-    // Busca visitantes com notas que mencionem RD CRM mas sem dealId salvo
-    const rows = await db.execute(sql.raw(`
-      SELECT id, notes
+    // 1. Diagnóstico: mostra quantos visitantes têm notas de RD CRM sem dealId
+    const diagResult = await db.execute(sql.raw(`
+      SELECT COUNT(*)::int AS total
       FROM lc_visitors
       WHERE "rdCrmDealId" IS NULL
         AND notes IS NOT NULL
         AND notes::text != '[]'
         AND notes::text ILIKE '%RD CRM%'
     `)) as any;
+    const total = Number((diagResult?.rows ?? diagResult)?.[0]?.total ?? 0);
+    console.log(`[LiveChat Backfill] Total de visitantes candidatos: ${total}`);
 
-    const visitors = rows?.rows ?? (Array.isArray(rows) ? rows : []);
-    let updated = 0;
-    let skipped = 0;
+    // 2. UPDATE via SQL puro: extrai dealId usando REGEXP e atualiza num único statement
+    // Estratégia: extrai o ID da URL do deal (formato: /app/deals/NNNN\n ou /app/deals/NNNN")
+    // que é o mais confiável pois não depende de texto em português
+    const updateResult = await db.execute(sql.raw(`
+      UPDATE lc_visitors
+      SET "rdCrmDealId" = matched.deal_id
+      FROM (
+        SELECT
+          v.id,
+          -- Tenta 1: extrai da URL /app/deals/ID (mais confiável)
+          COALESCE(
+            (REGEXP_MATCH(v.notes::text, '/app/deals/([a-zA-Z0-9]+)'))[1],
+            -- Tenta 2: extrai após "ID do Deal: " ou "ID: " (formato da nota)
+            (REGEXP_MATCH(v.notes::text, 'ID(?:\\s+do\\s+Deal)?:\\s*([a-zA-Z0-9]{4,})'))[1]
+          ) AS deal_id
+        FROM lc_visitors v
+        WHERE v."rdCrmDealId" IS NULL
+          AND v.notes IS NOT NULL
+          AND v.notes::text != '[]'
+          AND v.notes::text ILIKE '%RD CRM%'
+      ) matched
+      WHERE lc_visitors.id = matched.id
+        AND matched.deal_id IS NOT NULL
+    `)) as any;
 
-    // Regex: captura o dealId após "ID do Deal:" ou "ID:" nas notas
-    const dealIdRegex = /ID(?:\s+do\s+Deal)?:\s*([a-zA-Z0-9]{5,})/i;
+    const updated = Number(updateResult?.rowCount ?? updateResult?.count ?? 0);
+    const skipped = Math.max(0, total - updated);
 
-    for (const v of visitors) {
-      let notes: any[] = [];
-      try {
-        notes = Array.isArray(v.notes)
-          ? v.notes
-          : (typeof v.notes === "string" ? JSON.parse(v.notes) : []);
-      } catch { continue; }
-
-      let dealId: string | null = null;
-      for (const note of notes) {
-        const content: string = note?.content ?? note?.text ?? "";
-        if (!content.includes("RD CRM")) continue;
-        const match = content.match(dealIdRegex);
-        if (match?.[1]) { dealId = match[1].trim(); break; }
-      }
-
-      if (dealId) {
-        await db.update(lcVisitors)
-          .set({ rdCrmDealId: dealId })
-          .where(eq(lcVisitors.id, v.id));
-        updated++;
-      } else {
-        skipped++;
-      }
-    }
-
-    console.log(`[LiveChat] ✅ Backfill rdCrmDealId: ${updated} atualizados, ${skipped} sem dealId nas notas`);
-    return { updated, skipped, total: visitors.length };
+    console.log(`[LiveChat] ✅ Backfill rdCrmDealId (SQL): ${updated} atualizados, ${skipped} sem dealId nas notas`);
+    return { updated, skipped, total };
   },
+
 
 
   // ── Negociações Anteriores: busca todos os cards do mesmo cookie (exceto o atual) ──
