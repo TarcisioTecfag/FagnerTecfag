@@ -185,7 +185,7 @@ const GEMINI_BASE                = "https://generativelanguage.googleapis.com/v1
 // ─── Plano C: Claude 3.7 Sonnet (Anthropic) ─────────────────────────────────────
 // Acionado apenas quando AMBOS os modelos Gemini retornam 503/timeout.
 // A chave vem de process.env.ANTHROPIC_API_KEY (configurada no Railway).
-const CLAUDE_MODEL               = "claude-3-7-sonnet-20250219";
+const CLAUDE_MODEL               = "claude-sonnet-4-6-20260217"; // Claude Sonnet 4.6 — GA atual (substituiu 3.7-sonnet)
 const CLAUDE_API_URL             = "https://api.anthropic.com/v1/messages";
 
 /**
