@@ -1570,6 +1570,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             "RD CRM",
                             `✅ Card criado no RD Station CRM!\nID do Deal: ${dealId}\n${dealUrl}`
                           );
+                          // Salva o dealId no visitor para contabilizar no funil "Lead no CRM"
+                          await lcStorage.setRdCrmDealId(currentVisitorId, dealId).catch(() => {});
                           // Fagner define motivo automaticamente
                           await lcStorage.setChatCloseReason(chat.id, "atendimento_concluido").catch(() => {});
                           broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
@@ -1788,6 +1790,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             "RD CRM",
                             `✅ Card MÁQUINAS criado no RD Station CRM!\nFunil: MÁQUINAS 2.0\nID do Deal: ${dealId}\n${dealUrl}`
                           );
+                          // Salva o dealId no visitor para contabilizar no funil "Lead no CRM"
+                          await lcStorage.setRdCrmDealId(currentVisitorId, dealId).catch(() => {});
                           await lcStorage.setChatCloseReason(chat.id, "atendimento_concluido").catch(() => {});
                           broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
                           broadcastToAgents({
@@ -1922,6 +1926,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                               const dealIdFb = await createMaquinasOS(currentVisitorId, { ...maqDataFallback, ownerId: ownerIdFb }, relatorioFb);
                               const dealUrlFb = `https://crm.rdstation.com/app/deals/${dealIdFb}`;
                               await lcStorage.addVisitorNote(currentVisitorId, 'RD CRM', `✅ [FALLBACK] Card MÁQUINAS criado!\nID: ${dealIdFb}\n${dealUrlFb}`);
+                              // Salva o dealId no visitor para contabilizar no funil "Lead no CRM"
+                              await lcStorage.setRdCrmDealId(currentVisitorId, dealIdFb).catch(() => {});
                               await lcStorage.setChatCloseReason(chat.id, 'atendimento_concluido').catch(() => {});
                               broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
                               broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId: currentVisitorId, dealId: dealIdFb, dealUrl: dealUrlFb });
@@ -2079,6 +2085,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             "RD CRM",
                             `✅ Card PEÇAS criado no RD Station CRM!\nFunil: FUNIL PEÇAS 2.0\nID do Deal: ${dealId}\n${dealUrl}`
                           );
+                          // Salva o dealId no visitor para contabilizar no funil "Lead no CRM"
+                          await lcStorage.setRdCrmDealId(currentVisitorId, dealId).catch(() => {});
                           await lcStorage.setChatCloseReason(chat.id, "atendimento_concluido").catch(() => {});
                           broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
                           broadcastToAgents({
