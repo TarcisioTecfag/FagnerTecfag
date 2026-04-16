@@ -372,13 +372,23 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               await db.execute(sql`UPDATE lc_visitors SET "deviceType" = ${deviceType} WHERE "id" = ${visitorId}`);
             }
 
-            // Set pipeline stage — NUNCA rebaixa estágios de atendimento ativo
-            // Só define 'novo_atendimento' se o visitante não tem estágio ou está em estágio neutro/inicial
-            const ACTIVE_STAGES = ['em_atendimento', 'pos_venda', 'outros', 'finalizado_com_venda', 'finalizado_sem_venda'];
+            // Set pipeline stage — NUNCA rebaixa estágios de atendimento ativo ou concluído
+            // Só define 'novo_atendimento' se o visitante não tem estágio OU estava exatamente em 'novo_atendimento'
+            const ACTIVE_STAGES = [
+              'em_atendimento',
+              'pos_venda',
+              'outros',
+              'maquinas',           // FIX: nunca rebaixar visitante que já foi qualificado em maquinas
+              'pecas',              // FIX: idem para peças
+              'finalizado_com_venda',
+              'finalizado_sem_venda',
+              'vendido',
+              'sem_resposta',       // FIX: não resetar quem está classified como sem_resposta
+            ];
             if (visitor && !visitor.pipelineStage) {
               await lcStorage.updateVisitorPipeline(visitorId, "novo_atendimento");
-            } else if (visitor && !ACTIVE_STAGES.includes(visitor.pipelineStage ?? '') && visitor.pipelineStage !== 'sem_resposta') {
-              // Só reseta se estava em novo_atendimento (nunca rebaixa quem já avançou)
+            } else if (visitor && visitor.pipelineStage === 'novo_atendimento') {
+              // Só reseta se JÁ estava em novo_atendimento — nunca rebaixa quem avançou
               await lcStorage.updateVisitorPipeline(visitorId, "novo_atendimento");
             }
 
@@ -1809,6 +1819,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                           // Salva o dealId no visitor para contabilizar no funil "Lead no CRM"
                           await lcStorage.setRdCrmDealId(currentVisitorId, dealId).catch(() => {});
                           await lcStorage.setChatCloseReason(chat.id, "atendimento_concluido").catch(() => {});
+                          // FIX: Cancela follow-ups e fecha o chat após conclusão bem-sucedida do fluxo de máquinas
+                          clearFollowUpTimers(currentVisitorId);
+                          await lcStorage.closeChat(chat.id).catch(() => {});
                           broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
                           broadcastToAgents({
                             type: "RD_CRM_OS_CREATED",
@@ -1816,7 +1829,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             dealId,
                             dealUrl,
                           });
-                          console.log(`[RD CRM] ✅ Deal MÁQUINAS criado para visitante ${currentVisitorId}: ${dealId}`);
+                          broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id, visitorId: currentVisitorId });
+                          console.log(`[RD CRM] ✅ Deal MÁQUINAS criado — chat ${chat.id} encerrado e follow-ups cancelados.`);
                         } catch (crmErr: any) {
                           console.error(`[RD CRM] ❌ Falha ao criar deal MÁQUINAS:`, crmErr.message);
                           await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", `❌ Falha ao criar card MÁQUINAS\nMotivo: ${crmErr.message}`).catch(() => {});
@@ -1945,9 +1959,13 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                               // Salva o dealId no visitor para contabilizar no funil "Lead no CRM"
                               await lcStorage.setRdCrmDealId(currentVisitorId, dealIdFb).catch(() => {});
                               await lcStorage.setChatCloseReason(chat.id, 'atendimento_concluido').catch(() => {});
+                              // FIX: Cancela follow-ups e fecha o chat no fallback também
+                              clearFollowUpTimers(currentVisitorId);
+                              await lcStorage.closeChat(chat.id).catch(() => {});
                               broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
                               broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId: currentVisitorId, dealId: dealIdFb, dealUrl: dealUrlFb });
-                              console.log(`[RD CRM] ✅ [FALLBACK] Deal MÁQUINAS criado: ${dealIdFb}`);
+                              broadcastToAgents({ type: 'CHAT_CLOSED', chatId: chat.id, visitorId: currentVisitorId });
+                              console.log(`[RD CRM] ✅ [FALLBACK] Deal MÁQUINAS criado — chat ${chat.id} encerrado.`);
                             } catch (fbErr: any) {
                               console.error(`[RD CRM] ❌ [FALLBACK] Falha:`, fbErr.message);
                               await lcStorage.addVisitorNote(currentVisitorId, 'RD CRM', `❌ [FALLBACK] Falha ao criar card MÁQUINAS\n${fbErr.message}`).catch(() => {});
