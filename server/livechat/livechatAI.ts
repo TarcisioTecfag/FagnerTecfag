@@ -925,9 +925,6 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
       : "Gemini indisponível";
     console.error(`[LiveChat AI][FALLBACK] ❌ Falha total: ${fallbackErr?.message}`);
     throw new Error(safeMsg);
-  } finally {
-    // Limpa o controller ao finalizar (sucesso ou erro)
-    activeGenerations.delete(chatId);
   }
 }
 
@@ -1417,6 +1414,9 @@ export async function processVisitorMessage(
       tokens: 0,
       isError: true,
     };
+  } finally {
+    // Garante que o AbortController é sempre removido do mapa, independente de sucesso ou erro
+    activeGenerations.delete(chatId);
   }
 }
 
