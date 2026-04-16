@@ -755,7 +755,13 @@ export function registerLiveChatRoutes(app: any): void {
       if (!req.file) {
         return res.status(400).json({ error: "Nenhum arquivo recebido" });
       }
-      const url = `/uploads/${req.file.filename}`;
+      const filePath = `/uploads/${req.file.filename}`;
+      // Monta URL absoluta — necessário para o widget VTEX (domínio diferente do backend)
+      // BACKEND_URL deve ser setado na Railway: https://fagnertecfag-production.up.railway.app
+      const rawBackend = process.env.BACKEND_URL
+        ?? (process.env.RAILWAY_STATIC_URL ? `https://${process.env.RAILWAY_STATIC_URL}` : "");
+      const backendBase = rawBackend.replace(/\/$/, "");
+      const url = backendBase ? `${backendBase}${filePath}` : filePath;
       const mimeType = req.file.mimetype;
       const name = req.file.originalname;
       const size = req.file.size;
