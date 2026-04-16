@@ -270,6 +270,12 @@ const aiSessions = new Map<string, ChatAISession>();
 // ─── AbortController por chatId (permite cancelar Gemini ao "Assumir") ──────────
 const activeGenerations = new Map<string, AbortController>();
 
+// ─── Modo Degradado Global (Gemini overcargado) ────────────────────────
+// Quando o Gemini (primário + fallback) falha com 503, ativamos este flag
+// por 10 minutos. Nesse período todas as mensagens vão direto ao Claude
+// sem desperdiçar tempo nos timeouts do Gemini (evita o problema de 6min).
+let geminiDegradedUntil: number = 0; // timestamp em ms — 0 = modo normal
+
 /** Cancela o fetch Gemini em andamento para o chatId (chamado quando operador assume) */
 export function cancelGeneration(chatId: string): void {
   const ctrl = activeGenerations.get(chatId);
@@ -1429,6 +1435,29 @@ export async function processVisitorMessage(
   const abortCtrl = new AbortController();
   activeGenerations.set(chatId, abortCtrl);
 
+  // ─── Modo Degradado: ir direto ao Claude se Gemini está sabidamente sobrecarregado ──
+  const isGeminiDegraded = Date.now() < geminiDegradedUntil;
+  if (isGeminiDegraded && process.env.ANTHROPIC_API_KEY) {
+    const remainMin = Math.ceil((geminiDegradedUntil - Date.now()) / 60000);
+    console.warn(`[LiveChat AI] 🟡 MODO DEGRADADO ATIVO (${remainMin}min restantes) — indo direto ao Claude sem tentar Gemini.`);
+    try {
+      const claudeReply = await claudePlanC(systemPrompt, session.history, userMessage);
+      session.history.push({ role: "user",  parts: userParts });
+      session.history.push({ role: "model", parts: [{ text: claudeReply }] });
+      if (session.history.length > 40) session.history = session.history.slice(-40);
+      activeGenerations.delete(chatId);
+      return { reply: claudeReply, needsHuman: false, tokens: 0 };
+    } catch (claudeDegErr: any) {
+      console.error(`[LiveChat AI] 🟡 Claude falhou em modo degradado: ${claudeDegErr.message}`);
+      activeGenerations.delete(chatId);
+      return {
+        reply: `[SYSTEM_ERROR: ${claudeDegErr.message}]`,
+        visitorReply: "Hm, não entendi.",
+        needsHuman: false, tokens: 0, isError: true,
+      };
+    }
+  }
+
   try {
     const data = await geminiRequest(url, payload, abortCtrl.signal);
 
@@ -1512,13 +1541,15 @@ export async function processVisitorMessage(
     // Só aciona se a API key estiver configurada e o erro for de sobrecarga/timeout.
     const isGeminiOverload = /503|sobrecarregados|unavailable|high demand|timeout|ETIMEDOUT|AbortError/i.test(err?.message ?? "");
     if (isGeminiOverload && process.env.ANTHROPIC_API_KEY) {
+      // Ativa modo degradado por 10 minutos — próximas mensagens vão direto ao Claude
+      geminiDegradedUntil = Date.now() + 10 * 60 * 1000;
+      console.warn(`[LiveChat AI] 🟡 Modo degradado ATIVADO por 10min (Gemini 503). Próximas mensagens irão direto ao Claude.`);
       try {
         const claudeReply = await claudePlanC(
           systemPrompt,
-          session.history, // histórico Gemini convertido para Anthropic na função
+          session.history,
           userMessage,
         );
-        // Claude respondeu — integra normalmente ao pipeline
         session.history.push({ role: "user",  parts: userParts });
         session.history.push({ role: "model", parts: [{ text: claudeReply }] });
         if (session.history.length > 40) session.history = session.history.slice(-40);
