@@ -127,7 +127,101 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
     try {
       const chat = await lcStorage.getChatById(chatId);
       if (!chat || chat.status === "closed" || chat.status !== "ai_active") return;
-      
+
+      // ── 🛡️ FALLBACK DE OVERVIEW PENDENTE ─────────────────────────────────────
+      // Se o visitante está em estágio maquinas/pecas/pos_venda, ainda não tem deal CRM
+      // e o último AI message parece ser um OVERVIEW aguardando confirmação que o cliente
+      // não respondeu → cria o card automaticamente com os dados já salvos no banco.
+      // Isso resolve o caso: "cliente respondeu tudo mas não confirmou o resumo"
+      const visitorForOverview = await lcStorage.getVisitorById(visitorId).catch(() => null);
+      const overviewStages = ['maquinas', 'pecas', 'pos_venda'];
+      if (
+        visitorForOverview &&
+        overviewStages.includes(visitorForOverview.pipelineStage ?? '') &&
+        !visitorForOverview.rdCrmDealId &&
+        isRdCrmConfigured()
+      ) {
+        // Verifica se o último AI message é um OVERVIEW aguardando confirmação
+        const recentMsgs = await lcStorage.listMessagesByChat(chatId).catch(() => [] as any[]);
+        const lastAiMsg = [...recentMsgs].reverse().find((m: any) => m.sender === 'ai');
+        const isOverviewPending = lastAiMsg && /está tudo correto|confirme os dados|está correto\?/i.test(lastAiMsg.content);
+
+        if (isOverviewPending) {
+          const stage = visitorForOverview.pipelineStage as string;
+          console.log(`[Timers] ⏰ 8m OVERVIEW PENDENTE detectado para visitante ${visitorId} (estágio: ${stage}) — criando card automaticamente`);
+
+          if (stage === 'maquinas' && visitorForOverview.maquinaDesejada) {
+            // Reconstruir dados do banco e criar deal MÁQUINAS em background
+            (async () => {
+              try {
+                const parseOvField = (...labels: string[]): string | null => {
+                  for (const label of labels) {
+                    const re = new RegExp(`^\\s*[•\\-]\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:\\s*(.+)$`, 'i');
+                    const msg = [...recentMsgs].reverse().find((m: any) => m.sender === 'ai' && re.test(m.content.trim()));
+                    if (msg) { const cap = msg.content.trim().match(re); if (cap?.[1]) return cap[1].trim(); }
+                  }
+                  return null;
+                };
+                const maqDataOv = {
+                  nome:             (visitorForOverview as any).maquinaClienteNome     ?? visitorForOverview.name ?? 'Não informado',
+                  // telefone: MaquinasData exige string — fallback para string vazia se não coletado
+                  telefone:         ((visitorForOverview as any).maquinaTelefone        ?? parseOvField('Telefone', 'Tel') ?? '') as string,
+                  email:            (visitorForOverview as any).maquinaEmail           ?? parseOvField('E-mail', 'Email') ?? null,
+                  cnpjCpf:          (visitorForOverview as any).maquinaCnpjCpf         ?? parseOvField('CPF/CNPJ', 'CNPJ', 'CPF') ?? null,
+                  maquinaDesejada:  visitorForOverview.maquinaDesejada                 ?? 'Não informado',
+                  detalhes:         parseOvField('Detalhes', 'Observação')             ?? null,
+                  produtoFabricado: visitorForOverview.maquinaProdutoFabricado         ?? 'Não definido',
+                  volumeProducao:   visitorForOverview.maquinaVolumeProducao           ?? 'Médio volume',
+                  clienteNovo:      'SIM',
+                  qualificacaoSDR:  visitorForOverview.maquinaQualificacaoSDR         ?? '2',
+                  cnpjData:         visitorForOverview.posVendaCnpjData
+                    ? (typeof visitorForOverview.posVendaCnpjData === 'string' ? JSON.parse(visitorForOverview.posVendaCnpjData) : visitorForOverview.posVendaCnpjData)
+                    : undefined,
+                };
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [OVERVIEW SEM RESPOSTA] Criando card MÁQUINAS após 8min de inatividade...').catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+                const snippetOv = recentMsgs.slice(-20)
+                  .filter((m: any) => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
+                  .map((m: any) => `${m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]'} ${m.content.slice(0, 120)}`)
+                  .join('\n');
+                const relatorioOv = await generateMaquinasReport({
+                  nome: maqDataOv.nome, telefone: maqDataOv.telefone,
+                  email: maqDataOv.email ?? null, cnpjCpf: maqDataOv.cnpjCpf ?? null,
+                  maquinaDesejada: maqDataOv.maquinaDesejada,
+                  detalhes: maqDataOv.detalhes ?? null,
+                  produtoFabricado: maqDataOv.produtoFabricado,
+                  volumeProducao: maqDataOv.volumeProducao,
+                  clienteNovo: maqDataOv.clienteNovo,
+                  qualificacaoSDR: maqDataOv.qualificacaoSDR,
+                  cnpjData: maqDataOv.cnpjData,
+                  conversationSnippet: snippetOv,
+                  transcricaoCompleta: snippetOv,
+                });
+                let ownerOv: string | undefined;
+                try { ownerOv = await lcStorage.getNextOwnerForFunnel('maquinas') ?? undefined; } catch {}
+                const dealOv = await createMaquinasOS(visitorId, { ...maqDataOv, ownerId: ownerOv }, relatorioOv);
+                const dealUrlOv = `https://crm.rdstation.com/app/deals/${dealOv}`;
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [OVERVIEW SEM RESPOSTA] Card MÁQUINAS criado após inatividade!\nID: ${dealOv}\n${dealUrlOv}`).catch(() => {});
+                await lcStorage.setRdCrmDealId(visitorId, dealOv).catch(() => {});
+                await lcStorage.setChatCloseReason(chatId, 'atendimento_concluido').catch(() => {});
+                clearFollowUpTimers(visitorId);
+                await lcStorage.closeChat(chatId).catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+                broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId, dealId: dealOv, dealUrl: dealUrlOv });
+                broadcastToAgents({ type: 'CHAT_CLOSED', chatId, visitorId });
+                console.log(`[Timers] ✅ [OVERVIEW SEM RESPOSTA] Deal MÁQUINAS criado (${dealOv}) após 8min — chat ${chatId} encerrado.`);
+              } catch (ovErr: any) {
+                console.error(`[Timers] ❌ Fallback OVERVIEW SEM RESPOSTA (maquinas) falhou:`, ovErr.message);
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `❌ Falha ao criar card por inatividade no OVERVIEW\n${ovErr.message}`).catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+              }
+            })();
+            return; // não envia a mensagem de follow-up, pois vai criar o card
+          }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
       const msg = "Ainda posso ajudar com algo? Qualquer dúvida é só falar! 😊";
       await lcStorage.createMessage({ chatId, sender: "ai", content: msg });
       sendToVisitor(visitorId, { type: "CHAT_REPLY", chatId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
