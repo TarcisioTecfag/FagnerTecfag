@@ -186,8 +186,8 @@ const GEMINI_BASE                = "https://generativelanguage.googleapis.com/v1
 // Ativado automaticamente quando GOOGLE_SERVICE_ACCOUNT_JSON está definido no Railway.
 // A mesma API key do Gemini continua como fallback se a env não estiver presente.
 const VERTEX_PROJECT_ID = "project-d51e2a29-9246-4af9-b80";
-const VERTEX_LOCATION   = "us-central1";
-const VERTEX_BASE       = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models`;
+const VERTEX_LOCATION   = "global"; // modelos Preview (gemini-3.x) só ficam no endpoint global
+const VERTEX_BASE       = `https://aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models`;
 
 // Cache do access token (válido por ~55 min antes de renovar)
 let _vertexToken: { token: string; expiresAt: number } | null = null;
