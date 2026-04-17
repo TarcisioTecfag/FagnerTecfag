@@ -7,8 +7,8 @@
 
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { lcStorage } from "./livechatStorage.js";
-import { getDiagLog } from "./livechatAI.js";
-import { getRdValidToken } from "./rdCrmService.js";
+import { getDiagLog, generateConversationNote, generatePosVendaReport, generateMaquinasReport, generatePecasReport } from "./livechatAI.js";
+import { getRdValidToken, createPosVendaOS, createMaquinasOS, createPecasOS, isRdCrmConfigured } from "./rdCrmService.js";
 import { broadcastPipelineUpdateExternal } from "./livechatWs.js";
 import multer from "multer";
 import path from "path";
@@ -759,6 +759,167 @@ export function registerLiveChatRoutes(app: any): void {
     }
   });
 
+  // ── Sincronização Manual com CRM ─────────────────────────────────────────────
+  // POST /api/livechat/visitors/:id/manual-crm-sync
+  // Gera o relatório com IA e cria o card/contato/tarefa no RD CRM
+  router.post('/visitors/:id/manual-crm-sync', requireAuth, async (req: Request, res: Response) => {
+    const visitorId = req.params.id;
+    const steps: { step: string; status: 'ok' | 'error' | 'skip'; detail?: string }[] = [];
+
+    try {
+      if (!isRdCrmConfigured()) {
+        return res.status(400).json({ success: false, message: 'RD CRM não configurado. Verifique as credenciais no painel.' });
+      }
+
+      // ── 1. Carrega o visitante ──────────────────────────────────────────────
+      const visitor = await lcStorage.getVisitorById(visitorId);
+      if (!visitor) {
+        return res.status(404).json({ success: false, message: 'Visitante não encontrado.' });
+      }
+      steps.push({ step: 'Visitante carregado', status: 'ok', detail: visitor.posVendaNome || visitor.name || 'Sem nome' });
+
+      // ── 2. Carrega os chats + mensagens do visitante ───────────────────────
+      const chats = await lcStorage.listChatsByVisitor(visitorId, 5);
+      const latestChat = chats?.[0] ?? null;
+
+      let transcricao = '';
+      let chatId = latestChat?.id ?? null;
+
+      if (chatId) {
+        const msgs = await lcStorage.listMessagesByChat(chatId);
+        transcricao = msgs
+          .filter(m => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
+          .slice(-40)
+          .map(m => {
+            const who = m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]';
+            const clean = m.content
+              .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, '')
+              .replace(/\[SCORE:\d+\]/gi, '')
+              .replace(/\[STAGE:[^\]]+\]/gi, '')
+              .replace(/\[POS_VENDA_DADOS:[\s\S]*?\]/gi, '')
+              .replace(/\[MAQUINAS_DADOS:[\s\S]*?\]/gi, '')
+              .replace(/\[PECAS_DADOS:[\s\S]*?\]/gi, '')
+              .replace(/\[SYSTEM_ERROR:[^\]]*\]/gi, '')
+              .replace(/\[LOG_OCULTO:[^\]]*\]/gi, '')
+              .replace(/<br\s*\/?>/gi, ' ')
+              .replace(/<\/?(strong|em|b|i|p|div|span)[^>]*>/gi, ' ')
+              .replace(/\s{2,}/g, ' ')
+              .trim();
+            return clean ? `${who} ${clean}` : null;
+          })
+          .filter(Boolean)
+          .join('\n');
+        steps.push({ step: 'Histórico de mensagens carregado', status: 'ok', detail: `${msgs.length} mensagens` });
+      } else {
+        steps.push({ step: 'Histórico de mensagens', status: 'skip', detail: 'Nenhuma conversa encontrada' });
+      }
+
+      // ── 3. Detecta funil pelo pipelineStage do visitante ──────────────────
+      const stage = (visitor.pipelineStage ?? '').toLowerCase();
+      let funil: 'pos_venda' | 'maquinas' | 'pecas' | 'generico' = 'generico';
+      if (stage.includes('pos_venda') || stage.includes('finalizado')) funil = 'pos_venda';
+      else if (stage.includes('maquina')) funil = 'maquinas';
+      else if (stage.includes('peca')) funil = 'pecas';
+      // Fallback: detecta pelo conteúdo da conversa
+      else if (transcricao.match(/máquina|envazadora|seladora|embalagem|orçamento/i)) funil = 'maquinas';
+      else if (transcricao.match(/peça|reposição|conserto|assistência/i)) funil = 'pecas';
+      else if (transcricao.match(/pós.?venda|nota fiscal|garantia|problema|defeito/i)) funil = 'pos_venda';
+      steps.push({ step: 'Funil detectado', status: 'ok', detail: funil });
+
+      // ── 4. Dados do cliente ────────────────────────────────────────────────
+      const nome     = (visitor.posVendaNome  || visitor.name || 'Não identificado').trim();
+      const telefone = (visitor.posVendaTelefone || '0000000000').trim();
+      const email    = visitor.posVendaEmail   || null;
+      const cnpjCpf  = visitor.posVendaCnpjCpf || null;
+      const cnpjData = (visitor.posVendaCnpjData && typeof visitor.posVendaCnpjData === 'object')
+        ? visitor.posVendaCnpjData : null;
+
+      // Owner: pega via rodízio se configurado, senão env var
+      const funil_key = funil === 'maquinas' ? 'maquinas' : funil === 'pecas' ? 'pecas' : 'pos_venda';
+      const ownerId = await lcStorage.getNextOwnerForFunnel(funil_key).catch(() => null);
+
+      // ── 5. Gera relatório com IA ───────────────────────────────────────────
+      let relatorio = '';
+      try {
+        if (funil === 'maquinas') {
+          relatorio = await generateMaquinasReport({
+            nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
+            maquinaDesejada: (visitor as any).maquinaDesejada || 'Não informado',
+            detalhes: transcricao ? transcricao.slice(0, 200) : undefined,
+            produtoFabricado: (visitor as any).maquinaProdutoFabricado || undefined,
+            volumeProducao: (visitor as any).maquinaVolumeProducao || undefined,
+            qualificacaoSDR: (visitor as any).maquinaQualificacaoSDR || '2',
+            clienteNovo: (visitor as any).maquinaClienteNovo || 'SIM',
+            cnpjData,
+            transcricaoCompleta: transcricao || undefined,
+          });
+        } else if (funil === 'pecas') {
+          relatorio = await generatePecasReport({
+            nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
+            pecaDesejada: (visitor as any).pecaDesejada || 'Não informado',
+            detalhes: undefined,
+            cnpjData,
+            transcricaoCompleta: transcricao || undefined,
+          });
+        } else {
+          relatorio = await generatePosVendaReport({
+            nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
+            notaPedido: visitor.posVendaNotaPedido   || null,
+            problema:   visitor.posVendaProblema     || 'Não informado',
+            cnpjData,
+            transcricaoCompleta: transcricao || undefined,
+          });
+        }
+        steps.push({ step: 'Relatório gerado', status: 'ok', detail: `${relatorio.length} chars` });
+      } catch (rptErr: any) {
+        steps.push({ step: 'Relatório gerado', status: 'error', detail: rptErr.message });
+        relatorio = `[Relatório gerado manualmente pelo operador — erro de IA: ${rptErr.message}]\n\nTranscrição:\n${transcricao}`;
+      }
+
+      // ── 6. Cria o card no CRM ─────────────────────────────────────────────
+      let dealId: string;
+      try {
+        if (funil === 'maquinas') {
+          dealId = await createMaquinasOS(visitorId, {
+            nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
+            maquinaDesejada: (visitor as any).maquinaDesejada || 'Não informado',
+            produtoFabricado: (visitor as any).maquinaProdutoFabricado || undefined,
+            volumeProducao: (visitor as any).maquinaVolumeProducao || undefined,
+            qualificacaoSDR: (visitor as any).maquinaQualificacaoSDR || '2',
+            clienteNovo: (visitor as any).maquinaClienteNovo || 'SIM',
+            cnpjData,
+            ownerId: ownerId || undefined,
+          }, relatorio);
+        } else if (funil === 'pecas') {
+          dealId = await createPecasOS(visitorId, {
+            nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
+            pecaDesejada: (visitor as any).pecaDesejada || 'Não informado',
+            cnpjData,
+            ownerId: ownerId || undefined,
+          }, relatorio);
+        } else {
+          dealId = await createPosVendaOS(visitorId, {
+            nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
+            notaPedido: visitor.posVendaNotaPedido || null,
+            problema: visitor.posVendaProblema || 'Triagem manual pelo operador',
+            cnpjData,
+            ownerId: ownerId || undefined,
+          }, relatorio);
+        }
+        steps.push({ step: 'Card criado no CRM', status: 'ok', detail: `Deal ID: ${dealId}` });
+      } catch (crmErr: any) {
+        steps.push({ step: 'Card criado no CRM', status: 'error', detail: crmErr.message });
+        return res.status(500).json({ success: false, message: `Erro ao criar card no CRM: ${crmErr.message}`, steps });
+      }
+
+      console.log(`[LiveChat] ✅ manual-crm-sync visitor=${visitorId} → dealId=${dealId} funil=${funil}`);
+      return res.json({ success: true, dealId, funil, steps });
+
+    } catch (err: any) {
+      console.error('[LiveChat] manual-crm-sync erro:', err?.message);
+      return res.status(500).json({ success: false, message: err?.message ?? 'Erro interno', steps });
+    }
+  });
 
   // â”€â”€ Upload de arquivo pelo agente (para enviar ao cliente) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   router.post("/upload-agent", requireAuth, (req: Request, res: Response, next: NextFunction) => {

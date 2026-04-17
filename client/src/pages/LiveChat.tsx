@@ -441,6 +441,10 @@ function LiveChat() {
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [attentionReason, setAttentionReason] = useState("Falta de informação");
   const [attentionObs, setAttentionObs] = useState("");
+  // ── CRM Sync Manual ──────────────────────────────────────────────────────
+  const [crmSyncState, setCrmSyncState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [crmSyncResult, setCrmSyncResult] = useState<{ dealId?: string; funil?: string; steps?: any[]; message?: string } | null>(null);
+  const [crmSyncModalOpen, setCrmSyncModalOpen] = useState(false);
   const [visitorChats, setVisitorChats] = useState<Chat[]>([]);
   const [pastNegotiations, setPastNegotiations] = useState<any[]>([]);
   const [historyModal, setHistoryModal] = useState<{ visitor: Visitor; pageviews: Pageview[]; timeline?: TimelineEvent[] } | null>(null);
@@ -1978,6 +1982,53 @@ function LiveChat() {
                           >
                             <Users className="w-3 h-3" />
                             Ver no CRM
+                          </Button>
+
+                          {/* ── Botão Criar Card no CRM ────────────────── */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={crmSyncState === 'loading'}
+                            onClick={async () => {
+                              const visitorId = selectedChat?.visitorId;
+                              if (!visitorId) return;
+                              setCrmSyncState('loading');
+                              setCrmSyncResult(null);
+                              setCrmSyncModalOpen(true);
+                              try {
+                                const res = await fetch(`/api/livechat/visitors/${visitorId}/manual-crm-sync`, {
+                                  method: 'POST',
+                                  credentials: 'include',
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                  setCrmSyncState('success');
+                                  setCrmSyncResult(data);
+                                } else {
+                                  setCrmSyncState('error');
+                                  setCrmSyncResult(data);
+                                }
+                              } catch (e: any) {
+                                setCrmSyncState('error');
+                                setCrmSyncResult({ message: e.message ?? 'Erro desconhecido' });
+                              }
+                            }}
+                            className={`h-8 text-xs gap-1.5 ${
+                              crmSyncState === 'loading'
+                                ? 'border-purple-200 text-purple-600 bg-purple-50 cursor-wait'
+                                : crmSyncState === 'success'
+                                ? 'border-green-300 text-green-700 bg-green-50'
+                                : 'border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300'
+                            }`}
+                            title="Gera relatório com IA e cria o card no RD CRM com contato, deal e tarefa"
+                          >
+                            {crmSyncState === 'loading' ? (
+                              <><span className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" /> Criando...</>
+                            ) : crmSyncState === 'success' ? (
+                              <>✅ Card criado!</>
+                            ) : (
+                              <>🏷️ Criar no CRM</>
+                            )}
                           </Button>
 
                           {/* Botão de Atenção */}
@@ -3730,6 +3781,102 @@ function LiveChat() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── Modal: Resultado do Sync Manual com CRM ──────────────────────── */}
+      {crmSyncModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => { if (crmSyncState !== 'loading') { setCrmSyncModalOpen(false); setCrmSyncState('idle'); } }}>
+          <div
+            className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4"
+            style={{ animation: 'slideInUp .22s cubic-bezier(.4,0,.2,1)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-5">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+                crmSyncState === 'loading' ? 'bg-purple-50' :
+                crmSyncState === 'success' ? 'bg-green-50' : 'bg-red-50'
+              }`}>
+                {crmSyncState === 'loading' ? (
+                  <span className="w-5 h-5 rounded-full border-2 border-purple-400 border-t-transparent animate-spin block" />
+                ) : crmSyncState === 'success' ? '✅' : '❌'}
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-zinc-800">
+                  {crmSyncState === 'loading' ? 'Criando card no CRM...' :
+                   crmSyncState === 'success' ? 'Card criado com sucesso!' :
+                   'Erro ao criar card'}
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  {crmSyncState === 'loading' ? 'Aguarde, gerando relatório e sincronizando...' :
+                   crmSyncResult?.funil ? `Funil: ${crmSyncResult.funil}` : ''}
+                </p>
+              </div>
+            </div>
+
+            {/* Deal ID */}
+            {crmSyncResult?.dealId && (
+              <div className="mb-4 p-3 rounded-xl bg-green-50 border border-green-200 flex items-center gap-2">
+                <span className="text-green-600 text-lg">🎯</span>
+                <div>
+                  <p className="text-xs font-semibold text-green-700">Deal ID no RD CRM</p>
+                  <p className="text-sm font-mono text-green-800">{crmSyncResult.dealId}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Steps */}
+            {crmSyncResult?.steps && crmSyncResult.steps.length > 0 && (
+              <div className="space-y-2 mb-4">
+                {crmSyncResult.steps.map((s: any, i: number) => (
+                  <div key={i} className="flex items-start gap-2.5 text-sm">
+                    <span className="mt-0.5 text-base leading-none">
+                      {s.status === 'ok' ? '✅' : s.status === 'skip' ? '⏭️' : '❌'}
+                    </span>
+                    <div>
+                      <span className="font-medium text-zinc-700">{s.step}</span>
+                      {s.detail && <span className="text-xs text-zinc-400 ml-1.5">— {s.detail}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Error message */}
+            {crmSyncState === 'error' && crmSyncResult?.message && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200">
+                <p className="text-xs text-red-700">{crmSyncResult.message}</p>
+              </div>
+            )}
+
+            {/* Loading steps placeholder */}
+            {crmSyncState === 'loading' && (
+              <div className="space-y-2 mb-4">
+                {['Carregando visitante', 'Carregando histórico', 'Detectando funil', 'Gerando relatório com IA', 'Criando card no CRM'].map((s, i) => (
+                  <div key={i} className="flex items-center gap-2.5 text-sm text-zinc-400">
+                    <span className="w-4 h-4 rounded-full border-2 border-zinc-200 border-t-purple-400 animate-spin shrink-0" style={{ animationDelay: `${i * 150}ms` }} />
+                    {s}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Footer */}
+            {crmSyncState !== 'loading' && (
+              <button
+                onClick={() => { setCrmSyncModalOpen(false); setCrmSyncState('idle'); }}
+                className="w-full mt-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                style={{
+                  background: crmSyncState === 'success' ? 'linear-gradient(135deg, #16a34a, #15803d)' : 'linear-gradient(135deg, #6d28d9, #7c3aed)',
+                  color: 'white',
+                }}
+              >
+                {crmSyncState === 'success' ? 'Perfeito! Fechar' : 'Fechar'}
+              </button>
+            )}
+          </div>
+          <style>{`@keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }`}</style>
         </div>
       )}
     </div>
