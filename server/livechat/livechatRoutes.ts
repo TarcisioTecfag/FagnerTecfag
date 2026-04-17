@@ -778,27 +778,57 @@ export function registerLiveChatRoutes(app: any): void {
       }
       steps.push({ step: 'Visitante carregado', status: 'ok', detail: visitor.posVendaNome || visitor.name || 'Sem nome' });
 
-      // ── 2. Carrega os chats + mensagens do visitante ───────────────────────
+      // ── 2. Carrega todas as mensagens e extrai dados inteligentemente ────────
       const chats = await lcStorage.listChatsByVisitor(visitorId, 5);
       const latestChat = chats?.[0] ?? null;
 
       let transcricao = '';
       let chatId = latestChat?.id ?? null;
+      let cnpjDataFromMsg: any = null;
+      let emailFromCnpj: string | null = null;
+      let telefoneFromMsg: string | null = null;
+      let emailFromMsg: string | null = null;
+      let maquinaFromMsg: string | null = null;
+      let cnpjCpfFromMsg: string | null = null;
+      let produtoFromMsg: string | null = null;
+      let volumeFromMsg: string | null = null;
 
       if (chatId) {
         const msgs = await lcStorage.listMessagesByChat(chatId);
+
+        // ── 2a. Extrai CNPJ_RESULT das mensagens (primeira ocorrência) ──────
+        for (const m of msgs) {
+          if (m.content.startsWith('[CNPJ_RESULT')) {
+            try {
+              const jsonStr = m.content.replace(/^\[CNPJ_RESULT:/, '').replace(/\]$/, '');
+              const parsed = JSON.parse(jsonStr);
+              if (parsed?.valid && parsed?.dados) {
+                cnpjDataFromMsg = parsed.dados;
+                cnpjCpfFromMsg  = parsed.dados.cnpj ?? null;
+                emailFromCnpj   = parsed.dados.email ?? null;
+              }
+            } catch {}
+            break;
+          }
+        }
+
+        // ── 2b. Monta transcrição limpa (sem msgs de sistema) ───────────────
+        const rawTranscricao = msgs
+          .map(m => m.content)
+          .join('\n');
+
         transcricao = msgs
           .filter(m => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
-          .slice(-40)
+          .slice(-50)
           .map(m => {
             const who = m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]';
             const clean = m.content
               .replace(/\[OUTCOME:(SALE|NO_SALE)\]/gi, '')
               .replace(/\[SCORE:\d+\]/gi, '')
               .replace(/\[STAGE:[^\]]+\]/gi, '')
-              .replace(/\[POS_VENDA_DADOS:[\s\S]*?\]/gi, '')
-              .replace(/\[MAQUINAS_DADOS:[\s\S]*?\]/gi, '')
-              .replace(/\[PECAS_DADOS:[\s\S]*?\]/gi, '')
+              .replace(/\[POS_VENDA_DADOS[\s\S]*?\]/gi, '')
+              .replace(/\[MAQUINAS_DADOS[\s\S]*?\]/gi, '')
+              .replace(/\[PECAS_DADOS[\s\S]*?\]/gi, '')
               .replace(/\[SYSTEM_ERROR:[^\]]*\]/gi, '')
               .replace(/\[LOG_OCULTO:[^\]]*\]/gi, '')
               .replace(/<br\s*\/?>/gi, ' ')
@@ -809,32 +839,94 @@ export function registerLiveChatRoutes(app: any): void {
           })
           .filter(Boolean)
           .join('\n');
-        steps.push({ step: 'Histórico de mensagens carregado', status: 'ok', detail: `${msgs.length} mensagens` });
+
+        // ── 2c. Extrai telefone da transcrição (aceita formatos BR) ─────────
+        // Procura número de telefone nas mensagens do CLIENTE
+        const clienteLines = msgs
+          .filter(m => m.sender === 'visitor')
+          .map(m => m.content)
+          .join(' ');
+        const telMatch = clienteLines.match(
+          /(?:(?:\+?55\s?)?(?:\()?\s*\d{2}\s*(?:\))?\s*)?(?:9\s?)?\d{4}[\s\-]?\d{4}/
+        );
+        if (telMatch) {
+          telefoneFromMsg = telMatch[0].replace(/\D/g, '');
+          // Garante ao menos 10 dígitos
+          if (telefoneFromMsg.length < 10) telefoneFromMsg = null;
+        }
+
+        // ── 2d. Extrai e-mail da transcrição (cliente ou Fagner resumindo) ──
+        const emailMatch = rawTranscricao.match(
+          /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/
+        );
+        if (emailMatch) emailFromMsg = emailMatch[0];
+
+        // ── 2e. Extrai máquina da transcrição (primeira msg do cliente) ─────
+        // A primeira mensagem do cliente costuma descrever o produto
+        const firstClientMsg = msgs.find(m => m.sender === 'visitor');
+        if (firstClientMsg) {
+          const raw = firstClientMsg.content
+            .replace(/\[.*?\]/g, '')
+            .replace(/<[^>]*>/g, ' ')
+            .trim();
+          if (raw.length > 10) maquinaFromMsg = raw.slice(0, 250);
+        }
+
+        // ── 2f. Extrai produto/volume que Fagner confirmou no resumo ─────────
+        // Procura no texto do Fagner: "• Máquina:", "• Produto fabricado:", "• Volume"
+        const fagnerSummary = msgs
+          .filter(m => m.sender === 'ai' || m.sender === 'agent')
+          .map(m => m.content)
+          .join('\n');
+        const maqMatch    = fagnerSummary.match(/[Mm]áquina:\s*([^\n•<\[]{5,})/);
+        const prodMatch   = fagnerSummary.match(/[Pp]roduto fabricado:\s*([^\n•<\[]{3,})/);
+        const volMatch    = fagnerSummary.match(/[Vv]olume(?:\s+de\s+produ[çc][ãa]o)?:\s*([^\n•<\[]{3,})/);
+        if (maqMatch?.[1]?.trim())  maquinaFromMsg  = maqMatch[1].trim();
+        if (prodMatch?.[1]?.trim()) produtoFromMsg  = prodMatch[1].trim();
+        if (volMatch?.[1]?.trim())  volumeFromMsg   = volMatch[1].trim();
+
+        steps.push({ step: 'Histórico e dados extraídos', status: 'ok', detail: `${msgs.length} msgs | tel:${telefoneFromMsg ?? 'n/a'} | cnpj:${cnpjCpfFromMsg ?? 'n/a'}` });
       } else {
         steps.push({ step: 'Histórico de mensagens', status: 'skip', detail: 'Nenhuma conversa encontrada' });
       }
 
-      // ── 3. Detecta funil pelo pipelineStage do visitante ──────────────────
+      // ── 3. Detecta funil ──────────────────────────────────────────────────────
       const stage = (visitor.pipelineStage ?? '').toLowerCase();
       let funil: 'pos_venda' | 'maquinas' | 'pecas' | 'generico' = 'generico';
       if (stage.includes('pos_venda') || stage.includes('finalizado')) funil = 'pos_venda';
       else if (stage.includes('maquina')) funil = 'maquinas';
       else if (stage.includes('peca')) funil = 'pecas';
-      // Fallback: detecta pelo conteúdo da conversa
       else if (transcricao.match(/máquina|envazadora|seladora|embalagem|orçamento/i)) funil = 'maquinas';
       else if (transcricao.match(/peça|reposição|conserto|assistência/i)) funil = 'pecas';
       else if (transcricao.match(/pós.?venda|nota fiscal|garantia|problema|defeito/i)) funil = 'pos_venda';
       steps.push({ step: 'Funil detectado', status: 'ok', detail: funil });
 
-      // ── 4. Dados do cliente ────────────────────────────────────────────────
-      const nome     = (visitor.posVendaNome  || visitor.name || 'Não identificado').trim();
-      const telefone = (visitor.posVendaTelefone || '0000000000').trim();
-      const email    = visitor.posVendaEmail   || null;
-      const cnpjCpf  = visitor.posVendaCnpjCpf || null;
+      // ── 4. Consolida dados do cliente (visitor > extração da msg > fallback) ─
+      const nome     = (visitor.posVendaNome || visitor.name || 'Não identificado').trim();
+      // Telefone: preferência ao campo do visitor, depois extração da conversa
+      const telefone = (visitor.posVendaTelefone && visitor.posVendaTelefone !== '0000000000'
+        ? visitor.posVendaTelefone
+        : (telefoneFromMsg ?? '0000000000')).trim();
+      // Email: preferência ao campo do visitor, depois extração do CNPJ, depois regexda conversa
+      const email = visitor.posVendaEmail
+        || emailFromCnpj
+        || emailFromMsg
+        || null;
+      // CNPJ: campo do visitor > extraído da msg
+      const cnpjCpf  = visitor.posVendaCnpjCpf || cnpjCpfFromMsg || null;
+      // CNPJ data: campo do visitor > dados extraídos da msg CNPJ_RESULT
       const cnpjData = (visitor.posVendaCnpjData && typeof visitor.posVendaCnpjData === 'object')
-        ? visitor.posVendaCnpjData : null;
+        ? visitor.posVendaCnpjData
+        : (cnpjDataFromMsg ?? null);
 
-      // Owner: pega via rodízio se configurado, senão env var
+      // Dados específicos de máquinas
+      const maquinaDesejada  = (visitor as any).maquinaDesejada  || maquinaFromMsg || 'Não informado';
+      const produtoFabricado = (visitor as any).maquinaProdutoFabricado || produtoFromMsg || undefined;
+      const volumeProducao   = (visitor as any).maquinaVolumeProducao   || volumeFromMsg  || undefined;
+      const qualificacaoSDR  = (visitor as any).maquinaQualificacaoSDR  || '2';
+      const clienteNovo      = (visitor as any).maquinaClienteNovo      || 'SIM';
+
+      // Owner
       const funil_key = funil === 'maquinas' ? 'maquinas' : funil === 'pecas' ? 'pecas' : 'pos_venda';
       const ownerId = await lcStorage.getNextOwnerForFunnel(funil_key).catch(() => null);
 
@@ -844,19 +936,19 @@ export function registerLiveChatRoutes(app: any): void {
         if (funil === 'maquinas') {
           relatorio = await generateMaquinasReport({
             nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
-            maquinaDesejada: (visitor as any).maquinaDesejada || 'Não informado',
-            detalhes: transcricao ? transcricao.slice(0, 200) : undefined,
-            produtoFabricado: (visitor as any).maquinaProdutoFabricado || undefined,
-            volumeProducao: (visitor as any).maquinaVolumeProducao || undefined,
-            qualificacaoSDR: (visitor as any).maquinaQualificacaoSDR || '2',
-            clienteNovo: (visitor as any).maquinaClienteNovo || 'SIM',
+            maquinaDesejada,
+            detalhes: transcricao ? transcricao.slice(0, 300) : undefined,
+            produtoFabricado,
+            volumeProducao,
+            qualificacaoSDR,
+            clienteNovo,
             cnpjData,
             transcricaoCompleta: transcricao || undefined,
           });
         } else if (funil === 'pecas') {
           relatorio = await generatePecasReport({
             nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
-            pecaDesejada: (visitor as any).pecaDesejada || 'Não informado',
+            pecaDesejada: (visitor as any).pecaDesejada || maquinaFromMsg || 'Não informado',
             detalhes: undefined,
             cnpjData,
             transcricaoCompleta: transcricao || undefined,
@@ -865,7 +957,7 @@ export function registerLiveChatRoutes(app: any): void {
           relatorio = await generatePosVendaReport({
             nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
             notaPedido: visitor.posVendaNotaPedido   || null,
-            problema:   visitor.posVendaProblema     || 'Não informado',
+            problema:   visitor.posVendaProblema     || maquinaFromMsg || 'Não informado',
             cnpjData,
             transcricaoCompleta: transcricao || undefined,
           });
@@ -882,18 +974,18 @@ export function registerLiveChatRoutes(app: any): void {
         if (funil === 'maquinas') {
           dealId = await createMaquinasOS(visitorId, {
             nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
-            maquinaDesejada: (visitor as any).maquinaDesejada || 'Não informado',
-            produtoFabricado: (visitor as any).maquinaProdutoFabricado || undefined,
-            volumeProducao: (visitor as any).maquinaVolumeProducao || undefined,
-            qualificacaoSDR: (visitor as any).maquinaQualificacaoSDR || '2',
-            clienteNovo: (visitor as any).maquinaClienteNovo || 'SIM',
+            maquinaDesejada,
+            produtoFabricado,
+            volumeProducao,
+            qualificacaoSDR,
+            clienteNovo,
             cnpjData,
             ownerId: ownerId || undefined,
           }, relatorio);
         } else if (funil === 'pecas') {
           dealId = await createPecasOS(visitorId, {
             nome, telefone, email, cnpjCpf: cnpjCpf ?? null,
-            pecaDesejada: (visitor as any).pecaDesejada || 'Não informado',
+            pecaDesejada: (visitor as any).pecaDesejada || maquinaFromMsg || 'Não informado',
             cnpjData,
             ownerId: ownerId || undefined,
           }, relatorio);
