@@ -1400,6 +1400,34 @@ function LiveChat() {
   const chatsRef = useRef<Chat[]>(chats);
   useEffect(() => { chatsRef.current = chats; }, [chats]);
 
+  // ── Listener: abrir visitante pelo DrillDownPanel do FunnelCard (stats) ────
+  // O FunnelCard dispara 'fagner:open-visitor' via window.dispatchEvent.
+  // Aqui capturamos e navegamos pro visitante no sistema interno.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const visitorId = (e as CustomEvent)?.detail?.visitorId;
+      if (!visitorId) return;
+      const found = allVisitors.find(v => v.id === visitorId);
+      if (found) {
+        setSelectedVisitor(found);
+        setActiveTab('visitantes');
+      } else {
+        // Visitante não está na lista em memória — força busca direta
+        fetch(`/api/livechat/visitors/${visitorId}`, { credentials: 'include' })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data?.id) {
+              setSelectedVisitor(data);
+              setActiveTab('visitantes');
+            }
+          })
+          .catch(() => {});
+      }
+    };
+    window.addEventListener('fagner:open-visitor', handler);
+    return () => window.removeEventListener('fagner:open-visitor', handler);
+  }, [allVisitors]);
+
   return (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(0 0% 97%) 0%, hsl(0 5% 95%) 100%)" }}>
 

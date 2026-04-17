@@ -109,11 +109,18 @@ function DrillDownPanel({ step, stepLabel, stepColor, dateFrom, dateTo, onClose 
               {visitors.map((v: any, i: number) => {
                 const cat = categoryLabel(v.category ?? "visitor");
                 const name = v.posVendaNome || v.name || "Não identificado";
+                const isCrmStep = step === 'crm';
+
+                const handleOpenInCRM = () => {
+                  window.dispatchEvent(new CustomEvent('fagner:open-visitor', { detail: { visitorId: v.id } }));
+                };
+
                 return (
                   <div
                     key={v.id ?? i}
-                    className="p-3 rounded-xl border border-border hover:border-primary/40 hover:shadow-sm transition-all bg-card group cursor-default"
+                    className="p-3 rounded-xl border border-border hover:border-primary/40 hover:shadow-sm transition-all bg-card group"
                   >
+                    {/* Nome + localização */}
                     <div className="flex items-start justify-between mb-1.5">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-card-foreground truncate">
@@ -123,18 +130,15 @@ function DrillDownPanel({ step, stepLabel, stepColor, dateFrom, dateTo, onClose 
                           <p className="text-xs text-muted-foreground mt-0.5">📞 {v.posVendaTelefone}</p>
                         )}
                       </div>
-                      {v.rdCrmDealId && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 border border-green-500/20 shrink-0 ml-2">
-                          ✓ CRM
-                        </span>
-                      )}
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-2">
                       <span>{v.city ? `${v.city}${v.country ? `, ${v.country}` : ''}` : ''}</span>
                       <span>{timeAgo(v.lastSeenAt)}</span>
                     </div>
+
                     {/* Barra de engajamento */}
-                    <div className="mt-2 h-1 w-full rounded-full bg-muted overflow-hidden">
+                    <div className="mb-2.5 h-1 w-full rounded-full bg-muted overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-700"
                         style={{
@@ -142,6 +146,41 @@ function DrillDownPanel({ step, stepLabel, stepColor, dateFrom, dateTo, onClose 
                           backgroundColor: (Number(v.engagementScore) || 0) >= 70 ? 'hsl(0,85%,60%)' : (Number(v.engagementScore) || 0) >= 40 ? 'hsl(40,95%,55%)' : 'hsl(142,71%,45%)',
                         }}
                       />
+                    </div>
+
+                    {/* ── Botões de ação ──────────────────────────────── */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* ABRIR NO RD — somente na etapa "Lead no CRM" e se tiver dealId */}
+                      {isCrmStep && v.rdCrmDealId && (
+                        <a
+                          href={`https://app.rdstation.com.br/deals/${v.rdCrmDealId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all hover:shadow-sm"
+                          style={{
+                            background: 'linear-gradient(135deg, hsl(217,91%,97%), hsl(217,91%,93%))',
+                            borderColor: 'hsl(217,91%,75%)',
+                            color: 'hsl(217,91%,40%)',
+                          }}
+                          title={`Abrir deal ${v.rdCrmDealId} no RD Station CRM`}
+                        >
+                          🔗 ABRIR NO RD
+                        </a>
+                      )}
+
+                      {/* ABRIR NO CRM — para todos os cards com ou sem dealId */}
+                      <button
+                        onClick={handleOpenInCRM}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all hover:shadow-sm"
+                        style={{
+                          background: 'linear-gradient(135deg, hsl(262,83%,97%), hsl(262,83%,93%))',
+                          borderColor: 'hsl(262,83%,75%)',
+                          color: 'hsl(262,83%,40%)',
+                        }}
+                        title="Abrir visitante no sistema interno"
+                      >
+                        👤 ABRIR NO CRM
+                      </button>
                     </div>
                   </div>
                 );
