@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import {
   Power, PowerOff, TrendingUp, Users, MessageCircle,
   TerminalSquare, Loader2, Copy, History, Clock, CheckSquare,
-  Send, RotateCcw, Radio, Mic, Image as ImageIcon, Activity
+  Send, RotateCcw, Radio, Mic, Image as ImageIcon, Activity,
+  Info, ExternalLink,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -38,6 +39,9 @@ function KpiCard({
   trend,
   trendColor = "text-emerald-500",
   sub,
+  tooltip,
+  tooltipItems,
+  onClick,
 }: {
   title: string;
   value: string | number;
@@ -45,11 +49,38 @@ function KpiCard({
   trend?: string;
   trendColor?: string;
   sub?: string;
+  tooltip?: string;
+  tooltipItems?: { label: string; value: string | number; color?: string }[];
+  onClick?: () => void;
 }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
   return (
-    <Card className="bg-white border border-red-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+    <Card
+      className={`bg-white border border-red-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 relative ${
+        onClick ? 'cursor-pointer' : ''
+      }`}
+      onClick={onClick}
+    >
       <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-sm font-medium text-zinc-500">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium text-zinc-500 flex items-center gap-1.5">
+          {title}
+          {/* ℹ️ ícone discreto que aciona o tooltip */}
+          {(tooltip || tooltipItems) && (
+            <button
+              type="button"
+              onMouseEnter={() => setShowTooltip(true)}
+              onMouseLeave={() => setShowTooltip(false)}
+              onFocus={() => setShowTooltip(true)}
+              onBlur={() => setShowTooltip(false)}
+              className="text-zinc-300 hover:text-zinc-500 transition-colors"
+              onClick={(e) => { e.stopPropagation(); setShowTooltip(v => !v); }}
+            >
+              <Info className="h-3 w-3" />
+            </button>
+          )}
+        </CardTitle>
         <div className="p-1.5 rounded-lg" style={{ background: "rgba(220,38,38,0.07)" }}>
           <Icon className="h-4 w-4" style={{ color: "#dc2626" }} />
         </div>
@@ -66,6 +97,33 @@ function KpiCard({
           <p className="text-xs text-zinc-500 mt-1.5 font-medium">{sub}</p>
         )}
       </CardContent>
+
+      {/* Tooltip popover */}
+      {showTooltip && (tooltip || tooltipItems) && (
+        <div
+          className="absolute top-full left-0 mt-2 z-50 w-56 bg-zinc-900 text-white rounded-xl shadow-xl p-3 pointer-events-none"
+          style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}
+        >
+          {/* Seta */}
+          <div className="absolute -top-1.5 left-5 w-3 h-3 bg-zinc-900 rotate-45 rounded-sm" />
+          {tooltip && <p className="text-[11px] text-zinc-300 mb-2 leading-relaxed">{tooltip}</p>}
+          {tooltipItems && tooltipItems.length > 0 && (
+            <div className="space-y-1.5">
+              {tooltipItems.map((item, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <span className="text-[11px] text-zinc-400">{item.label}</span>
+                  <span
+                    className="text-[11px] font-bold"
+                    style={{ color: item.color ?? '#f4f4f5' }}
+                  >
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
@@ -1082,6 +1140,13 @@ export default function Dashboard() {
                   value={dashStats?.totalLeads ?? "—"}
                   icon={Users}
                   sub={dashStats ? `${dashStats.syncedToCrm} enviado(s) ao CRM` : "Carregando..."}
+                  tooltip="Total de conversas iniciadas com o Fagner que geraram pelo menos um dado de contato."
+                  tooltipItems={dashStats ? [
+                    { label: "Total de leads", value: dashStats.totalLeads, color: '#f87171' },
+                    { label: "Enviados ao CRM", value: dashStats.syncedToCrm, color: '#4ade80' },
+                    { label: "Pendentes de sync", value: dashStats.totalLeads - dashStats.syncedToCrm, color: '#fbbf24' },
+                    { label: "Taxa de sync", value: dashStats.totalLeads > 0 ? `${Math.round((dashStats.syncedToCrm / dashStats.totalLeads) * 100)}%` : '0%', color: '#60a5fa' },
+                  ] : []}
                 />
               </div>
               <div className="animate-pop-in stagger-2">
@@ -1090,6 +1155,11 @@ export default function Dashboard() {
                   value={dashStats?.activeSessions ?? "—"}
                   icon={MessageCircle}
                   sub="Sessões em andamento agora"
+                  tooltip="Número de sessões do Fagner ativas no momento — usuários que enviaram mensagens recentemente e não tiveram o atendimento encerrado."
+                  tooltipItems={dashStats ? [
+                    { label: "Sessões ativas", value: dashStats.activeSessions, color: '#f87171' },
+                    { label: "Status", value: dashStats.activeSessions > 0 ? '🟢 Em atendimento' : '⚪ Ocioso', color: dashStats.activeSessions > 0 ? '#4ade80' : '#a1a1aa' },
+                  ] : []}
                 />
               </div>
               <div className="animate-pop-in stagger-3">
@@ -1098,6 +1168,12 @@ export default function Dashboard() {
                   value={dashStats?.syncedToCrm ?? "—"}
                   icon={CheckSquare}
                   sub={dashStats ? `de ${dashStats.totalLeads} conversa(s) total` : "Carregando..."}
+                  tooltip="Negociações (deals) criados automaticamente no RD Station CRM pelo Fagner. Cada card representa um lead qualificado e triado."
+                  tooltipItems={dashStats ? [
+                    { label: "Cards no CRM", value: dashStats.syncedToCrm, color: '#4ade80' },
+                    { label: "Total de leads", value: dashStats.totalLeads, color: '#f87171' },
+                    { label: "Conversão lead→CRM", value: dashStats.totalLeads > 0 ? `${Math.round((dashStats.syncedToCrm / dashStats.totalLeads) * 100)}%` : '0%', color: '#60a5fa' },
+                  ] : []}
                 />
               </div>
             </div>

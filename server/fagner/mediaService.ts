@@ -26,6 +26,16 @@ export interface ImageAnalysis {
 // ─── Download de arquivo ──────────────────────────────────────────────────────
 
 async function downloadAsBase64(url: string): Promise<{ base64: string; mimeType: string }> {
+  // ⚠️ Node.js fetch() NÃO suporta data: URLs — se vier do simulador (base64 inline),
+  // extraímos mimeType + base64 diretamente sem fazer requisição de rede.
+  if (url.startsWith("data:")) {
+    const match = url.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!match) throw new Error("data: URL inválida ou formato não suportado");
+    console.log(`[Media] data: URL detectada — extraindo base64 inline (mimeType: ${match[1]})`);
+    return { mimeType: match[1], base64: match[2] };
+  }
+
+  // URL HTTP normal — faz download via rede
   const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   if (!res.ok) throw new Error(`Download falhou: ${res.status} ${url}`);
 

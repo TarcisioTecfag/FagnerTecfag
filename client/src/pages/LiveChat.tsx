@@ -476,6 +476,11 @@ function LiveChat() {
   const [dateTo, setDateTo] = useState<string>("");     // Até: YYYY-MM-DD
   const [dateFilterActive, setDateFilterActive] = useState(false);
 
+  // ——— Visitantes: colapso de seções (online/offline) ———
+  // Offline começa minimizado para não renderizar milhares de cards de uma vez
+  const [onlineExpanded, setOnlineExpanded] = useState(true);
+  const [offlineExpanded, setOfflineExpanded] = useState(false);
+
   // ——— Settings Modal ———
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [liveSettings, setLiveSettings] = useState<LiveChatSettings>(loadSettings);
@@ -2471,17 +2476,27 @@ function LiveChat() {
         {/* ——— Tab: Visitantes ———————————————————————————————————————— */}
         {activeTab === "visitors" && (
           <div className="h-full flex flex-col bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden animate-tab-enter">
-            {/* Header */}
-            <div className="px-5 py-3 border-b border-zinc-100 flex items-center justify-between">
+            {/* ── Online Header ── */}
+            <div
+              className="shrink-0 px-5 py-3 border-b border-zinc-100 flex items-center justify-between cursor-pointer select-none hover:bg-zinc-50/60 transition-colors"
+              onClick={() => setOnlineExpanded(p => !p)}
+              title={onlineExpanded ? "Minimizar visitantes online" : "Expandir visitantes online"}
+            >
               <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <div className={`w-2 h-2 rounded-full transition-all ${onlineExpanded ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-300'}`} />
                 Visitantes Online
                 <span className="text-zinc-400 font-normal">({filteredVisitors.filter(v => v.isOnline === "true").length})</span>
               </h3>
+              <ChevronRight
+                className={`w-4 h-4 text-zinc-300 transition-transform duration-200 ${onlineExpanded ? 'rotate-90' : ''}`}
+              />
             </div>
 
-            {/* Visitor cards list */}
-            <div className="flex-1 overflow-y-auto p-4">
+            {/* Visitor cards list — só renderiza quando expandido */}
+            {onlineExpanded && <div
+              className="overflow-y-auto p-4"
+              style={{ flex: offlineExpanded ? '0 0 45%' : '1 1 auto', minHeight: 0 }}
+            >
               {filteredVisitors.filter(v => v.isOnline === "true").length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-zinc-400">
                   <Eye className="w-12 h-12 mb-3 opacity-20" />
@@ -2584,18 +2599,29 @@ function LiveChat() {
                   })}
                 </div>
               )}
-            </div>
+            </div>}
 
-            {/* Offline Visitors Section */}
-            <div className="px-5 py-3 border-t border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50 shadow-inner">
-              <h3 className="text-sm font-bold text-zinc-500 flex items-center gap-2">
+            {/* ── Offline Visitors Section ── */}
+            <div
+              className="shrink-0 px-5 py-2.5 border-t border-zinc-100 flex items-center justify-between bg-zinc-50/60 cursor-pointer select-none hover:bg-zinc-100/70 transition-colors"
+              onClick={() => setOfflineExpanded(p => !p)}
+              title={offlineExpanded ? "Minimizar visitantes offline" : "Expandir visitantes offline"}
+            >
+              <h3 className="text-xs font-semibold text-zinc-500 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-zinc-300" />
                 Visitantes Offline
-                <span className="text-zinc-400 font-normal">({filteredVisitors.filter(v => v.isOnline !== "true").length} recentes)</span>
+                <span className="text-zinc-400 font-normal text-[11px]">({filteredVisitors.filter(v => v.isOnline !== "true").length} recentes)</span>
+                {!offlineExpanded && (
+                  <span className="text-[10px] text-zinc-400 italic font-normal">— clique para carregar</span>
+                )}
               </h3>
+              <ChevronRight
+                className={`w-4 h-4 text-zinc-300 transition-transform duration-200 ${offlineExpanded ? 'rotate-90' : ''}`}
+              />
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 bg-zinc-50/30">
+            {/* Offline cards — SÓ renderiza quando expandido (evita processar 3k+ cards no DOM) */}
+            {offlineExpanded && <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-zinc-50/30">
               {filteredVisitors.filter(v => v.isOnline !== "true").length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-zinc-400">
                   <User className="w-8 h-8 mb-2 opacity-20" />
@@ -2681,7 +2707,7 @@ function LiveChat() {
                   })}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         )}
 
