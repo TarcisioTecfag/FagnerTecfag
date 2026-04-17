@@ -1463,6 +1463,48 @@ export const lcStorage = {
     return { steps: steps.map(s => ({ ...s, pct: total > 0 ? Math.round((s.count / total) * 100) : 0 })) };
   },
 
+  // ── Drill-down do funil: visitantes de uma etapa específica ─────────────────
+  // step: 'sessao' | 'mensagem' | 'dados' | 'crm'
+  async getFunnelStepVisitors(
+    step: string,
+    dateFrom?: string,
+    dateTo?: string
+  ): Promise<{ id: string; name: string | null; posVendaNome: string | null; posVendaTelefone: string | null; rdCrmDealId: string | null; pipelineStage: string; firstSeenAt: string; lastSeenAt: string; category: string; engagementScore: number; city: string | null; country: string | null; source: string | null }[]> {
+    const dw = dateFrom && dateTo
+      ? `AND "firstSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z' AND "firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : dateFrom ? `AND "firstSeenAt"::timestamptz >= '${dateFrom}T00:00:00Z'`
+      : dateTo   ? `AND "firstSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
+      : '';
+
+    let whereClause: string;
+    if (step === 'crm') {
+      whereClause = `"rdCrmDealId" IS NOT NULL ${dw}`;
+    } else if (step === 'dados') {
+      whereClause = `"posVendaNome" IS NOT NULL ${dw}`;
+    } else if (step === 'mensagem') {
+      const chatDw = dw.replace(/"firstSeenAt"/g, '"startedAt"');
+      whereClause = `id IN (SELECT DISTINCT "visitorId" FROM lc_chats WHERE 1=1 ${chatDw}) ${dw}`;
+    } else {
+      whereClause = `1=1 ${dw}`;
+    }
+
+    try {
+      const result = await db.execute(sql.raw(`
+        SELECT id, name, "posVendaNome", "posVendaTelefone", "rdCrmDealId",
+               "pipelineStage", "firstSeenAt", "lastSeenAt",
+               category, "engagementScore", city, country, source
+        FROM lc_visitors
+        WHERE ${whereClause}
+        ORDER BY "lastSeenAt" DESC
+        LIMIT 100
+      `)) as any;
+      const rows = result?.rows ?? result ?? [];
+      return Array.isArray(rows) ? rows : [];
+    } catch {
+      return [];
+    }
+  },
+
   async getLeadScoringDistribution(dateFrom?: string, dateTo?: string): Promise<{
     hot: number; warm: number; cold: number; total: number;
     hotTrend: { date: string; count: number }[];

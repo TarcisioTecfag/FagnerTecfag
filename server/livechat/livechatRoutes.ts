@@ -725,6 +725,20 @@ export function registerLiveChatRoutes(app: any): void {
     } catch (err: any) { return res.status(500).json({ message: err?.message ?? 'Erro interno' }); }
   });
 
+  // ── Drill-down do funil: lista de visitantes de uma etapa específica ──────────
+  // step: 'sessao' | 'mensagem' | 'dados' | 'crm'
+  router.get('/stats/funnel-visitors', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { step, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+      if (!step) return res.status(400).json({ message: 'Parâmetro step obrigatório' });
+      const visitors = await lcStorage.getFunnelStepVisitors(step, dateFrom, dateTo);
+      return res.json(visitors);
+    } catch (err: any) {
+      console.error('[LiveChat] GET /stats/funnel-visitors error:', err?.message);
+      return res.status(500).json({ message: err?.message ?? 'Erro interno' });
+    }
+  });
+
   router.get('/stats/lead-scoring', requireAuth, async (req: Request, res: Response) => {
     try {
       const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
