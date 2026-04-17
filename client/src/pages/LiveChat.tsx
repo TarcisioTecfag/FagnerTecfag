@@ -2012,53 +2012,6 @@ function LiveChat() {
                             Ver no CRM
                           </Button>
 
-                          {/* ── Botão Criar Card no CRM ────────────────── */}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={crmSyncState === 'loading'}
-                            onClick={async () => {
-                              const visitorId = selectedChat?.visitorId;
-                              if (!visitorId) return;
-                              setCrmSyncState('loading');
-                              setCrmSyncResult(null);
-                              setCrmSyncModalOpen(true);
-                              try {
-                                const res = await fetch(`/api/livechat/visitors/${visitorId}/manual-crm-sync`, {
-                                  method: 'POST',
-                                  credentials: 'include',
-                                });
-                                const data = await res.json();
-                                if (data.success) {
-                                  setCrmSyncState('success');
-                                  setCrmSyncResult(data);
-                                } else {
-                                  setCrmSyncState('error');
-                                  setCrmSyncResult(data);
-                                }
-                              } catch (e: any) {
-                                setCrmSyncState('error');
-                                setCrmSyncResult({ message: e.message ?? 'Erro desconhecido' });
-                              }
-                            }}
-                            className={`h-8 text-xs gap-1.5 ${
-                              crmSyncState === 'loading'
-                                ? 'border-purple-200 text-purple-600 bg-purple-50 cursor-wait'
-                                : crmSyncState === 'success'
-                                ? 'border-green-300 text-green-700 bg-green-50'
-                                : 'border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300'
-                            }`}
-                            title="Gera relatório com IA e cria o card no RD CRM com contato, deal e tarefa"
-                          >
-                            {crmSyncState === 'loading' ? (
-                              <><span className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" /> Criando...</>
-                            ) : crmSyncState === 'success' ? (
-                              <>✅ Card criado!</>
-                            ) : (
-                              <>🏷️ Criar no CRM</>
-                            )}
-                          </Button>
-
                           {/* Botão de Atenção */}
                           <Button
                             size="sm"
@@ -2117,6 +2070,55 @@ function LiveChat() {
                             Encerrar
                           </Button>
                         </>
+                      )}
+
+                      {/* Botão Criar no CRM — visível também em arquivados */}
+                      {activeTab !== 'atencao' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={crmSyncState === 'loading'}
+                          onClick={async () => {
+                            const visitorId = selectedChat?.visitorId;
+                            if (!visitorId) return;
+                            setCrmSyncState('loading');
+                            setCrmSyncResult(null);
+                            setCrmSyncModalOpen(true);
+                            try {
+                              const res = await fetch(`/api/livechat/visitors/${visitorId}/manual-crm-sync`, {
+                                method: 'POST',
+                                credentials: 'include',
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                setCrmSyncState('success');
+                                setCrmSyncResult(data);
+                              } else {
+                                setCrmSyncState('error');
+                                setCrmSyncResult(data);
+                              }
+                            } catch (e: any) {
+                              setCrmSyncState('error');
+                              setCrmSyncResult({ message: e.message ?? 'Erro desconhecido' });
+                            }
+                          }}
+                          className={`h-8 text-xs gap-1.5 ${
+                            crmSyncState === 'loading'
+                              ? 'border-purple-200 text-purple-600 bg-purple-50 cursor-wait'
+                              : crmSyncState === 'success'
+                              ? 'border-green-300 text-green-700 bg-green-50'
+                              : 'border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300'
+                          }`}
+                          title="Gera relatório com IA e cria o card no RD CRM com contato, deal e tarefa"
+                        >
+                          {crmSyncState === 'loading' ? (
+                            <><span className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" /> Criando...</>
+                          ) : crmSyncState === 'success' ? (
+                            <>✅ Card criado!</>
+                          ) : (
+                            <>🏷️ Criar no CRM</>
+                          )}
+                        </Button>
                       )}
 
                       {/* Badge somente leitura — aba Atenção */}
@@ -3256,8 +3258,8 @@ function LiveChat() {
                     <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                       {selectedVisitor.notes && selectedVisitor.notes.length > 0 ? (
                         [...selectedVisitor.notes].reverse().map((n, i) => {
-                          // Extrai qualquer URL do RD Station da nota (com ou sem prefixo "Link: ")
-                          const rdLinkMatch = n.content.match(/https:\/\/(?:app\.rdstation\.com\.br\/(?:crm|sales)|crm\.rdstation\.com\/app)\/[\w\-\/]+/);
+                          // Extrai qualquer URL do RD Station da nota (card de deal, crm, sales ou deals)
+                          const rdLinkMatch = n.content.match(/https:\/\/(?:app\.rdstation\.com\.br\/(?:crm|sales|deals)|crm\.rdstation\.com\/app)\/[\w\-\/]+/);
                           // Remove a URL bruta do texto do card — vai virar botão dedicado
                           const cleanContent = n.content
                             .replace(/Link:\s*https:\/\/[^\s]+/g, "")
@@ -3892,16 +3894,30 @@ function LiveChat() {
 
             {/* Footer */}
             {crmSyncState !== 'loading' && (
-              <button
-                onClick={() => { setCrmSyncModalOpen(false); setCrmSyncState('idle'); }}
-                className="w-full mt-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                style={{
-                  background: crmSyncState === 'success' ? 'linear-gradient(135deg, #16a34a, #15803d)' : 'linear-gradient(135deg, #6d28d9, #7c3aed)',
-                  color: 'white',
-                }}
-              >
-                {crmSyncState === 'success' ? 'Perfeito! Fechar' : 'Fechar'}
-              </button>
+              <div className="flex flex-col gap-2 mt-2">
+                {/* Botão Abrir no RD Station — aparece somente no sucesso */}
+                {crmSyncState === 'success' && crmSyncResult?.dealId && (
+                  <a
+                    href={`https://app.rdstation.com.br/deals/${crmSyncResult.dealId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 hover:opacity-90"
+                    style={{ background: 'linear-gradient(135deg, #0078cc, #0056b3)', color: 'white' }}
+                  >
+                    🔗 Abrir no RD Station
+                  </a>
+                )}
+                <button
+                  onClick={() => { setCrmSyncModalOpen(false); setCrmSyncState('idle'); }}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
+                  style={{
+                    background: crmSyncState === 'success' ? 'linear-gradient(135deg, #16a34a, #15803d)' : 'linear-gradient(135deg, #6d28d9, #7c3aed)',
+                    color: 'white',
+                  }}
+                >
+                  {crmSyncState === 'success' ? 'Fechar' : 'Fechar'}
+                </button>
+              </div>
             )}
           </div>
           <style>{`@keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }`}</style>

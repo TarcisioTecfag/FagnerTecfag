@@ -912,6 +912,20 @@ export function registerLiveChatRoutes(app: any): void {
         return res.status(500).json({ success: false, message: `Erro ao criar card no CRM: ${crmErr.message}`, steps });
       }
 
+      // ── 7. Adiciona nota no sistema interno com link para o deal ──────────
+      try {
+        const rdUrl = `https://app.rdstation.com.br/deals/${dealId}`;
+        const funilLabel = funil === 'maquinas' ? 'Máquinas' : funil === 'pecas' ? 'Peças' : 'Pós Venda';
+        await lcStorage.addVisitorNote(
+          visitorId,
+          `Card CRM — ${funilLabel}`,
+          `Card criado manualmente pelo operador no RD Station CRM.\nFunil: ${funilLabel} | Deal ID: ${dealId}\n${rdUrl}`
+        );
+        steps.push({ step: 'Nota registrada no sistema', status: 'ok', detail: 'Nota com link para o deal adicionada' });
+      } catch (noteErr: any) {
+        steps.push({ step: 'Nota registrada no sistema', status: 'skip', detail: `Não crítico: ${noteErr.message}` });
+      }
+
       console.log(`[LiveChat] ✅ manual-crm-sync visitor=${visitorId} → dealId=${dealId} funil=${funil}`);
       return res.json({ success: true, dealId, funil, steps });
 
