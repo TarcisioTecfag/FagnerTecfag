@@ -1410,7 +1410,7 @@ function LiveChat() {
       const found = allVisitors.find(v => v.id === visitorId);
       if (found) {
         setSelectedVisitor(found);
-        setActiveTab('visitantes');
+        setActiveTab('crm');
       } else {
         // Visitante não está na lista em memória — força busca direta
         fetch(`/api/livechat/visitors/${visitorId}`, { credentials: 'include' })
@@ -1418,7 +1418,7 @@ function LiveChat() {
           .then(data => {
             if (data?.id) {
               setSelectedVisitor(data);
-              setActiveTab('visitantes');
+              setActiveTab('crm');
             }
           })
           .catch(() => {});
@@ -3898,7 +3898,7 @@ function LiveChat() {
                 {/* Botão Abrir no RD Station — aparece somente no sucesso */}
                 {crmSyncState === 'success' && crmSyncResult?.dealId && (
                   <a
-                    href={`https://app.rdstation.com.br/deals/${crmSyncResult.dealId}`}
+                    href={`https://crm.rdstation.com/app/deals/${crmSyncResult.dealId}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 hover:opacity-90"

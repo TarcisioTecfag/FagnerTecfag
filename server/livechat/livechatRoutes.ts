@@ -914,7 +914,7 @@ export function registerLiveChatRoutes(app: any): void {
 
       // ── 7. Adiciona nota no sistema interno com link para o deal ──────────
       try {
-        const rdUrl = `https://app.rdstation.com.br/deals/${dealId}`;
+        const rdUrl = `https://crm.rdstation.com/app/deals/${dealId}`;
         const funilLabel = funil === 'maquinas' ? 'Máquinas' : funil === 'pecas' ? 'Peças' : 'Pós Venda';
         await lcStorage.addVisitorNote(
           visitorId,

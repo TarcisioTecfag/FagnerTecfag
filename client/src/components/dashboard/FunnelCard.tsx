@@ -153,7 +153,7 @@ function DrillDownPanel({ step, stepLabel, stepColor, dateFrom, dateTo, onClose 
                       {/* ABRIR NO RD — somente na etapa "Lead no CRM" e se tiver dealId */}
                       {isCrmStep && v.rdCrmDealId && (
                         <a
-                          href={`https://app.rdstation.com.br/deals/${v.rdCrmDealId}`}
+                          href={`https://crm.rdstation.com/app/deals/${v.rdCrmDealId}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all hover:shadow-sm"
