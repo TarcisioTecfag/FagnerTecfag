@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import DashboardCard from "./DashboardCard";
 import { useStatsData, periodToDates } from "./useStatsData";
 
@@ -63,7 +64,7 @@ function DrillDownPanel({ step, stepLabel, stepColor, dateFrom, dateTo, onClose 
   const { data, loading } = useStatsData<any[]>(`/api/livechat/stats/funnel-visitors?${qs}`);
   const visitors = Array.isArray(data) ? data : [];
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
@@ -156,7 +157,8 @@ function DrillDownPanel({ step, stepLabel, stepColor, dateFrom, dateTo, onClose 
           to   { transform: translateX(0);    opacity: 1; }
         }
       `}</style>
-    </>
+    </>,
+    document.body
   );
 }
 
