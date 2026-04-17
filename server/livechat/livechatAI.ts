@@ -182,10 +182,11 @@ const GEMINI_CHAT_MODEL          = "gemini-3.1-pro-preview";
 const GEMINI_FALLBACK_MODEL      = "gemini-2.5-flash"; // GA Stable (confirmado docs oficiais Google) — sem sufixo = versão estável
 const GEMINI_BASE                = "https://generativelanguage.googleapis.com/v1beta";
 
-// ─── Plano C: Claude 3.7 Sonnet (Anthropic) ─────────────────────────────────────
+// ─── Plano C: Claude Haiku 3.5 (Anthropic) ───────────────────────────────────────
 // Acionado apenas quando AMBOS os modelos Gemini retornam 503/timeout.
 // A chave vem de process.env.ANTHROPIC_API_KEY (configurada no Railway).
-const CLAUDE_MODEL               = "claude-sonnet-4-6"; // ID real confirmado via GET /v1/models — Claude Sonnet 4.6 GA
+// ⚡ Haiku 3.5: $0.80/M input + $4.00/M output (vs Sonnet: $3.00/$15.00) — 73% mais barato, qualidade suficiente para fallback
+const CLAUDE_MODEL               = "claude-haiku-3-5"; // Haiku 3.5 — fallback econômico (GA confirmado)
 const CLAUDE_API_URL             = "https://api.anthropic.com/v1/messages";
 
 /**
