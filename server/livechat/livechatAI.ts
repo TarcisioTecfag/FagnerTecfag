@@ -182,6 +182,88 @@ const GEMINI_CHAT_MODEL          = "gemini-3.1-pro-preview";
 const GEMINI_FALLBACK_MODEL      = "gemini-2.5-flash"; // GA Stable (confirmado docs oficiais Google) — sem sufixo = versão estável
 const GEMINI_BASE                = "https://generativelanguage.googleapis.com/v1beta";
 
+// ─── Vertex AI (infraestrutura enterprise — sem 503 de high demand) ───────────
+// Ativado automaticamente quando GOOGLE_SERVICE_ACCOUNT_JSON está definido no Railway.
+// A mesma API key do Gemini continua como fallback se a env não estiver presente.
+const VERTEX_PROJECT_ID = "project-d51e2a29-9246-4af9-b80";
+const VERTEX_LOCATION   = "us-central1";
+const VERTEX_BASE       = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models`;
+
+// Cache do access token (válido por ~55 min antes de renovar)
+let _vertexToken: { token: string; expiresAt: number } | null = null;
+
+/** Gera ou retorna do cache um Bearer token para Vertex AI via Service Account JSON */
+async function getVertexAccessToken(): Promise<string> {
+  if (_vertexToken && Date.now() < _vertexToken.expiresAt) return _vertexToken.token;
+
+  const saRaw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!saRaw) throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON não configurada');
+  const sa = JSON.parse(saRaw);
+
+  const { createSign } = await import('crypto');
+  const now = Math.floor(Date.now() / 1000);
+
+  const b64url = (s: string | Buffer) => {
+    const buf = Buffer.isBuffer(s) ? s : Buffer.from(s);
+    return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+
+  const header  = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const payload = b64url(JSON.stringify({
+    iss:   sa.client_email,
+    scope: 'https://www.googleapis.com/auth/cloud-platform',
+    aud:   'https://oauth2.googleapis.com/token',
+    iat:   now,
+    exp:   now + 3600,
+  }));
+
+  const signer = createSign('RSA-SHA256');
+  signer.update(`${header}.${payload}`);
+  const sig = b64url(signer.sign(sa.private_key));
+  const jwt = `${header}.${payload}.${sig}`;
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion:  jwt,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Vertex AI token error ${res.status}: ${body.slice(0, 200)}`);
+  }
+  const { access_token, expires_in } = await res.json();
+  _vertexToken = { token: access_token, expiresAt: Date.now() + (expires_in - 60) * 1000 };
+  console.log('[LiveChat AI][VERTEX] ✅ Access token obtido/renovado.');
+  return access_token;
+}
+
+/** Retorna true se Vertex AI está configurado (tem service account JSON no env) */
+function isVertexEnabled(): boolean {
+  return !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+}
+
+/**
+ * Converte uma URL no formato Gemini API (generativelanguage.googleapis.com) para
+ * o formato Vertex AI (aiplatform.googleapis.com) e retorna os headers corretos.
+ * Se Vertex não estiver configurado, retorna a URL original + headers simples.
+ */
+async function resolveGeminiEndpoint(originalUrl: string): Promise<{ url: string; headers: Record<string, string> }> {
+  if (!isVertexEnabled()) {
+    return { url: originalUrl, headers: { 'Content-Type': 'application/json' } };
+  }
+  // Extrai o nome do modelo da URL: /models/gemini-3.1-pro-preview:generateContent?key=...
+  const modelMatch = originalUrl.match(/\/models\/([^:?]+):generateContent/);
+  const model = modelMatch?.[1] ?? GEMINI_CHAT_MODEL;
+  const token = await getVertexAccessToken();
+  return {
+    url:     `${VERTEX_BASE}/${model}:generateContent`,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+  };
+}
+
 // ─── Plano C: Claude Haiku 3.5 (Anthropic) ───────────────────────────────────────
 // Acionado apenas quando AMBOS os modelos Gemini retornam 503/timeout.
 // A chave vem de process.env.ANTHROPIC_API_KEY (configurada no Railway).
@@ -295,10 +377,14 @@ export async function initGeminiHealthCheck(): Promise<void> {
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_AI_KEY ?? '';
   if (!apiKey || !process.env.ANTHROPIC_API_KEY) return; // só faz sentido se Claude está configurado
   try {
-    const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
+    const rawUrl = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
+    const { url, headers } = await resolveGeminiEndpoint(rawUrl);
+    if (isVertexEnabled()) {
+      console.log('[LiveChat AI] 🔵 STARTUP: Vertex AI configurado — health check via endpoint enterprise.');
+    }
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       // Payload mínimo: 1 token de entrada
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
@@ -310,7 +396,7 @@ export async function initGeminiHealthCheck(): Promise<void> {
       geminiDegradedUntil = Date.now() + 10 * 60 * 1000;
       console.warn(`[LiveChat AI] 🟡 STARTUP HEALTH CHECK: Gemini ${res.status} — modo degradado ativado por 10min. Claude será usado.`);
     } else {
-      console.log(`[LiveChat AI] ✅ STARTUP HEALTH CHECK: Gemini OK (${res.status}).`);
+      console.log(`[LiveChat AI] ✅ STARTUP HEALTH CHECK: Gemini OK (${res.status})${isVertexEnabled() ? ' [via Vertex AI]' : ''}.`);
     }
   } catch (e: any) {
     console.warn(`[LiveChat AI] ⚠️ STARTUP HEALTH CHECK: falha (${e.message}) — assumindo Gemini OK.`);
@@ -991,10 +1077,16 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
       ? AbortSignal.any([externalSignal, AbortSignal.timeout(timeoutMs)])
       : AbortSignal.timeout(timeoutMs);
 
+  // Resolve endpoint: Vertex AI (enterprise, sem 503) ou Gemini API (legado)
+  const { url: effectiveUrl, headers: authHeaders } = await resolveGeminiEndpoint(url);
+  if (isVertexEnabled()) {
+    console.log(`[LiveChat AI][VERTEX] Chamando ${effectiveUrl.split('/models/')[1]?.split(':')[0]} via Vertex AI...`);
+  }
+
   try {
-    const res = await fetch(url, {
+    const res = await fetch(effectiveUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders,
       body: JSON.stringify(payload),
       signal: makeSignal(8_000), // 8s: 503 responde em <500ms, não precisa de 20s
     });
@@ -1004,7 +1096,7 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
     const body = await res.text().catch(() => "");
     console.error(`[LiveChat AI][GEMINI ERROR] HTTP ${res.status}`);
     console.error(`[LiveChat AI][GEMINI ERROR] Body completo: ${body.slice(0, 2000)}`);
-    console.error(`[LiveChat AI][GEMINI ERROR] URL usada: ${url.replace(/key=([^&]+)/, 'key=HIDDEN')}`);
+    console.error(`[LiveChat AI][GEMINI ERROR] URL usada: ${effectiveUrl.replace(/key=([^&]+)/, 'key=HIDDEN')}`);
     console.error(`[LiveChat AI][GEMINI ERROR] Payload preview: ${JSON.stringify(payload).slice(0, 800)}`);
 
   // 4xx (exceto 429) não são retryáveis — lança imediatamente
@@ -1016,9 +1108,9 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
     // (pico transitório pode resolver em <2s; outage prolongado vai falhar rápido)
     await new Promise(r => setTimeout(r, 1500));
     try {
-      const retryRes = await fetch(url, {
+      const retryRes = await fetch(effectiveUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify(payload),
         signal: makeSignal(8_000),
       });
@@ -1044,13 +1136,14 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
   }
 
   // ── Tentativa 2: Modelo fallback (1 tentativa, 30s timeout) ───────────────
-  const fallbackUrl = `${GEMINI_BASE}/models/${GEMINI_FALLBACK_MODEL}:generateContent?key=${apiKey}`;
-  console.log(`[LiveChat AI][FALLBACK] Chamando ${GEMINI_FALLBACK_MODEL}...`);
+  const fallbackOriginalUrl = `${GEMINI_BASE}/models/${GEMINI_FALLBACK_MODEL}:generateContent?key=${apiKey}`;
+  const { url: fallbackUrl, headers: fallbackHeaders } = await resolveGeminiEndpoint(fallbackOriginalUrl);
+  console.log(`[LiveChat AI][FALLBACK] Chamando ${GEMINI_FALLBACK_MODEL}${isVertexEnabled() ? ' (Vertex AI)' : ''}...`);
 
   try {
     const fallbackRes = await fetch(fallbackUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: fallbackHeaders,
       body: JSON.stringify(payload),
       signal: makeSignal(8_000), // 8s: flash também retorna 503 em <1s durante outage
     });

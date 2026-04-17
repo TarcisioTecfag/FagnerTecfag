@@ -4,3 +4,8 @@ dist/
 *.log
 *.db
 data/
+# Google Cloud service account keys (NUNCA commitar)
+*.json
+!package.json
+!tsconfig.json
+!components.json
