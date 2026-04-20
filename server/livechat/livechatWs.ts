@@ -144,11 +144,26 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
         // Verifica se o último AI message é um OVERVIEW aguardando confirmação
         const recentMsgs = await lcStorage.listMessagesByChat(chatId).catch(() => [] as any[]);
         const lastAiMsg = [...recentMsgs].reverse().find((m: any) => m.sender === 'ai');
-        const isOverviewPending = lastAiMsg && /está tudo correto|confirme os dados|está correto\?/i.test(lastAiMsg.content);
+        // Expansão da regex: o Fagner às vezes diz "Estão corretos?", "Está tudo certo?", etc.
+        const isOverviewPending = lastAiMsg && /est[áão] (tudo )?correto|confirme os dados|resumo|est[áão] corretos\?/i.test(lastAiMsg.content);
 
         if (isOverviewPending) {
           const stage = visitorForOverview.pipelineStage as string;
           console.log(`[Timers] ⏰ 8m OVERVIEW PENDENTE detectado para visitante ${visitorId} (estágio: ${stage}) — criando card automaticamente`);
+
+          const sendFinalMsgs = async () => {
+            const msgs = [
+              "Vou entender isso como um sim! 😊",
+              "Muito obrigado pelas informações.",
+              "A nossa equipe já recebeu os seus dados e o responsável entrará em contato em breve.",
+            ];
+            for (const text of msgs) {
+              await lcStorage.createMessage({ chatId, sender: 'ai', content: text });
+              sendToVisitor(visitorId, { type: 'CHAT_REPLY', chatId, sender: 'ai', content: text, timestamp: new Date().toISOString() });
+              broadcastToAgents({ type: 'CHAT_MESSAGE', chatId, visitorId, sender: 'ai', content: text, timestamp: new Date().toISOString() });
+              await new Promise(r => setTimeout(r, 800)); // typing delay visualzinho
+            }
+          };
 
           const parseOvField = (...labels: string[]): string | null => {
             for (const label of labels) {
@@ -206,6 +221,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                 await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [OVERVIEW SEM RESPOSTA] Card MÁQUINAS criado após inatividade!\nID: ${dealOv}\n${dealUrlOv}`).catch(() => {});
                 await lcStorage.setRdCrmDealId(visitorId, dealOv).catch(() => {});
                 await lcStorage.setChatCloseReason(chatId, 'atendimento_concluido').catch(() => {});
+                await sendFinalMsgs();
                 clearFollowUpTimers(visitorId);
                 await lcStorage.closeChat(chatId).catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
@@ -251,6 +267,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                 await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [OVERVIEW SEM RESPOSTA] Card PEÇAS criado após inatividade!\nID: ${dealOv}\n${dealUrlOv}`).catch(() => {});
                 await lcStorage.setRdCrmDealId(visitorId, dealOv).catch(() => {});
                 await lcStorage.setChatCloseReason(chatId, 'atendimento_concluido').catch(() => {});
+                await sendFinalMsgs();
                 clearFollowUpTimers(visitorId);
                 await lcStorage.closeChat(chatId).catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
@@ -296,6 +313,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                 await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [OVERVIEW SEM RESPOSTA] OS PÓS VENDA criada após inatividade!\nID: ${dealOv}\n${dealUrlOv}`).catch(() => {});
                 await lcStorage.setRdCrmDealId(visitorId, dealOv).catch(() => {});
                 await lcStorage.setChatCloseReason(chatId, 'atendimento_concluido').catch(() => {});
+                await sendFinalMsgs();
                 clearFollowUpTimers(visitorId);
                 await lcStorage.closeChat(chatId).catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
