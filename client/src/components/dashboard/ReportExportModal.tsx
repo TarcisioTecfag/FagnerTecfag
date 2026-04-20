@@ -133,7 +133,7 @@ export default function ReportExportModal({ open, onClose }: ReportExportModalPr
         {/* HEADER */}
         <div className="flex items-center justify-between p-5 border-b border-zinc-100 bg-zinc-50/80">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center border border-violet-200 text-violet-600">
+            <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center border border-zinc-200 text-zinc-700">
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
@@ -154,14 +154,14 @@ export default function ReportExportModal({ open, onClose }: ReportExportModalPr
           {/* SELECTION AREA */}
           <section>
             <h3 className="text-sm font-semibold text-zinc-700 mb-4 flex items-center gap-2">
-              <Search className="w-4 h-4 text-violet-500" /> Relatórios Disponíveis
+              <Search className="w-4 h-4 text-zinc-500" /> Relatórios Disponíveis
             </h3>
             
             <div className="space-y-4">
               {reports.map(r => (
                 <div 
                   key={r.id} 
-                  className={`p-4 rounded-xl border transition-all ${r.available ? 'border-zinc-200 bg-white hover:border-violet-300 hover:shadow-sm' : 'border-zinc-100 bg-zinc-50 opacity-60'}`}
+                  className={`p-4 rounded-xl border transition-all ${r.available ? 'border-zinc-200 bg-white hover:border-zinc-400 hover:shadow-sm' : 'border-zinc-100 bg-zinc-50 opacity-60'}`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex-1">
@@ -202,7 +202,7 @@ export default function ReportExportModal({ open, onClose }: ReportExportModalPr
                         <button
                           onClick={() => handleDownload(r.id)}
                           disabled={downloading}
-                          className="px-4 py-2 bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+                          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-900 active:bg-black text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
                         >
                           {downloading ? (
                             <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
@@ -228,7 +228,7 @@ export default function ReportExportModal({ open, onClose }: ReportExportModalPr
             <div className="border border-zinc-200 rounded-xl overflow-hidden bg-white">
               {loadingLogs ? (
                 <div className="p-8 flex items-center justify-center">
-                  <div className="w-6 h-6 rounded-full border-2 border-zinc-200 border-t-violet-500 animate-spin" />
+                  <div className="w-6 h-6 rounded-full border-2 border-zinc-200 border-t-zinc-600 animate-spin" />
                 </div>
               ) : logs.length === 0 ? (
                 <div className="p-8 text-center text-zinc-500">
@@ -250,7 +250,7 @@ export default function ReportExportModal({ open, onClose }: ReportExportModalPr
                         <td className="p-3 whitespace-nowrap text-zinc-500">
                           {format(new Date(log.downloadedAt), "dd/MM/yyyy • HH:mm:ss")}
                         </td>
-                        <td className="p-3 font-medium text-violet-600">
+                        <td className="p-3 font-medium text-zinc-800">
                           {log.reportName}
                         </td>
                         <td className="p-3 text-[10px] font-mono text-zinc-500">

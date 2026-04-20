@@ -4246,10 +4246,9 @@ function StatsTab() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => setReportModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white shadow-lg transition-all hover:opacity-90 active:scale-95"
-            style={{ background: "linear-gradient(135deg, #8b5cf6, #6d28d9)" }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-white text-zinc-700 border border-zinc-200 shadow-sm transition-all hover:bg-zinc-50 active:scale-95"
           >
-            <FileText className="w-4 h-4" />
+            <FileText className="w-4 h-4 text-zinc-500" />
             Exportar Relatórios
           </button>
           <div className="w-px h-6 bg-zinc-200 mx-1" />
