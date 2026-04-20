@@ -150,28 +150,33 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
           const stage = visitorForOverview.pipelineStage as string;
           console.log(`[Timers] ⏰ 8m OVERVIEW PENDENTE detectado para visitante ${visitorId} (estágio: ${stage}) — criando card automaticamente`);
 
+          const parseOvField = (...labels: string[]): string | null => {
+            for (const label of labels) {
+              const re = new RegExp(`^\\s*[•\\-]\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:\\s*(.+)$`, 'i');
+              const msg = [...recentMsgs].reverse().find((m: any) => m.sender === 'ai' && re.test(m.content.trim()));
+              if (msg) { const cap = msg.content.trim().match(re); if (cap?.[1]) return cap[1].trim(); }
+            }
+            return null;
+          };
+
+          const snippetOv = recentMsgs.slice(-20)
+            .filter((m: any) => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
+            .map((m: any) => `${m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]'} ${m.content.slice(0, 120)}`)
+            .join('\n');
+
           if (stage === 'maquinas' && visitorForOverview.maquinaDesejada) {
-            // Reconstruir dados do banco e criar deal MÁQUINAS em background
+            // ── FALLBACK MÁQUINAS ──────────────────────────────────────────────
             (async () => {
               try {
-                const parseOvField = (...labels: string[]): string | null => {
-                  for (const label of labels) {
-                    const re = new RegExp(`^\\s*[•\\-]\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:\\s*(.+)$`, 'i');
-                    const msg = [...recentMsgs].reverse().find((m: any) => m.sender === 'ai' && re.test(m.content.trim()));
-                    if (msg) { const cap = msg.content.trim().match(re); if (cap?.[1]) return cap[1].trim(); }
-                  }
-                  return null;
-                };
                 const maqDataOv = {
                   nome:             (visitorForOverview as any).maquinaClienteNome     ?? visitorForOverview.name ?? 'Não informado',
-                  // telefone: MaquinasData exige string — fallback para string vazia se não coletado
                   telefone:         ((visitorForOverview as any).maquinaTelefone        ?? parseOvField('Telefone', 'Tel') ?? '') as string,
                   email:            (visitorForOverview as any).maquinaEmail           ?? parseOvField('E-mail', 'Email') ?? null,
                   cnpjCpf:          (visitorForOverview as any).maquinaCnpjCpf         ?? parseOvField('CPF/CNPJ', 'CNPJ', 'CPF') ?? null,
                   maquinaDesejada:  visitorForOverview.maquinaDesejada                 ?? 'Não informado',
                   detalhes:         parseOvField('Detalhes', 'Observação')             ?? null,
-                  produtoFabricado: visitorForOverview.maquinaProdutoFabricado         ?? 'Não definido',
-                  volumeProducao:   visitorForOverview.maquinaVolumeProducao           ?? 'Médio volume',
+                  produtoFabricado: visitorForOverview.maquinaProdutoFabricado         ?? parseOvField('Produto Fabricado', 'Produto') ?? 'Não definido',
+                  volumeProducao:   visitorForOverview.maquinaVolumeProducao           ?? parseOvField('Volume de Produção', 'Volume') ?? 'Médio volume',
                   clienteNovo:      'SIM',
                   qualificacaoSDR:  visitorForOverview.maquinaQualificacaoSDR         ?? '2',
                   cnpjData:         visitorForOverview.posVendaCnpjData
@@ -180,10 +185,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                 };
                 await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [OVERVIEW SEM RESPOSTA] Criando card MÁQUINAS após 8min de inatividade...').catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
-                const snippetOv = recentMsgs.slice(-20)
-                  .filter((m: any) => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
-                  .map((m: any) => `${m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]'} ${m.content.slice(0, 120)}`)
-                  .join('\n');
+
                 const relatorioOv = await generateMaquinasReport({
                   nome: maqDataOv.nome, telefone: maqDataOv.telefone,
                   email: maqDataOv.email ?? null, cnpjCpf: maqDataOv.cnpjCpf ?? null,
@@ -217,6 +219,96 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
               }
             })();
             return; // não envia a mensagem de follow-up, pois vai criar o card
+
+          } else if (stage === 'pecas' && visitorForOverview.pecaDesejada) {
+            // ── FALLBACK PEÇAS ─────────────────────────────────────────────────
+            (async () => {
+              try {
+                const pecasDataOv = {
+                  nome:             (visitorForOverview as any).pecasNome     ?? visitorForOverview.name ?? 'Não informado',
+                  telefone:         ((visitorForOverview as any).pecasTelefone ?? parseOvField('Telefone', 'Tel') ?? '') as string,
+                  email:             parseOvField('E-mail', 'Email') ?? null,
+                  cnpjCpf:           parseOvField('CPF/CNPJ', 'CNPJ', 'CPF') ?? null,
+                  pecaDesejada:      visitorForOverview.pecaDesejada,
+                  eCliente:          'NÃO INFORMADO',
+                  cnpjData:          undefined,
+                };
+                
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [OVERVIEW SEM RESPOSTA] Criando card PEÇAS após 8min de inatividade...').catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+                
+                const relatorioOv = await generatePecasReport({
+                  ...pecasDataOv,
+                  conversationSnippet: snippetOv,
+                  transcricaoCompleta: snippetOv,
+                });
+                
+                let ownerOv: string | undefined;
+                try { ownerOv = await lcStorage.getNextOwnerForFunnel('pecas') ?? undefined; } catch {}
+                
+                const dealOv = await createPecasOS(visitorId, { ...pecasDataOv, ownerId: ownerOv }, relatorioOv);
+                const dealUrlOv = `https://crm.rdstation.com/app/deals/${dealOv}`;
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [OVERVIEW SEM RESPOSTA] Card PEÇAS criado após inatividade!\nID: ${dealOv}\n${dealUrlOv}`).catch(() => {});
+                await lcStorage.setRdCrmDealId(visitorId, dealOv).catch(() => {});
+                await lcStorage.setChatCloseReason(chatId, 'atendimento_concluido').catch(() => {});
+                clearFollowUpTimers(visitorId);
+                await lcStorage.closeChat(chatId).catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+                broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId, dealId: dealOv, dealUrl: dealUrlOv });
+                broadcastToAgents({ type: 'CHAT_CLOSED', chatId, visitorId });
+                console.log(`[Timers] ✅ [OVERVIEW SEM RESPOSTA] Deal PEÇAS criado (${dealOv}) após 8min.`);
+              } catch (ovErr: any) {
+                console.error(`[Timers] ❌ Fallback OVERVIEW SEM RESPOSTA (pecas) falhou:`, ovErr.message);
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `❌ Falha ao criar card de peças por inatividade\n${ovErr.message}`).catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+              }
+            })();
+            return;
+
+          } else if (stage === 'pos_venda' && visitorForOverview.posVendaProblema) {
+            // ── FALLBACK PÓS-VENDA ─────────────────────────────────────────────
+            (async () => {
+              try {
+                const pvDataOv = {
+                  nome:             (visitorForOverview as any).posVendaNome       ?? visitorForOverview.name ?? 'Não informado',
+                  telefone:         ((visitorForOverview as any).posVendaTelefone   ?? parseOvField('Telefone', 'Tel') ?? '') as string,
+                  email:             parseOvField('E-mail', 'Email') ?? null,
+                  cnpjCpf:           parseOvField('CPF/CNPJ', 'CNPJ', 'CPF', 'CNPJ/CPF') ?? null,
+                  notaPedido:        parseOvField('Nota Fiscal', 'Nº da Nota', 'Pedido', 'Nota') ?? null,
+                  problema:          visitorForOverview.posVendaProblema ?? 'Não informado',
+                  urgencia:          'NORMAL', // default fallback
+                };
+                
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [OVERVIEW SEM RESPOSTA] Criando OS PÓS VENDA após 8min de inatividade...').catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+                
+                const relatorioOv = await generatePosVendaReport({
+                  ...pvDataOv,
+                  conversationSnippet: snippetOv,
+                  transcricaoCompleta: snippetOv,
+                });
+                
+                let ownerOv: string | undefined;
+                try { ownerOv = await lcStorage.getNextOwnerForFunnel('pos_venda') ?? undefined; } catch {}
+                
+                const dealOv = await createPosVendaOS(visitorId, { ...pvDataOv, ownerId: ownerOv }, relatorioOv);
+                const dealUrlOv = `https://crm.rdstation.com/app/deals/${dealOv}`;
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [OVERVIEW SEM RESPOSTA] OS PÓS VENDA criada após inatividade!\nID: ${dealOv}\n${dealUrlOv}`).catch(() => {});
+                await lcStorage.setRdCrmDealId(visitorId, dealOv).catch(() => {});
+                await lcStorage.setChatCloseReason(chatId, 'atendimento_concluido').catch(() => {});
+                clearFollowUpTimers(visitorId);
+                await lcStorage.closeChat(chatId).catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+                broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId, dealId: dealOv, dealUrl: dealUrlOv });
+                broadcastToAgents({ type: 'CHAT_CLOSED', chatId, visitorId });
+                console.log(`[Timers] ✅ [OVERVIEW SEM RESPOSTA] Deal PÓS VENDA criado (${dealOv}) após 8min.`);
+              } catch (ovErr: any) {
+                console.error(`[Timers] ❌ Fallback OVERVIEW SEM RESPOSTA (pos_venda) falhou:`, ovErr.message);
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `❌ Falha ao criar OS Pós Venda por inatividade\n${ovErr.message}`).catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+              }
+            })();
+            return;
           }
         }
       }
