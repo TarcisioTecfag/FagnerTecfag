@@ -160,7 +160,7 @@ export default function ReportExportModal({ open, onClose }: ReportExportModalPr
               {reports.map(r => (
                 <div 
                   key={r.id} 
-                  className={\`p-4 rounded-xl border transition-all \${r.available ? 'border-white/10 bg-white/5 hover:border-violet-500/50' : 'border-white/5 bg-white/5 opacity-50'}\`}
+                  className={`p-4 rounded-xl border transition-all ${r.available ? 'border-white/10 bg-white/5 hover:border-violet-500/50' : 'border-white/5 bg-white/5 opacity-50'}`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex-1">
@@ -253,8 +253,8 @@ export default function ReportExportModal({ open, onClose }: ReportExportModalPr
                           {log.reportName}
                         </td>
                         <td className="p-3 text-[10px] font-mono text-zinc-500">
-                          {log.filtersUsed?.dateFrom ? \`De \${log.filtersUsed.dateFrom} \` : ""}
-                          {log.filtersUsed?.dateTo ? \`Até \${log.filtersUsed.dateTo}\` : ""}
+                          {log.filtersUsed?.dateFrom ? `De ${log.filtersUsed.dateFrom} ` : ""}
+                          {log.filtersUsed?.dateTo ? `Até ${log.filtersUsed.dateTo}` : ""}
                           {!log.filtersUsed?.dateFrom && !log.filtersUsed?.dateTo ? "Sem filtros" : ""}
                         </td>
                         <td className="p-3">
