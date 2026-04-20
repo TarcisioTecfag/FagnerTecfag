@@ -113,10 +113,11 @@ interface Visitor {
   pecaDesejada?: string;
   pecasECliente?: string;
   // Máquinas específico
-  maqProdutoFabricado?: string;
-  maqVolumeProducao?: string;
-  maqQualificacaoSDR?: string;
-  maqClienteNovo?: string;
+  maquinaProdutoFabricado?: string;
+  maquinaVolumeProducao?: string;
+  maquinaQualificacaoSDR?: string;
+  maquinaClienteNovo?: string;
+  maquinaDesejada?: string;
 }
 
 interface Chat {
@@ -3528,16 +3529,16 @@ function LiveChat() {
 
                       {/* Maquinas - campos especificos */}
                       {/* Exibe quando está no stage maquinas OU quando já tem dados preenchidos (para preservar ao voltar) */}
-                      {(selectedVisitor.pipelineStage === 'maquinas' || selectedVisitor.maqProdutoFabricado || selectedVisitor.maqVolumeProducao || selectedVisitor.maqQualificacaoSDR || selectedVisitor.maqClienteNovo) && (
+                      {(selectedVisitor.pipelineStage === 'maquinas' || selectedVisitor.maquinaProdutoFabricado || selectedVisitor.maquinaVolumeProducao || selectedVisitor.maquinaQualificacaoSDR || selectedVisitor.maquinaClienteNovo) && (
                         <>
                           <div className="pt-1 pb-0.5">
                             <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#ea580c' }}>⚩️ Máquinas</p>
                           </div>
                           {[
-                            { label: 'Produto fabricado', value: selectedVisitor.maqProdutoFabricado, icon: '🏭' },
-                            { label: 'Volume de produção', value: selectedVisitor.maqVolumeProducao, icon: '📊' },
-                            { label: 'Qualificação SDR', value: selectedVisitor.maqQualificacaoSDR, icon: '⭐' },
-                            { label: 'Cliente novo?', value: selectedVisitor.maqClienteNovo, icon: '🆕' },
+                            { label: 'Produto fabricado', value: selectedVisitor.maquinaProdutoFabricado, icon: '🏭' },
+                            { label: 'Volume de produção', value: selectedVisitor.maquinaVolumeProducao, icon: '📊' },
+                            { label: 'Qualificação SDR', value: selectedVisitor.maquinaQualificacaoSDR, icon: '⭐' },
+                            { label: 'Cliente novo?', value: selectedVisitor.maquinaClienteNovo, icon: '🆕' },
                           ].map(f => (
                             <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-orange-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
                               <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: '#ea580c' }}>{f.icon} {f.label}</p>
