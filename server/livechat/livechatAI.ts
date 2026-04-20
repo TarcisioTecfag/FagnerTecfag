@@ -272,77 +272,7 @@ async function resolveGeminiEndpoint(originalUrl: string): Promise<{ url: string
   };
 }
 
-// ─── Plano C: Claude Haiku 3.5 (Anthropic) ───────────────────────────────────────
-// Acionado apenas quando AMBOS os modelos Gemini retornam 503/timeout.
-// A chave vem de process.env.ANTHROPIC_API_KEY (configurada no Railway).
-// ⚡ Haiku 3.5: $0.80/M input + $4.00/M output (vs Sonnet: $3.00/$15.00) — 73% mais barato, qualidade suficiente para fallback
-const CLAUDE_MODEL               = "claude-haiku-3-5"; // Haiku 3.5 — fallback econômico (GA confirmado)
-const CLAUDE_API_URL             = "https://api.anthropic.com/v1/messages";
 
-/**
- * Converte o histórico de sessão Gemini (formato parts[]) para o formato
- * Anthropic Messages API (content: string). Extrai o system prompt e
- * converte os turnos user/model → user/assistant.
- */
-async function claudePlanC(
-  systemPrompt: string,
-  geminiHistory: { role: string; parts: { text: string }[] }[],
-  userMessage: string,
-): Promise<string> {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY não configurada");
-
-  // Converte histórico Gemini (role: "user"|"model") → Anthropic ("user"|"assistant")
-  const messages: { role: "user" | "assistant"; content: string }[] = [];
-  for (const turn of geminiHistory) {
-    const role = turn.role === "model" ? "assistant" : "user";
-    const text = turn.parts.map((p: any) => p.text ?? "").join("").trim();
-    if (!text) continue;
-    // Anthropic exige alternância estrita user/assistant — funde turnos duplicados
-    if (messages.length > 0 && messages[messages.length - 1].role === role) {
-      messages[messages.length - 1].content += "\n" + text;
-    } else {
-      messages.push({ role, content: text });
-    }
-  }
-  // Adiciona a mensagem atual do visitante
-  if (messages.length === 0 || messages[messages.length - 1].role === "assistant") {
-    messages.push({ role: "user", content: userMessage });
-  } else {
-    messages[messages.length - 1].content += "\n" + userMessage;
-  }
-
-  console.log(`[LiveChat AI][PLANO-C] 🟡 Acionando Claude ${CLAUDE_MODEL} com ${messages.length} turn(s)...`);
-
-  const res = await fetch(CLAUDE_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type":      "application/json",
-      "x-api-key":         anthropicKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model:      CLAUDE_MODEL,
-      max_tokens: 1024,
-      system:     systemPrompt,
-      messages,
-    }),
-    signal: AbortSignal.timeout(30_000),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error(`[LiveChat AI][PLANO-C] ❌ Claude HTTP ${res.status}: ${body.slice(0, 300)}`);
-    throw new Error(`Claude HTTP ${res.status}`);
-  }
-
-  const json = await res.json();
-  const reply = json?.content?.[0]?.text ?? "";
-  if (!reply) throw new Error("Claude retornou resposta vazia");
-
-  console.log(`[LiveChat AI][PLANO-C] ✅ Claude respondeu com sucesso (${reply.length} chars).`);
-  return reply;
-}
 
 // ─── In-memory chat sessions (histórico por chat) ─────────────────────────────
 
@@ -361,20 +291,7 @@ const aiSessions = new Map<string, ChatAISession>();
 // ─── AbortController por chatId (permite cancelar Gemini ao "Assumir") ──────────
 const activeGenerations = new Map<string, AbortController>();
 
-// ─── Modo Degradado Global (Gemini overcargado) ────────────────────────
-// Quando o Gemini (primário + fallback) falha com 503, ativamos este flag
-// por 10 minutos. Nesse período todas as mensagens vão direto ao Claude
-// sem desperdiçar tempo nos timeouts do Gemini (evita o problema de 6min).
-//
-// FORCE_CLAUDE=1 (env var) — Bypass total do Gemini durante outages prolongados.
-// Setar no Railway para ativar imediatamente sem esperar o ciclo automático.
-let geminiDegradedUntil: number = 0; // timestamp em ms — 0 = modo normal
 
-/** Retorna true se o sistema deve pular Gemini e ir direto ao Claude */
-function shouldUseClaude(): boolean {
-  if (process.env.FORCE_CLAUDE === '1' || process.env.FORCE_CLAUDE === 'true') return true;
-  return Date.now() < geminiDegradedUntil;
-}
 
 /**
  * Health check no startup: faz uma requisição mínima ao Gemini.
@@ -383,7 +300,7 @@ function shouldUseClaude(): boolean {
  */
 export async function initGeminiHealthCheck(): Promise<void> {
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_AI_KEY ?? '';
-  if (!apiKey || !process.env.ANTHROPIC_API_KEY) return; // só faz sentido se Claude está configurado
+  if (!apiKey) return;
   try {
     const rawUrl = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
     const { url, headers } = await resolveGeminiEndpoint(rawUrl);
@@ -401,8 +318,7 @@ export async function initGeminiHealthCheck(): Promise<void> {
       signal: AbortSignal.timeout(6_000),
     });
     if (res.status === 503 || res.status === 429) {
-      geminiDegradedUntil = Date.now() + 10 * 60 * 1000;
-      console.warn(`[LiveChat AI] 🟡 STARTUP HEALTH CHECK: Gemini ${res.status} — modo degradado ativado por 10min. Claude será usado.`);
+      console.warn(`[LiveChat AI] 🟡 STARTUP HEALTH CHECK: Gemini ${res.status} — API fora do ar ou sobrecarregada.`);
     } else {
       console.log(`[LiveChat AI] ✅ STARTUP HEALTH CHECK: Gemini OK (${res.status})${isVertexEnabled() ? ' [via Vertex AI]' : ''}.`);
     }
@@ -1602,29 +1518,7 @@ export async function processVisitorMessage(
   const abortCtrl = new AbortController();
   activeGenerations.set(chatId, abortCtrl);
 
-  // ─── Modo Degradado / FORCE_CLAUDE: ir direto ao Claude se Gemini está sabidamente sobrecarregado ──
-  const isGeminiDegraded = shouldUseClaude();
-  if (isGeminiDegraded && process.env.ANTHROPIC_API_KEY) {
-    const forced = process.env.FORCE_CLAUDE === '1';
-    const remainMin = geminiDegradedUntil > 0 ? Math.ceil((geminiDegradedUntil - Date.now()) / 60000) : '∞';
-    console.warn(`[LiveChat AI] 🟡 ${forced ? 'FORCE_CLAUDE ATIVO' : `MODO DEGRADADO (${remainMin}min restantes)`} — indo direto ao Claude.`);
-    try {
-      const claudeReply = await claudePlanC(systemPrompt, session.history, userMessage);
-      session.history.push({ role: "user",  parts: userParts });
-      session.history.push({ role: "model", parts: [{ text: claudeReply }] });
-      if (session.history.length > 40) session.history = session.history.slice(-40);
-      activeGenerations.delete(chatId);
-      return { reply: claudeReply, needsHuman: false, tokens: 0 };
-    } catch (claudeDegErr: any) {
-      console.error(`[LiveChat AI] 🟡 Claude falhou em modo degradado: ${claudeDegErr.message}`);
-      activeGenerations.delete(chatId);
-      return {
-        reply: `[SYSTEM_ERROR: ${claudeDegErr.message}]`,
-        // Silêncio para o visitante — apenas o admin vê o log técnico
-        needsHuman: false, tokens: 0, isError: true,
-      };
-    }
-  }
+
 
   try {
     const data = await geminiRequest(url, payload, abortCtrl.signal);
@@ -1703,30 +1597,6 @@ export async function processVisitorMessage(
     // NÃO adicionamos placeholder ao histório em caso de erro
     // O histórico permanece como estava antes desta chamada — a próxima
     // mensagem do usuário será adicionada normalmente e o Gemini será tentado de novo
-
-    // ── 🟡 PLANO C: Claude 3.7 Sonnet (Anthropic) ────────────────────────────
-    // Antes de retornar erro ao visitante, tenta o Claude como último recurso.
-    // Só aciona se a API key estiver configurada e o erro for de sobrecarga/timeout.
-    const isGeminiOverload = /503|sobrecarregados|unavailable|high demand|timeout|ETIMEDOUT|AbortError/i.test(err?.message ?? "");
-    if (isGeminiOverload && process.env.ANTHROPIC_API_KEY) {
-      // Ativa modo degradado por 10 minutos — próximas mensagens vão direto ao Claude
-      geminiDegradedUntil = Date.now() + 10 * 60 * 1000;
-      console.warn(`[LiveChat AI] 🟡 Modo degradado ATIVADO por 10min (Gemini 503). Próximas mensagens irão direto ao Claude.`);
-      try {
-        const claudeReply = await claudePlanC(
-          systemPrompt,
-          session.history,
-          userMessage,
-        );
-        session.history.push({ role: "user",  parts: userParts });
-        session.history.push({ role: "model", parts: [{ text: claudeReply }] });
-        if (session.history.length > 40) session.history = session.history.slice(-40);
-        return { reply: claudeReply, needsHuman: false, tokens: 0 };
-      } catch (claudeErr: any) {
-        console.error(`[LiveChat AI][PLANO-C] ❌ Claude também falhou: ${claudeErr.message}`);
-        // Segue para o return de erro padrão abaixo
-      }
-    }
 
     const errorTag = `[SYSTEM_ERROR: ${err?.message ?? "erro desconhecido"}]`;
     return {
