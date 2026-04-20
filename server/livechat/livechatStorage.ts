@@ -1374,19 +1374,22 @@ export const lcStorage = {
     };
   },
 
-  async getUnhandledIntents(limit = 15): Promise<{ question: string; count: number; date: string }[]> {
+  async getUnhandledIntents(limit = 15): Promise<{ id: string; visitorId: string; chatId: string; question: string; date: string }[]> {
     try {
       const result = await db.execute(sql.raw(`
-        SELECT "rawMessage" AS question, COUNT(*)::int AS count, MAX("createdAt") AS date
+        SELECT id, "visitorId", "chatId", "rawMessage" AS question, "createdAt" AS date
         FROM lc_unhandled_intents
         WHERE "createdAt" >= NOW() - INTERVAL '30 days'
-        GROUP BY "rawMessage" ORDER BY count DESC, date DESC LIMIT ${limit}
+        ORDER BY "createdAt" DESC
+        LIMIT ${limit}
       `)) as any;
       const rows = result?.rows ?? result ?? [];
       return Array.isArray(rows)
         ? rows.map((r: any) => ({
+            id: String(r.id),
+            visitorId: r.visitorId || '',
+            chatId: r.chatId || '',
             question: r.question || 'Sem texto',
-            count: Number(r.count),
             date: r.date
           }))
         : [];

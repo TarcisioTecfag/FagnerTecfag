@@ -1,5 +1,7 @@
 import DashboardCard from "./DashboardCard";
 import { useStatsData } from "./useStatsData";
+import { UserCircle, MessageSquare } from "lucide-react";
+import { useCallback } from "react";
 
 const AlertIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--chart-red))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -9,17 +11,22 @@ const AlertIcon = () => (
 );
 
 const UnhandledIntentsCard = ({ delay = 0 }: { delay?: number }) => {
-  const { data, loading } = useStatsData<{ question: string; count: number; date: string }[]>(
+  const { data, loading } = useStatsData<{ id: string; visitorId: string; chatId: string; question: string; date: string }[]>(
     "/api/livechat/stats/unhandled-intents?limit=10"
   );
 
   const items = Array.isArray(data) ? data : [];
-  const maxCount = Math.max(...items.map((i) => i.count), 1);
+
+  const handleAction = useCallback((type: 'OPEN_CHAT' | 'OPEN_VISITOR', payload: { chatId?: string; visitorId?: string }) => {
+    window.dispatchEvent(new CustomEvent("livechat-action", {
+      detail: { type, ...payload }
+    }));
+  }, []);
 
   return (
     <DashboardCard
       title="Mapa de Intents Não Atendidos"
-      subtitle="Perguntas onde o Fagner falhou — últimos 30 dias"
+      subtitle="Perguntas individuais onde o Fagner não soube responder — últimos 30 dias"
       icon={<AlertIcon />}
       iconBg="bg-chart-red/10"
       delay={delay}
@@ -34,21 +41,34 @@ const UnhandledIntentsCard = ({ delay = 0 }: { delay?: number }) => {
             <path d="M12 20V10" /><path d="M18 20V4" /><path d="M6 20v-4" />
           </svg>
           <p className="text-base font-medium text-muted-foreground">Nenhuma falha registrada ainda.</p>
-          <p className="text-sm text-muted-foreground/60 mt-2 max-w-sm">Os fallbacks do Fagner serão capturados aqui.</p>
+          <p className="text-sm text-muted-foreground/60 mt-2 max-w-sm">Os fallbacks do Fagner individuais serão capturados aqui.</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {items.map((item, i) => (
-            <div key={i}>
-              <div className="flex items-start justify-between mb-1.5 gap-2">
-                <span className="text-sm font-medium text-card-foreground line-clamp-2 flex-1 mt-0.5" title={item.question}>{item.question}</span>
-                <span className="text-sm font-bold text-destructive shrink-0 bg-destructive/10 px-2 py-0.5 rounded-full">{item.count}×</span>
-              </div>
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-chart-red transition-all duration-700"
-                  style={{ width: `${(item.count / maxCount) * 100}%` }}
-                />
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.id} className="p-4 rounded-xl border border-muted/50 bg-muted/10 hover:bg-muted/30 transition-colors flex flex-col gap-3 group">
+              <span className="text-sm font-medium text-card-foreground leading-relaxed flex gap-2 items-start">
+                <span className="text-destructive mt-0.5" style={{ fontSize: '6px' }}>🔴</span>
+                {item.question}
+              </span>
+              <div className="flex flex-wrap items-center gap-2 pl-3">
+                <button
+                  onClick={() => handleAction('OPEN_VISITOR', { visitorId: item.visitorId })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-600 bg-white border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-900 transition-colors shadow-sm"
+                >
+                  <UserCircle className="w-3.5 h-3.5" />
+                  Abrir Cliente
+                </button>
+                <button
+                  onClick={() => handleAction('OPEN_CHAT', { chatId: item.chatId })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:text-blue-700 transition-colors shadow-sm"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Ver Histórico
+                </button>
+                <div className="ml-auto text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider">
+                  {new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(' de ', '/')}
+                </div>
               </div>
             </div>
           ))}

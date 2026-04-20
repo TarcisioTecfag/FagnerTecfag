@@ -796,6 +796,25 @@ function LiveChat() {
     }
   };
 
+  // ——— Global Event Listener for Sub-Components —————————————————————————————
+  useEffect(() => {
+    const handleAction = (e: any) => {
+      const { type, chatId, visitorId } = e.detail || {};
+      if (type === 'OPEN_CHAT' && chatId) {
+        openVisitorChat(chatId);
+      } else if (type === 'OPEN_VISITOR' && visitorId) {
+        const v = allVisitors.find(x => x.id === visitorId) || visitors.find(x => x.id === visitorId);
+        if (v) {
+          openHistoryModal(v);
+        } else {
+          toast({ description: "Visitante não encontrado nos registros atuais." });
+        }
+      }
+    };
+    window.addEventListener("livechat-action", handleAction);
+    return () => window.removeEventListener("livechat-action", handleAction);
+  }, [allVisitors, visitors, chats, visitorChats]);
+
   // ——— WebSocket connection —————————————————————————————————————————————————
   useEffect(() => {
     fetchData();
