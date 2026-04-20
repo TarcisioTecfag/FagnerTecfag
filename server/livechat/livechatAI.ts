@@ -1606,7 +1606,7 @@ export async function processVisitorMessage(
       activeGenerations.delete(chatId);
       return {
         reply: `[SYSTEM_ERROR: ${claudeDegErr.message}]`,
-        visitorReply: "Hm, não entendi.",
+        // Silêncio para o visitante — apenas o admin vê o log técnico
         needsHuman: false, tokens: 0, isError: true,
       };
     }
@@ -1714,11 +1714,10 @@ export async function processVisitorMessage(
       }
     }
 
-    // Gera um log técnico (aparece como "Log Oculto" no admin) + mensagem limpa para o visitante
     const errorTag = `[SYSTEM_ERROR: ${err?.message ?? "erro desconhecido"}]`;
     return {
       reply: errorTag,
-      visitorReply: "Hm, não entendi.",
+      // Silêncio para o visitante — apenas o admin vê o log técnico
       needsHuman: false,
       tokens: 0,
 

@@ -1162,13 +1162,11 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   // Separa o log técnico (para admin, "Log Oculto") da mensagem limpa (para o cliente)
                   if (aiResponse.isError) {
                     sendToVisitor(currentVisitorId, { type: "TYPING_STOP" });
-                    // 1. Salva o log técnico [SYSTEM_ERROR: ...] no banco (admin vê como "Log Oculto")
+                    // Salva o log técnico [SYSTEM_ERROR: ...] no banco (admin vê como "Log Oculto")
                     await lcStorage.createMessage({ chatId: chat.id, sender: "ai", content: rawReply });
                     broadcastToAgents({ type: "CHAT_MESSAGE", chatId: chat.id, visitorId: currentVisitorId, sender: "ai", content: rawReply, timestamp: new Date().toISOString() });
-                    // 2. Envia mensagem limpa e amigável ao visitante
-                    const cleanErrMsg = aiResponse.visitorReply ?? "Hm, acho que não entendi.";
-                    await lcStorage.createMessage({ chatId: chat.id, sender: "ai", content: cleanErrMsg });
-                    sendToVisitor(currentVisitorId, { type: "CHAT_REPLY", chatId: chat.id, sender: "ai", content: cleanErrMsg, timestamp: new Date().toISOString() });
+                    // ⚠️ NÃO envia nenhuma mensagem ao visitante — silêncio total para o cliente.
+                    // O admin vê o log técnico no painel como "Log Oculto (Sistema)".
                     
                     // Só inicia follow-up se não estiver em estágio final
                     const chatStatus = await lcStorage.getChatById(chat.id);
@@ -1479,6 +1477,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 const currentStageNow = (await lcStorage.getVisitorById(currentVisitorId))?.pipelineStage ?? '';
                 const isMaquinasStage = currentStageNow === 'maquinas' || hasMaquinasDados;
                 const isPecasStage    = currentStageNow === 'pecas'    || hasPecasDados;
+                // 🛡️ PROTEÇÃO AMPLIADA: todos os estágios qualificados nunca retrocedem para sem_resposta
+                const PROTECTED_NO_SALE_STAGES = ['maquinas', 'pecas', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'vendido'];
+                const isProtectedStage = PROTECTED_NO_SALE_STAGES.includes(currentStageNow) || hasMaquinasDados || hasPecasDados;
 
                 if (hasSale) {
                   // ✅ OUTCOME:SALE detectado: apenas marca o pipeline e gera nota.
@@ -1489,25 +1490,24 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "finalizado_com_venda");
                   if (note) {
                     await lcStorage.addVisitorNote(currentVisitorId, "Venda", note);
-                    broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId }); // ✅ FIX
+                    broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
                   }
                   // Fagner define motivo automaticamente
                   await lcStorage.setChatCloseReason(chat.id, "venda_fechada").catch(() => {});
                   // ✅ NÃO fechar nem limpar sessão — visitante ainda pode confirmar CEP, pagamento, etc.
                   broadcastPipelineUpdate(currentVisitorId, "finalizado_com_venda");
-                } else if (hasNoSale && !isMaquinasStage && !isPecasStage) {
-                  // NO_SALE só muda stage se NÃO for atendimento de máquinas ou peças
+                } else if (hasNoSale && !isProtectedStage) {
+                  // NO_SALE só muda stage para sem_resposta se o visitante NÃO estiver em estágio protegido
                   const note = await generateConversationNote(chat.id);
                   await lcStorage.updateVisitorPipeline(currentVisitorId, "sem_resposta");
                   if (note) {
                     await lcStorage.addVisitorNote(currentVisitorId, "Sem Venda", note);
-                    broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId }); // ✅ FIX
+                    broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
                   }
                   await lcStorage.setChatCloseReason(chat.id, "venda_cancelada").catch(() => {});
                   broadcastPipelineUpdate(currentVisitorId, "sem_resposta");
-                } else if (hasNoSale && (isMaquinasStage || isPecasStage)) {
-                  const whichStage = isMaquinasStage ? 'maquinas' : 'pecas';
-                  console.log(`[LiveChat] NO_SALE ignorado — visitante ${currentVisitorId} está em estágio ${whichStage} (protegido)`);
+                } else if (hasNoSale && isProtectedStage) {
+                  console.log(`[LiveChat] NO_SALE ignorado — visitante ${currentVisitorId} está em estágio protegido: ${currentStageNow}`);
                 }
 
                 // ── Detectar tags de estágio [STAGE:...] ──

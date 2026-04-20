@@ -278,21 +278,34 @@ app.get("/api/proxy-meta", async (req, res) => {
   }
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => controller.abort(), 6000);
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { "User-Agent": "TecfagBot/1.0" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
+      },
     });
     clearTimeout(timeout);
     const html = await response.text();
 
-    // Extrai OG tags com regex simples (sem dependência de parser HTML)
-    const ogTitle = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i)?.[1]
-                   || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]
-                   || "";
-    const ogImage = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] || "";
+    // Extrai OG tags — suporta qualquer ordem dos atributos (property antes ou depois de content)
+    const extractOg = (prop: string): string => {
+      // Ordem 1: property="og:X" ... content="Y"
+      const m1 = html.match(new RegExp(`<meta[^>]*property=["']${prop}["'][^>]*content=["']([^"']+)["']`, "i"));
+      if (m1?.[1]) return m1[1];
+      // Ordem 2: content="Y" ... property="og:X"
+      const m2 = html.match(new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*property=["']${prop}["']`, "i"));
+      return m2?.[1] ?? "";
+    };
 
-    return res.json({ title: ogTitle, image: ogImage, url });
+    const ogTitle = extractOg("og:title")
+                   || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim()
+                   || "";
+    const ogImage = extractOg("og:image");
+
+    return res.json({ title: ogTitle.trim(), image: ogImage.trim(), url });
   } catch {
     return res.json({ title: "", image: "", url });
   }
