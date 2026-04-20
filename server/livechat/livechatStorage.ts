@@ -193,7 +193,7 @@ export const lcStorage = {
       .orderBy(desc(lcVisitors.lastSeenAt));
   },
 
-  async listAllVisitors(limit = 5000): Promise<LcVisitor[]> {
+  async listAllVisitors(limit = 100000): Promise<LcVisitor[]> {
     const rows = await db.select().from(lcVisitors)
       .orderBy(desc(lcVisitors.lastSeenAt))
       .limit(limit);
@@ -248,7 +248,7 @@ export const lcStorage = {
     return this.getVisitorById(id);
   },
 
-  async listVisitorsByPipeline(stage: string, limit = 5000): Promise<LcVisitor[]> {
+  async listVisitorsByPipeline(stage: string, limit = 100000): Promise<LcVisitor[]> {
     return db.select().from(lcVisitors)
       .where(eq(lcVisitors.pipelineStage, stage))
       .orderBy(desc(lcVisitors.lastSeenAt))
