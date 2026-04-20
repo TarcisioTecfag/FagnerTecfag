@@ -1119,7 +1119,7 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
       method: "POST",
       headers: authHeaders,
       body: JSON.stringify(payload),
-      signal: makeSignal(8_000), // 8s: 503 responde em <500ms, não precisa de 20s
+      signal: makeSignal(20_000), // 20s timeout para modelo primário (evita aborto em respostas demoradas)
     });
 
     if (res.ok) return await res.json();
@@ -1143,7 +1143,7 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify(payload),
-        signal: makeSignal(8_000),
+        signal: makeSignal(20_000),
       });
       if (retryRes.ok) {
         console.log(`[LiveChat AI] ✅ Retry primário bem-sucedido.`);
@@ -1176,7 +1176,7 @@ async function geminiRequest(url: string, payload: object, externalSignal?: Abor
       method: "POST",
       headers: fallbackHeaders,
       body: JSON.stringify(payload),
-      signal: makeSignal(8_000), // 8s: flash também retorna 503 em <1s durante outage
+      signal: makeSignal(25_000), // Fallback com modelo GA estável (25s de timeout)
     });
 
     if (fallbackRes.ok) {
