@@ -1051,6 +1051,98 @@ export function registerLiveChatRoutes(app: any): void {
     });
   });
 
+  // ── Relatórios Gerenciais (Exportação p/ Excel) ─────────────────────────────
+  router.get("/reports/logs", requireAuth, async (_req: Request, res: Response) => {
+    try {
+      const logs = await lcStorage.getReportLogs(50); // Últimos 50 logs
+      return res.json(logs);
+    } catch (err: any) {
+      console.error("[LiveChat Reports] GET /reports/logs error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
+  router.post("/reports/download", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { reportCode, dateFrom, dateTo } = req.body;
+      if (!reportCode) return res.status(400).json({ error: "reportCode é obrigatório" });
+
+      // Registra o download no log
+      const { storage } = await import('../storage.js');
+      const user = (req.session as any)?.userId ? await storage.getUserSafeById((req.session as any).userId) : null;
+      const downloadedBy = user ? user.name : "Sistema";
+      let reportName = reportCode;
+      
+      if (reportCode === 'geral_leads') reportName = 'Relatório Geral de Leads (CRM)';
+
+      await lcStorage.createReportLog({
+        reportName,
+        downloadedBy,
+        filtersUsed: { dateFrom, dateTo }
+      });
+
+      // Gerar o Excel em memória
+      const ExcelJS = (await import('exceljs')).default || await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = downloadedBy;
+      workbook.created = new Date();
+      const sheet = workbook.addWorksheet('Dados Brutos');
+
+      if (reportCode === 'geral_leads') {
+        const stats = await lcStorage.getConversionFunnel(dateFrom, dateTo);
+        // Exemplo simples: no futuro podemos buscar a lista *real* de leads.
+        // Aqui já faremos uma busca real dos visitantes!
+        const visitors = await lcStorage.listVisitorsByPipeline('pos_venda'); // Exemplo inicial, podemos pegar listAllVisitors limitando por data
+        
+        sheet.columns = [
+          { header: 'ID_Visitante', key: 'id', width: 25 },
+          { header: 'Nome', key: 'name', width: 30 },
+          { header: 'Telefone', key: 'telefone', width: 20 },
+          { header: 'Email', key: 'email', width: 30 },
+          { header: 'Funil', key: 'pipelineStage', width: 20 },
+          { header: 'Data do Primeiro Acesso', key: 'firstSeenAt', width: 25 },
+          { header: 'ID Negociação CRM', key: 'rdCrmDealId', width: 20 },
+        ];
+        
+        // Vamos pegar todos visitantes por enquanto para um relatorio completo. Limitado a 5000 para n sobrecarregar.
+        const allVisitors = await lcStorage.listAllVisitors(5000); 
+        // Filtra em memória se quisermos, mas a ideia é q isso venha como base
+        for(let v of allVisitors) {
+          const vDate = new Date(v.firstSeenAt);
+          if (dateFrom && vDate < new Date(`${dateFrom}T00:00:00`)) continue;
+          if (dateTo && vDate > new Date(`${dateTo}T23:59:59`)) continue;
+
+          sheet.addRow({
+            id: v.id,
+            name: v.posVendaNome || v.name || 'Visitante Desconhecido',
+            telefone: v.posVendaTelefone || '',
+            email: v.posVendaEmail || '',
+            pipelineStage: v.pipelineStage,
+            firstSeenAt: new Date(v.firstSeenAt).toLocaleString('pt-BR'),
+            rdCrmDealId: v.rdCrmDealId || ''
+          });
+        }
+      } else {
+        // Mock default
+        sheet.columns = [
+          { header: 'Status', key: 'status', width: 20 },
+          { header: 'Mensagem', key: 'msg', width: 40 }
+        ];
+        sheet.addRow({ status: 'Sucesso', msg: 'Relatório em desenvolvimento' });
+      }
+
+      // Bufferiza e manda o XLSX
+      const buffer = await workbook.xlsx.writeBuffer();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${reportName}.xlsx"`);
+      return res.send(buffer);
+
+    } catch (err: any) {
+      console.error("[LiveChat Reports] POST /reports/download error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
   // Mount all routes under /api/livechat
   app.use("/api/livechat", router);
 

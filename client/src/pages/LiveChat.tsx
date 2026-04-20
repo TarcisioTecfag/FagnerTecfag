@@ -64,6 +64,7 @@ import RetentionCohortCard   from "../components/dashboard/RetentionCohortCard";
 import FunnelCard            from "../components/dashboard/FunnelCard";
 import LeadScoringCard       from "../components/dashboard/LeadScoringCard";
 import PreChatPagesCard      from "../components/dashboard/PreChatPagesCard";
+import ReportExportModal     from "../components/dashboard/ReportExportModal";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -4237,31 +4238,45 @@ const PERIODS = [
 // ─── StatsTab — Container Principal ───────────────────────────────────────────
 function StatsTab() {
   const [period, setPeriod] = useState("14d");
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   return (
     <div className="h-full overflow-y-auto animate-tab-enter">
-      {/* Period Selector */}
+      {/* Period Selector & Report Export */}
       <div className="flex items-center justify-between mb-8 px-1">
         <div>
           <h2 className="text-lg font-bold text-zinc-800">Estatísticas do Site</h2>
           <p className="text-sm text-zinc-400 mt-0.5">Live Chat — Monitoramento do Fagner</p>
         </div>
-        <div className="flex items-center gap-2">
-          {PERIODS.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => setPeriod(p.value)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                period === p.value
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setReportModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white shadow-lg transition-all hover:opacity-90 active:scale-95"
+            style={{ background: "linear-gradient(135deg, #8b5cf6, #6d28d9)" }}
+          >
+            <FileText className="w-4 h-4" />
+            Exportar Relatórios
+          </button>
+          <div className="w-px h-6 bg-zinc-200 mx-1" />
+          <div className="flex items-center gap-2">
+            {PERIODS.map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setPeriod(p.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  period === p.value
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      <ReportExportModal open={reportModalOpen} onClose={() => setReportModalOpen(false)} />
 
       <div className="space-y-10 pb-8 px-1">
         {/* ── Seção: Saúde da Plataforma ── */}

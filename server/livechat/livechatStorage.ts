@@ -17,6 +17,7 @@ import {
   lcChats,
   lcMessages,
   lcSettings,
+  lcReportLogs,
   type LcVisitor,
   type LcPageview,
   type LcChat,
@@ -1373,21 +1374,20 @@ export const lcStorage = {
     };
   },
 
-  async getUnhandledIntents(limit = 15): Promise<{ category: string; count: number; samples: string[] }[]> {
+  async getUnhandledIntents(limit = 15): Promise<{ question: string; count: number; date: string }[]> {
     try {
       const result = await db.execute(sql.raw(`
-        SELECT "category", COUNT(*)::int AS count,
-          ARRAY_AGG("rawMessage" ORDER BY "createdAt" DESC) AS samples
+        SELECT "rawMessage" AS question, COUNT(*)::int AS count, MAX("createdAt") AS date
         FROM lc_unhandled_intents
         WHERE "createdAt" >= NOW() - INTERVAL '30 days'
-        GROUP BY "category" ORDER BY count DESC LIMIT ${limit}
+        GROUP BY "rawMessage" ORDER BY count DESC, date DESC LIMIT ${limit}
       `)) as any;
       const rows = result?.rows ?? result ?? [];
       return Array.isArray(rows)
         ? rows.map((r: any) => ({
-            category: r.category ?? 'outro',
+            question: r.question || 'Sem texto',
             count: Number(r.count),
-            samples: Array.isArray(r.samples) ? r.samples.slice(0, 3) : [],
+            date: r.date
           }))
         : [];
     } catch { return []; }
@@ -1572,6 +1572,30 @@ export const lcStorage = {
       hot, warm, cold: Math.max(0, total - hot - warm), total,
       hotTrend: filledTrend,
     };
+  },
+
+  // ── Reports Logging ──────────────────────────────────────────────────
+  async createReportLog(data: {
+    reportName: string;
+    downloadedBy: string;
+    filtersUsed?: any;
+  }): Promise<any> {
+    const { v4: uuidv4 } = await import("uuid");
+    const id = uuidv4();
+    await db.insert(lcReportLogs).values({
+      id,
+      reportName: data.reportName,
+      downloadedBy: data.downloadedBy,
+      filtersUsed: data.filtersUsed || {},
+    });
+    return { id };
+  },
+
+  async getReportLogs(limit = 100): Promise<any[]> {
+    return db.select()
+      .from(lcReportLogs)
+      .orderBy(desc(lcReportLogs.downloadedAt))
+      .limit(limit);
   },
 
 };

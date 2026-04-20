@@ -226,6 +226,14 @@ export async function bootstrapSchema(): Promise<void> {
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS lc_report_logs (
+        id            TEXT PRIMARY KEY,
+        "reportName"  TEXT NOT NULL,
+        "downloadedBy" TEXT NOT NULL,
+        "filtersUsed" JSONB,
+        "downloadedAt" TEXT NOT NULL DEFAULT now()::text
+      );
     `);
     console.log("[DB] ✅ Schema PostgreSQL criado/verificado com sucesso");
 

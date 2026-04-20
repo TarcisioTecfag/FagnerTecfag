@@ -59,6 +59,7 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.1",
     "embla-carousel-react": "^8.6.0",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "framer-motion": "^12.23.24",

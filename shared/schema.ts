@@ -247,6 +247,14 @@ export const lcSettings = pgTable("lc_settings", {
   value: text("value").notNull(),
 });
 
+export const lcReportLogs = pgTable("lc_report_logs", {
+  id: text("id").primaryKey(),
+  reportName: text("reportName").notNull(),
+  downloadedBy: text("downloadedBy").notNull(), // Nome ou ID de quem baixou
+  filtersUsed: jsonb("filtersUsed").$type<any>(),
+  downloadedAt: text("downloadedAt").notNull().default(sql`now()::text`),
+});
+
 // ─── Live Chat Types ──────────────────────────────────────────────────────────
 
 export type LcVisitor = typeof lcVisitors.$inferSelect;
@@ -254,4 +262,5 @@ export type LcPageview = typeof lcPageviews.$inferSelect;
 export type LcChat = typeof lcChats.$inferSelect;
 export type LcMessage = typeof lcMessages.$inferSelect;
 export type LcSetting = typeof lcSettings.$inferSelect;
+export type LcReportLog = typeof lcReportLogs.$inferSelect;
 
