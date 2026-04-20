@@ -1074,6 +1074,7 @@ export function registerLiveChatRoutes(app: any): void {
       let reportName = reportCode;
       
       if (reportCode === 'geral_leads') reportName = 'Relatório Geral de Leads (CRM)';
+      else if (reportCode === 'historico_chats') reportName = 'Histórico de Atendimentos da I.A.';
 
       await lcStorage.createReportLog({
         reportName,
@@ -1090,9 +1091,7 @@ export function registerLiveChatRoutes(app: any): void {
 
       if (reportCode === 'geral_leads') {
         const stats = await lcStorage.getConversionFunnel(dateFrom, dateTo);
-        // Exemplo simples: no futuro podemos buscar a lista *real* de leads.
-        // Aqui já faremos uma busca real dos visitantes!
-        const visitors = await lcStorage.listVisitorsByPipeline('pos_venda'); // Exemplo inicial, podemos pegar listAllVisitors limitando por data
+        const visitors = await lcStorage.listVisitorsByPipeline('pos_venda');
         
         sheet.columns = [
           { header: 'ID_Visitante', key: 'id', width: 25 },
@@ -1104,9 +1103,7 @@ export function registerLiveChatRoutes(app: any): void {
           { header: 'ID Negociação CRM', key: 'rdCrmDealId', width: 20 },
         ];
         
-        // Vamos pegar todos visitantes por enquanto para um relatorio completo. Limitado a 5000 para n sobrecarregar.
         const allVisitors = await lcStorage.listAllVisitors(5000); 
-        // Filtra em memória se quisermos, mas a ideia é q isso venha como base
         for(let v of allVisitors) {
           const vDate = new Date(v.firstSeenAt);
           if (dateFrom && vDate < new Date(`${dateFrom}T00:00:00`)) continue;
@@ -1120,6 +1117,38 @@ export function registerLiveChatRoutes(app: any): void {
             pipelineStage: v.pipelineStage,
             firstSeenAt: new Date(v.firstSeenAt).toLocaleString('pt-BR'),
             rdCrmDealId: v.rdCrmDealId || ''
+          });
+        }
+      } else if (reportCode === 'historico_chats') {
+        sheet.columns = [
+          { header: 'Chat ID', key: 'id', width: 25 },
+          { header: 'Visitante ID', key: 'visitorId', width: 25 },
+          { header: 'Visitante Nome', key: 'visitorName', width: 25 },
+          { header: 'Início', key: 'startedAt', width: 25 },
+          { header: 'Fim', key: 'endedAt', width: 25 },
+          { header: 'Status', key: 'status', width: 15 },
+          { header: 'Score de Engajamento', key: 'engagementScore', width: 20 },
+          { header: 'Transcrição da Conversa', key: 'transcript', width: 120 },
+        ];
+        
+        const allChats = await lcStorage.listChats(undefined, 5000); 
+        for(let c of allChats) {
+          const cDate = new Date(c.startedAt);
+          if (dateFrom && cDate < new Date(`${dateFrom}T00:00:00`)) continue;
+          if (dateTo && cDate > new Date(`${dateTo}T23:59:59`)) continue;
+
+          const msgs = await lcStorage.listMessagesByChat(c.id);
+          const transcript = msgs.map((m: any) => `[${m.sender}] ${m.content}`).join('\n\n');
+
+          sheet.addRow({
+            id: c.id,
+            visitorId: c.visitorId,
+            visitorName: c.visitorName || 'Desconhecido',
+            startedAt: new Date(c.startedAt).toLocaleString('pt-BR'),
+            endedAt: c.endedAt ? new Date(c.endedAt).toLocaleString('pt-BR') : 'Em andamento',
+            status: c.status,
+            engagementScore: c.engagementScore || 0,
+            transcript: transcript
           });
         }
       } else {
