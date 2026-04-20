@@ -3481,13 +3481,12 @@ function LiveChat() {
                       ))}
 
                       {/* Pós Venda — campos específicos */}
-                      {/* Exibe se tiver QUALQUER dado, independente do stage atual */}
-                      {(selectedVisitor.posVendaProblema || selectedVisitor.posVendaNotaPedido) && (
+                      {/* Exibe quando está no stage pos_venda OU quando já tem dados preenchidos (para preservar ao voltar) */}
+                      {(selectedVisitor.pipelineStage === 'pos_venda' || selectedVisitor.posVendaProblema || selectedVisitor.posVendaNotaPedido) && (
                         <>
                           <div className="pt-1 pb-0.5">
-                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#8b5cf6' }}>
+                            <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#8b5cf6' }}>
                               Pós Venda
-                              {selectedVisitor.pipelineStage === 'pos_venda' && <span className="text-[8px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded ml-1">atual</span>}
                             </p>
                           </div>
                           {[
@@ -3505,13 +3504,12 @@ function LiveChat() {
                       )}
 
                       {/* Pecas - campos especificos */}
-                      {/* Exibe se tiver QUALQUER dado, independente do stage atual */}
-                      {(selectedVisitor.pecaDesejada || selectedVisitor.pecasECliente) && (
+                      {/* Exibe quando está no stage pecas OU quando já tem dados preenchidos (para preservar ao voltar) */}
+                      {(selectedVisitor.pipelineStage === 'pecas' || selectedVisitor.pecaDesejada || selectedVisitor.pecasECliente) && (
                         <>
                           <div className="pt-1 pb-0.5">
-                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#b45309' }}>
+                            <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#b45309' }}>
                               🔧 Peças
-                              {selectedVisitor.pipelineStage === 'pecas' && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded ml-1">atual</span>}
                             </p>
                           </div>
                           {[
@@ -3529,13 +3527,11 @@ function LiveChat() {
                       )}
 
                       {/* Maquinas - campos especificos */}
-                      {/* Exibe se tiver QUALQUER dado, independente do stage atual */}
-                      {(selectedVisitor.maqProdutoFabricado || selectedVisitor.maqVolumeProducao || selectedVisitor.maqQualificacaoSDR || selectedVisitor.maqClienteNovo) && (
+                      {/* Exibe quando está no stage maquinas OU quando já tem dados preenchidos (para preservar ao voltar) */}
+                      {(selectedVisitor.pipelineStage === 'maquinas' || selectedVisitor.maqProdutoFabricado || selectedVisitor.maqVolumeProducao || selectedVisitor.maqQualificacaoSDR || selectedVisitor.maqClienteNovo) && (
                         <>
                           <div className="pt-1 pb-0.5">
-                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#ea580c' }}>⚩️ Máquinas
-                              {selectedVisitor.pipelineStage === 'maquinas' && <span className="text-[8px] bg-orange-100 text-orange-600 px-1 py-0.5 rounded ml-1">atual</span>}
-                            </p>
+                            <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#ea580c' }}>⚩️ Máquinas</p>
                           </div>
                           {[
                             { label: 'Produto fabricado', value: selectedVisitor.maqProdutoFabricado, icon: '🏭' },
