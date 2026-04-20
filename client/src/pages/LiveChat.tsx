@@ -2155,230 +2155,233 @@ function LiveChat() {
                         </>
                       )}
 
-                      {/* Botões de ação: ocultos na aba Atenção e Arquivados */}
-                      {activeTab !== "atencao" && activeTab !== "arquivados" && (
-                        <>
-                          {selectedChat.status === "ai_active" ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleTakeOver(selectedChat.id)}
-                              className="h-8 text-xs gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300"
-                            >
-                              <User className="w-3 h-3" />
-                              Assumir
-                            </Button>
-                          ) : selectedChat.status === "human_active" ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleReturnToAI(selectedChat.id)}
-                              className="h-8 text-xs gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300"
-                            >
-                              <Bot className="w-3 h-3" />
-                              Ativar Fagner
-                            </Button>
-                          ) : null}
-
-                          {/* Botão Ver no CRM */}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              const v = allVisitors.find(x => x.id === selectedChat?.visitorId);
-                              if (v) setSelectedVisitor(v);
-                              setActiveTab("crm");
-                            }}
-                            className="h-8 text-xs gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300"
-                          >
-                            <Users className="w-3 h-3" />
-                            Ver no CRM
-                          </Button>
-
-                          {/* Botão de Atenção */}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setAttentionOpen(!attentionOpen)}
-                            className="h-8 text-xs gap-1.5 border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300 relative"
-                          >
-                            🚨 Atenção
-                          </Button>
-
-                          {/* Dropdown de Atenção manual */}
-                          {attentionOpen && (
-                            <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-zinc-200 p-4 z-50">
-                              <h4 className="text-sm font-bold text-zinc-800 mb-3">Marcar para Atenção</h4>
-                              <select
-                                className="w-full text-sm p-2 border border-zinc-200 rounded-lg mb-3"
-                                value={attentionReason}
-                                onChange={(e) => setAttentionReason(e.target.value)}
+                      {/* Botões de ação reformulados */}
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        
+                        {/* 1. Botão Assumir / Ativar IA (Destaque Principal) */}
+                        {activeTab !== "atencao" && activeTab !== "arquivados" && (
+                          <>
+                            {selectedChat.status === "ai_active" ? (
+                              <Button
+                                size="sm"
+                                onClick={() => handleTakeOver(selectedChat.id)}
+                                className="h-8 text-xs font-semibold shadow-sm text-amber-900 bg-amber-400 hover:bg-amber-500"
                               >
-                                <option value="Falta de informação">Falta de informação</option>
-                                <option value="Não respondeu">Não respondeu</option>
-                                <option value="Não entendeu o cliente">Não entendeu o cliente</option>
-                                <option value="Parou de responder">Parou de responder</option>
-                                <option value="Outro problema técnico">Outro problema técnico</option>
-                              </select>
-                              <Textarea
-                                placeholder="Observação (opcional)"
-                                className="text-sm min-h-[60px] mb-3"
-                                value={attentionObs}
-                                onChange={(e) => setAttentionObs(e.target.value)}
-                              />
-                              <div className="flex justify-end gap-2">
-                                <Button size="sm" variant="ghost" onClick={() => setAttentionOpen(false)}>Cancelar</Button>
-                                <Button size="sm" onClick={handleFlagAttention} className="bg-orange-500 hover:bg-orange-600">Salvar Flag</Button>
-                              </div>
-                            </div>
-                          )}
+                                <User className="w-3.5 h-3.5 mr-1.5" />
+                                Assumir Conversa
+                              </Button>
+                            ) : selectedChat.status === "human_active" ? (
+                              <Button
+                                size="sm"
+                                onClick={() => handleReturnToAI(selectedChat.id)}
+                                className="h-8 text-xs font-semibold shadow-sm text-emerald-900 bg-emerald-400 hover:bg-emerald-500"
+                              >
+                                <Bot className="w-3.5 h-3.5 mr-1.5" />
+                                Ativar Fagner
+                              </Button>
+                            ) : null}
+                          </>
+                        )}
 
-                          {/* Bug 3.2: Botão Copiar Histórico */}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleCopyHistory}
-                            className="h-8 text-xs gap-1.5 border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300"
-                            title="Copiar todo o histórico desta conversa"
-                          >
-                            📋 Copiar
-                          </Button>
-
-                          <Button
-                            size="sm"
-                            onClick={() => handleCloseChat(selectedChat.id)}
-                            className="h-8 text-xs"
-                            style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
-                          >
-                            Encerrar
-                          </Button>
-                        </>
-                      )}
-
-                      {/* Botão Criar no CRM — visível também em arquivados */}
-                      {activeTab !== 'atencao' && (
+                        {/* 2. Ferramentas Secundárias (Visuais Coerentes) */}
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={crmSyncState === 'loading'}
-                          onClick={async () => {
-                            const visitorId = selectedChat?.visitorId;
-                            if (!visitorId) return;
-                            setCrmSyncState('loading');
-                            setCrmSyncResult(null);
-                            setCrmSyncModalOpen(true);
-                            try {
-                              const res = await fetch(`/api/livechat/visitors/${visitorId}/manual-crm-sync`, {
-                                method: 'POST',
-                                credentials: 'include',
-                              });
-                              const data = await res.json();
-                              if (data.success) {
-                                setCrmSyncState('success');
-                                setCrmSyncResult(data);
-                              } else {
-                                setCrmSyncState('error');
-                                setCrmSyncResult(data);
-                              }
-                            } catch (e: any) {
-                              setCrmSyncState('error');
-                              setCrmSyncResult({ message: e.message ?? 'Erro desconhecido' });
-                            }
+                          onClick={() => {
+                            const v = allVisitors.find(x => x.id === selectedChat?.visitorId);
+                            if (v) setSelectedVisitor(v);
+                            setActiveTab("crm");
                           }}
-                          className={`h-8 text-xs gap-1.5 ${
-                            crmSyncState === 'loading'
-                              ? 'border-purple-200 text-purple-600 bg-purple-50 cursor-wait'
-                              : crmSyncState === 'success'
-                              ? 'border-green-300 text-green-700 bg-green-50'
-                              : 'border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300'
-                          }`}
-                          title="Gera relatório com IA e cria o card no RD CRM com contato, deal e tarefa"
+                          className="h-8 text-xs text-zinc-600 hover:text-zinc-900 border-zinc-200"
                         >
-                          {crmSyncState === 'loading' ? (
-                            <><span className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" /> Criando...</>
-                          ) : crmSyncState === 'success' ? (
-                            <>✅ Card criado!</>
-                          ) : (
-                            <>🏷️ Criar no CRM</>
-                          )}
+                          <Users className="w-3.5 h-3.5 mr-1.5 text-zinc-400" />
+                          Ver Perfil
                         </Button>
-                      )}
 
-                      {/* Badge somente leitura — aba Atenção */}
-                      {activeTab === "atencao" && (
-                        <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
-                          👁 Visualização — somente leitura
-                        </span>
-                      )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleCopyHistory}
+                          className="h-8 text-xs text-zinc-600 hover:text-zinc-900 border-zinc-200"
+                          title="Copiar todo o histórico desta conversa"
+                        >
+                          📋 Copiar
+                        </Button>
 
-                      {/* Badge somente leitura — aba Arquivados + botão Motivo */}
-                      {activeTab === "arquivados" && (() => {
-                        const CLOSE_REASONS = [
-                          { value: "sem_resposta", label: "Não respondeu mais", color: "#6b7280" },
-                          { value: "venda_fechada", label: "Venda fechada", color: "#16a34a" },
-                          { value: "venda_cancelada", label: "Venda cancelada", color: "#dc2626" },
-                          { value: "atendimento_concluido", label: "Atendimento concluído", color: "#2563eb" },
-                          { value: "problema_tecnico", label: "Problema técnico", color: "#d97706" },
-                          { value: "outro", label: "Outro", color: "#7c3aed" },
-                        ];
-                        const currentReason = (selectedChat as any).closeReason;
-                        const reasonObj = CLOSE_REASONS.find(r => r.value === currentReason);
-                        return (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-50 text-zinc-500 border border-zinc-200">
-                              🗄️ Conversa arquivada
-                            </span>
-                            {reasonObj ? (
-                              <span className="px-3 py-1.5 rounded-lg text-xs font-semibold border" style={{ background: `${reasonObj.color}15`, color: reasonObj.color, borderColor: `${reasonObj.color}40` }}>
-                                📝 {reasonObj.label}
-                              </span>
-                            ) : null}
+                        {/* 3. Integração CRM (Se não for Atenção) */}
+                        {activeTab !== 'atencao' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={crmSyncState === 'loading'}
+                            onClick={async () => {
+                              const visitorId = selectedChat?.visitorId;
+                              if (!visitorId) return;
+                              setCrmSyncState('loading');
+                              setCrmSyncResult(null);
+                              setCrmSyncModalOpen(true);
+                              try {
+                                const res = await fetch(`/api/livechat/visitors/${visitorId}/manual-crm-sync`, {
+                                  method: 'POST',
+                                  credentials: 'include',
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                  setCrmSyncState('success');
+                                  setCrmSyncResult(data);
+                                } else {
+                                  setCrmSyncState('error');
+                                  setCrmSyncResult(data);
+                                }
+                              } catch (e: any) {
+                                setCrmSyncState('error');
+                                setCrmSyncResult({ message: e.message ?? 'Erro desconhecido' });
+                              }
+                            }}
+                            className={`h-8 text-xs transition-colors border ${
+                              crmSyncState === 'loading'
+                                ? 'border-purple-200 text-purple-600 bg-purple-50 cursor-wait'
+                                : crmSyncState === 'success'
+                                ? 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                                : 'border-purple-200 text-purple-700 hover:bg-purple-50'
+                            }`}
+                            title="Gera relatório com IA e cria o card no RD CRM"
+                          >
+                            {crmSyncState === 'loading' ? (
+                              <><span className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin mr-1.5" /> Enviando...</>
+                            ) : crmSyncState === 'success' ? (
+                              <>✅ Sincronizado!</>
+                            ) : (
+                              <>🏷️ Criar Lead</>
+                            )}
+                          </Button>
+                        )}
+
+                        {/* 4. Ações Destrutivas / Warns */}
+                        {activeTab !== "atencao" && activeTab !== "arquivados" && (
+                          <>
                             <div className="relative">
-                              <button
-                                id={`close-reason-btn-${selectedChat.id}`}
-                                onClick={() => setCloseReasonOpen(closeReasonOpen === selectedChat.id ? null : selectedChat.id)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-zinc-300 text-zinc-600 hover:border-zinc-400 hover:bg-zinc-50 transition-all flex items-center gap-1"
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setAttentionOpen(!attentionOpen)}
+                                className="h-8 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
                               >
-                                <FileText className="w-3 h-3" />
-                                {currentReason ? "Alterar motivo" : "Definir motivo"}
-                              </button>
-                              {closeReasonOpen === selectedChat.id && (
-                                <div className="absolute top-full left-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 py-1 min-w-[180px]">
-                                  {CLOSE_REASONS.map(r => (
-                                    <button
-                                      key={r.value}
-                                      disabled={closeReasonSaving}
-                                      onClick={async () => {
-                                        setCloseReasonSaving(true);
-                                        try {
-                                          await fetch(`/api/livechat/chats/${selectedChat.id}/close-reason`, {
-                                            method: "PATCH",
-                                            headers: { "Content-Type": "application/json" },
-                                            credentials: "include",
-                                            body: JSON.stringify({ reason: r.value }),
-                                          });
-                                          setChats(prev => prev.map(c => c.id === selectedChat.id ? { ...c, closeReason: r.value } as any : c));
-                                          setSelectedChat(prev => prev ? { ...prev, closeReason: r.value } as any : prev);
-                                          toast({ title: "Motivo salvo!", description: r.label });
-                                        } catch {
-                                          toast({ title: "Erro ao salvar", variant: "destructive" });
-                                        } finally {
-                                          setCloseReasonSaving(false);
-                                          setCloseReasonOpen(null);
-                                        }
-                                      }}
-                                      className="w-full text-left px-4 py-2 text-xs hover:bg-zinc-50 transition-colors flex items-center gap-2"
-                                    >
-                                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: r.color }} />
-                                      {r.label}
-                                    </button>
-                                  ))}
+                                🚨 Flag
+                              </Button>
+
+                              {attentionOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-zinc-200 p-4 z-50">
+                                  <h4 className="text-sm font-bold text-zinc-800 mb-3">Marcar para Atenção</h4>
+                                  <select
+                                    className="w-full text-sm p-2 border border-zinc-200 rounded-lg mb-3"
+                                    value={attentionReason}
+                                    onChange={(e) => setAttentionReason(e.target.value)}
+                                  >
+                                    <option value="Falta de informação">Falta de informação</option>
+                                    <option value="Não respondeu">Não respondeu</option>
+                                    <option value="Não entendeu o cliente">Não entendeu o cliente</option>
+                                    <option value="Parou de responder">Parou de responder</option>
+                                    <option value="Outro problema técnico">Outro problema técnico</option>
+                                  </select>
+                                  <Textarea
+                                    placeholder="Observação (opcional)"
+                                    className="text-sm min-h-[60px] mb-3"
+                                    value={attentionObs}
+                                    onChange={(e) => setAttentionObs(e.target.value)}
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <Button size="sm" variant="ghost" onClick={() => setAttentionOpen(false)}>Cancelar</Button>
+                                    <Button size="sm" onClick={handleFlagAttention} className="bg-orange-500 hover:bg-orange-600 text-white">Salvar Flag</Button>
+                                  </div>
                                 </div>
                               )}
                             </div>
-                          </div>
-                        );
-                      })()}
+
+                            <Button
+                              size="sm"
+                              onClick={() => handleCloseChat(selectedChat.id)}
+                              className="h-8 text-xs font-semibold bg-red-600 text-white hover:bg-red-700 shadow-sm"
+                            >
+                              Encerrar
+                            </Button>
+                          </>
+                        )}
+
+                        {/* Visualização da Aba Atenção */}
+                        {activeTab === "atencao" && (
+                          <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200 ml-2">
+                            👁 Somente Leitura
+                          </span>
+                        )}
+
+                        {/* Ações e Tags da Aba Arquivados */}
+                        {activeTab === "arquivados" && (() => {
+                          const CLOSE_REASONS = [
+                            { value: "sem_resposta", label: "Não respondeu mais", color: "#6b7280" },
+                            { value: "venda_fechada", label: "Venda fechada", color: "#16a34a" },
+                            { value: "venda_cancelada", label: "Venda cancelada", color: "#dc2626" },
+                            { value: "atendimento_concluido", label: "Atendimento concluído", color: "#2563eb" },
+                            { value: "problema_tecnico", label: "Problema técnico", color: "#d97706" },
+                            { value: "outro", label: "Outro", color: "#7c3aed" },
+                          ];
+                          const currentReason = (selectedChat as any).closeReason;
+                          const reasonObj = CLOSE_REASONS.find(r => r.value === currentReason);
+                          return (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {reasonObj ? (
+                                <span className="px-3 py-1.5 rounded-lg text-xs font-semibold border" style={{ background: `${reasonObj.color}15`, color: reasonObj.color, borderColor: `${reasonObj.color}40` }}>
+                                  📝 {reasonObj.label}
+                                </span>
+                              ) : null}
+                              
+                              <div className="relative">
+                                <button
+                                  id={`close-reason-btn-${selectedChat.id}`}
+                                  onClick={() => setCloseReasonOpen(closeReasonOpen === selectedChat.id ? null : selectedChat.id)}
+                                  className="h-8 px-3 rounded-lg text-xs font-semibold bg-white border border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 transition-all flex items-center gap-1 shadow-sm"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                  {currentReason ? "Alterar motivo" : "Definir motivo"}
+                                </button>
+                                {closeReasonOpen === selectedChat.id && (
+                                  <div className="absolute right-0 top-full mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 py-1 min-w-[200px]">
+                                    {CLOSE_REASONS.map(r => (
+                                      <button
+                                        key={r.value}
+                                        disabled={closeReasonSaving}
+                                        onClick={async () => {
+                                          setCloseReasonSaving(true);
+                                          try {
+                                            await fetch(`/api/livechat/chats/${selectedChat.id}/close-reason`, {
+                                              method: "PATCH",
+                                              headers: { "Content-Type": "application/json" },
+                                              credentials: "include",
+                                              body: JSON.stringify({ reason: r.value }),
+                                            });
+                                            setChats(prev => prev.map(c => c.id === selectedChat.id ? { ...c, closeReason: r.value } as any : c));
+                                            setSelectedChat(prev => prev ? { ...prev, closeReason: r.value } as any : prev);
+                                            toast({ description: "Motivo salvo com sucesso!" });
+                                          } catch {
+                                            toast({ description: "Erro ao salvar motivo.", variant: "destructive" });
+                                          } finally {
+                                            setCloseReasonSaving(false);
+                                            setCloseReasonOpen(null);
+                                          }
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-xs hover:bg-zinc-50 transition-colors flex items-center gap-2"
+                                      >
+                                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: r.color }} />
+                                        {r.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
 
