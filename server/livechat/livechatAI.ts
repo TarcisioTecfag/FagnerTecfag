@@ -113,6 +113,14 @@ const PECAS_PATTERNS: RegExp[] = [
 // Máquinas: detecção de intenção de orçamento/cotação de máquinas grandes ou indisponíveis
 // ATENÇÃO: NÃO entra em máquinas se for pós-venda (defeito, garantia) — pos_venda tem prioridade
 const MAQUINAS_PATTERNS: RegExp[] = [
+  // ── Detecção PRECOCE por nome direto da máquina (sem precisar de "orçamento") ──
+  // Captura logo na primeira mensagem quando o cliente menciona o tipo da máquina.
+  // Exemplos: "Envasadora manual", "seladora", "dosadora automática", "A-03"
+  /\b(envasadora|dosadora|seladora|rotuladora|embaladora|fardadora|lacrador[ae]?|tampadora|ensacador[ae]?|enchedora|pesadora|empacotadora|capsuladora)\b/i,
+  // Modelos numéricos comuns da Tecfag (AR, A-, B, PP + número)
+  /\b(ar-?\d+|a-\d+|b\d{2,}|pp-?\d*)\b/i,
+
+  // ── Detecção por intenção explícita de cotação/compra ──
   /or[çc]amento.{0,25}(m[aá]quina|equipamento|seladora|envasadora|dosadora|rotul)/i,
   /cota[çc][aã]o.{0,25}(m[aá]quina|equipamento|seladora|envasadora|dosadora|rotul)/i,
   /pre[çc]o.{0,20}(m[aá]quina|equipamento|seladora|envasadora|dosadora|rotul)/i,

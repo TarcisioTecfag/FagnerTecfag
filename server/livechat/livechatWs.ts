@@ -981,10 +981,23 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
             if (!chat) break; // Falha na criação — abortar
 
-            // SEMPRE mover para em_atendimento quando visitante envia mensagem
+            // Mover para em_atendimento APENAS se o visitante não está já em um stage
+            // final/protegido. Isso evita que mensagens pós-conclusão (ex: "obrigado", "👍")
+            // destruam o card já finalizado ao resetar o stage.
+            // Exemplo: João confirmou os dados (→ maquinas) e depois mandou "Eu que agradeço"
+            // → sem esta proteção, ele voltaria para em_atendimento → sem_resposta.
             try {
-              await lcStorage.updateVisitorPipeline(visitorId, "em_atendimento");
-              broadcastPipelineUpdate(visitorId, "em_atendimento");
+              const FINAL_STAGES = [
+                'maquinas', 'pecas', 'pos_venda',
+                'finalizado_com_venda', 'finalizado_sem_venda',
+                'sem_resposta', 'outros', 'vendido',
+              ];
+              const currentVisitorStage = (await lcStorage.getVisitorById(visitorId))?.pipelineStage ?? '';
+              if (!FINAL_STAGES.includes(currentVisitorStage)) {
+                await lcStorage.updateVisitorPipeline(visitorId, "em_atendimento");
+                broadcastPipelineUpdate(visitorId, "em_atendimento");
+              }
+              // Se já está em stage final, mantém onde está — nova mensagem não reseta o card
             } catch {}
 
             // chatId não precisa ser armazenado na conexão — é obtido via storage quando necessário
@@ -2398,7 +2411,17 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     startFollowUpTimers(currentVisitorId, chat.id);
                   }
                 } catch {
-                  startFollowUpTimers(currentVisitorId, chat.id);
+                  // Fallback seguro: verificar stage antes de iniciar timer
+                  // (nunca iniciar follow-up para stages finais mesmo em caso de exceção)
+                  try {
+                    const vFallback = await lcStorage.getVisitorById(currentVisitorId);
+                    const SAFE_STAGES = ['maquinas','pecas','pos_venda','outros','finalizado_com_venda','finalizado_sem_venda','sem_resposta','vendido'];
+                    if (SAFE_STAGES.includes(vFallback?.pipelineStage ?? '')) {
+                      clearFollowUpTimers(currentVisitorId);
+                    } else {
+                      startFollowUpTimers(currentVisitorId, chat.id);
+                    }
+                  } catch { /* sem-op — melhor não iniciar timer do que crashar */ }
                 } finally {
                   // SEMPRE libera o lock ao terminar — mesmo em exceção — para não bloquear msgs futuras
                   chatsBeingProcessed.delete(chat.id);
