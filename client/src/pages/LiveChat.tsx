@@ -270,12 +270,12 @@ function formatTextWithLinks(text: string) {
 
 // ─── Admin Product Card (igual ao widget, mas adaptado para fundo escuro/claro) ─
 function AdminProductCard({ url, isAgentMsg }: { url: string; isAgentMsg: boolean }) {
-  const [meta, setMeta] = React.useState<{ title: string; image: string } | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [meta, setMeta] = useState<{ title: string; image: string } | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const BACKEND = (import.meta.env.VITE_BACKEND_URL || "https://fagnertecfag-production.up.railway.app").replace(/\/$/, "");
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false;
     const segments = url.split("/").filter(Boolean);
     let slug = segments.pop() || "";
