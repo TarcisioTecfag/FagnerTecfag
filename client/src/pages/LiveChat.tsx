@@ -2165,7 +2165,7 @@ function LiveChat() {
                               <Button
                                 size="sm"
                                 onClick={() => handleTakeOver(selectedChat.id)}
-                                className="h-8 text-xs font-semibold shadow-sm text-amber-900 bg-amber-400 hover:bg-amber-500"
+                                className="h-8 text-xs font-semibold shadow-sm text-white bg-red-600 hover:bg-red-700"
                               >
                                 <User className="w-3.5 h-3.5 mr-1.5" />
                                 Assumir Conversa
@@ -2174,7 +2174,7 @@ function LiveChat() {
                               <Button
                                 size="sm"
                                 onClick={() => handleReturnToAI(selectedChat.id)}
-                                className="h-8 text-xs font-semibold shadow-sm text-emerald-900 bg-emerald-400 hover:bg-emerald-500"
+                                className="h-8 text-xs font-semibold shadow-sm text-zinc-900 bg-zinc-200 hover:bg-zinc-300"
                               >
                                 <Bot className="w-3.5 h-3.5 mr-1.5" />
                                 Ativar Fagner
@@ -2240,15 +2240,15 @@ function LiveChat() {
                             }}
                             className={`h-8 text-xs transition-colors border ${
                               crmSyncState === 'loading'
-                                ? 'border-purple-200 text-purple-600 bg-purple-50 cursor-wait'
+                                ? 'border-red-200 text-red-600 bg-red-50 cursor-wait'
                                 : crmSyncState === 'success'
-                                ? 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                                : 'border-purple-200 text-purple-700 hover:bg-purple-50'
+                                ? 'border-zinc-200 text-zinc-700 bg-zinc-50 hover:bg-zinc-100'
+                                : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'
                             }`}
                             title="Gera relatório com IA e cria o card no RD CRM"
                           >
                             {crmSyncState === 'loading' ? (
-                              <><span className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin mr-1.5" /> Enviando...</>
+                              <><span className="w-3 h-3 rounded-full border-2 border-red-500 border-t-transparent animate-spin mr-1.5" /> Enviando...</>
                             ) : crmSyncState === 'success' ? (
                               <>✅ Sincronizado!</>
                             ) : (
@@ -2265,7 +2265,7 @@ function LiveChat() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => setAttentionOpen(!attentionOpen)}
-                                className="h-8 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
+                                className="h-8 text-xs border-zinc-200 text-zinc-700 hover:bg-zinc-50"
                               >
                                 🚨 Flag
                               </Button>
@@ -2292,7 +2292,7 @@ function LiveChat() {
                                   />
                                   <div className="flex justify-end gap-2">
                                     <Button size="sm" variant="ghost" onClick={() => setAttentionOpen(false)}>Cancelar</Button>
-                                    <Button size="sm" onClick={handleFlagAttention} className="bg-orange-500 hover:bg-orange-600 text-white">Salvar Flag</Button>
+                                    <Button size="sm" onClick={handleFlagAttention} className="bg-red-600 hover:bg-red-700 text-white">Salvar Flag</Button>
                                   </div>
                                 </div>
                               )}

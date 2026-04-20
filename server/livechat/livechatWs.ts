@@ -1290,12 +1290,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     broadcastToAgents({ type: "CHAT_MESSAGE", chatId: chat.id, visitorId: currentVisitorId, sender: "ai", content: rawReply, timestamp: new Date().toISOString() });
                     // ⚠️ NÃO envia nenhuma mensagem ao visitante — silêncio total para o cliente.
                     // O admin vê o log técnico no painel como "Log Oculto (Sistema)".
-                    
-                    // Só inicia follow-up se não estiver em estágio final
-                    const chatStatus = await lcStorage.getChatById(chat.id);
-                    if (chatStatus?.status !== "closed") {
-                      startFollowUpTimers(currentVisitorId, chat.id);
-                    }
+                    // ⚠️ NÃO inicia timer de follow-up: o silêncio foi causado por falha do sistema,
+                    // não por inatividade real do visitante. Disparar "Opa, você ainda está aí?"
+                    // após um erro de API é incorreto e confunde o cliente.
                     break;
                   }
 
