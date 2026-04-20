@@ -303,11 +303,51 @@ app.get("/api/proxy-meta", async (req, res) => {
     const ogTitle = extractOg("og:title")
                    || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim()
                    || "";
-    const ogImage = extractOg("og:image");
+    let ogImage = extractOg("og:image");
+
+    // Normaliza URLs protocol-relative (//cdn.exemplo.com/img.jpg → https://...)
+    if (ogImage.startsWith("//")) ogImage = "https:" + ogImage;
+    // Normaliza URLs relativas
+    if (ogImage.startsWith("/") && !ogImage.startsWith("//")) {
+      const origin = new URL(url).origin;
+      ogImage = origin + ogImage;
+    }
 
     return res.json({ title: ogTitle.trim(), image: ogImage.trim(), url });
   } catch {
     return res.json({ title: "", image: "", url });
+  }
+});
+
+// ─── Proxy Image — serve imagens externas pelo backend (contorna hotlink/CORS) ─
+// Usado pelo ProductCard do widget: evita bloqueio de imagens VTEX/CDN no iframe
+app.get("/api/proxy-image", async (req, res) => {
+  const imageUrl = req.query.url as string;
+  if (!imageUrl || !imageUrl.startsWith("http")) {
+    return res.status(400).send("URL inválida");
+  }
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const imgRes = await fetch(imageUrl, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "image/webp,image/avif,image/*,*/*;q=0.8",
+        "Referer": "https://www.tecfag.com.br/",
+      },
+    });
+    clearTimeout(timeout);
+    if (!imgRes.ok) return res.status(imgRes.status).send("Falha ao buscar imagem");
+
+    const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    return res.send(buffer);
+  } catch {
+    return res.status(500).send("Erro ao buscar imagem");
   }
 });
 

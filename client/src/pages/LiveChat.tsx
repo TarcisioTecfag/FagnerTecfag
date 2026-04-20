@@ -268,7 +268,78 @@ function formatTextWithLinks(text: string) {
   });
 }
 
-function renderMessageContent(text: string) {
+// ─── Admin Product Card (igual ao widget, mas adaptado para fundo escuro/claro) ─
+function AdminProductCard({ url, isAgentMsg }: { url: string; isAgentMsg: boolean }) {
+  const [meta, setMeta] = React.useState<{ title: string; image: string } | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  const BACKEND = (import.meta.env.VITE_BACKEND_URL || "https://fagnertecfag-production.up.railway.app").replace(/\/$/, "");
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const segments = url.split("/").filter(Boolean);
+    let slug = segments.pop() || "";
+    if (slug.toLowerCase() === "p" && segments.length > 0) slug = segments.pop() || slug;
+    const fallbackTitle = slug.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()).replace(/\.html?$/, "");
+    (async () => {
+      try {
+        const res = await fetch(`${BACKEND}/api/proxy-meta?url=${encodeURIComponent(url)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setMeta({ title: data.title || fallbackTitle, image: data.image || "" });
+        } else {
+          if (!cancelled) setMeta({ title: fallbackTitle, image: "" });
+        }
+      } catch {
+        if (!cancelled) setMeta({ title: fallbackTitle, image: "" });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [url]);
+
+  if (loading) {
+    return (
+      <div className="mt-2 rounded-xl border border-white/20 bg-white/10 p-3 animate-pulse w-full max-w-[260px]">
+        <div className="h-20 bg-white/10 rounded-lg mb-2" />
+        <div className="h-3 bg-white/10 rounded w-3/4" />
+      </div>
+    );
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-2 block rounded-xl overflow-hidden border border-white/20 bg-white/10 hover:bg-white/15 transition-all hover:scale-[1.01] no-underline w-full max-w-[260px]"
+      style={{ textDecoration: "none" }}
+    >
+      {meta?.image && (
+        <div className="w-full h-24 overflow-hidden bg-white">
+          <img
+            src={`${BACKEND}/api/proxy-image?url=${encodeURIComponent(meta.image)}`}
+            alt={meta?.title || "Produto"}
+            className="w-full h-full object-contain p-1"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        </div>
+      )}
+      <div className="px-3 py-2 flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold truncate text-white">{meta?.title || "Produto Tecfag"}</p>
+          <p className="text-[10px] text-white/60 mt-0.5">tecfag.com.br</p>
+        </div>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.75)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </div>
+    </a>
+  );
+}
+
+function renderMessageContent(text: string, isAgentMsg = false) {
   if (!text) return null;
 
   // ── Detecta mensagem de áudio do operador: [AUDIO:url] ──────────────────────
@@ -288,37 +359,67 @@ function renderMessageContent(text: string) {
     );
   }
 
-  const anexoRegex = /\[Anexo_Cliente:\s*(.+?)\]/g;
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match;
-
-  // URL base do backend Railway — resolve URLs relativas /uploads/
   const BACKEND = (import.meta.env.VITE_BACKEND_URL || "https://fagnertecfag-production.up.railway.app").replace(/\/$/, "");
 
-  while ((match = anexoRegex.exec(text)) !== null) {
+  // ── Regex de detecção ──────────────────────────────────────────────────────
+  const TECFAG_URL_REGEX = /https?:\/\/(?:www\.)?tecfag\.com\.br\/[^\s)]+/gi;
+  const PDF_URL_REGEX = /https?:\/\/[^\s)]+\.pdf(?:\?[^\s)]*)? /gi;
+  const BACKEND_PDF_REGEX = /\/uploads\/[^\s)]+\.pdf/gi;
+  const ANEXO_REGEX = /\[Anexo_Cliente:\s*(.+?)\]/g;
+
+  // Extrai rich embeds da mensagem (igual ao widget)
+  const productUrls: string[] = [];
+  const pdfUrls: { url: string; title: string }[] = [];
+  let processedText = text;
+
+  if (isAgentMsg) {
+    // Produto Tecfag
+    const productMatches = Array.from(text.matchAll(new RegExp(TECFAG_URL_REGEX.source, "gi")));
+    for (const m of productMatches) {
+      const u = m[0];
+      if (!u.toLowerCase().endsWith(".pdf") && !u.includes("/checkout?")) {
+        productUrls.push(u);
+        processedText = processedText.replace(u, "").trim();
+      }
+    }
+    // PDF links
+    const pdfMatches = Array.from(processedText.matchAll(new RegExp(PDF_URL_REGEX.source, "gi")));
+    for (const m of pdfMatches) {
+      const u = m[0];
+      pdfUrls.push({ url: u, title: u.split("/").pop()?.split("?")[0] || "Manual.pdf" });
+      processedText = processedText.replace(u, "").trim();
+    }
+  }
+
+  // Anexos do cliente ([Anexo_Cliente: url])
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const anexoRegex = new RegExp(ANEXO_REGEX.source, "g");
+
+  // Limpa texto de tags internas antes de exibir
+  const INTERNAL_TAG_REGEX = /\[(?:PRODUTO_IDENTIFICADO|PRODUCT_IDENTIFIED|SCORE|OUTCOME|STAGE|VTEX_PEDIDO_INICIADO|VTEX_ORDER_DADOS|VTEX_CHECKOUT_REQUEST|MAQUINAS_DADOS|POS_VENDA_DADOS|PECAS_DADOS|CNPJ_CHECK|CNPJ_RESULT|LOG_OCULTO)[^\]]*\]/gi;
+  const displayText = processedText.replace(INTERNAL_TAG_REGEX, "").replace(/\s{2,}/g, " ").trim();
+
+  while ((match = anexoRegex.exec(displayText)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(<span key={lastIndex}>{formatTextWithLinks(text.substring(lastIndex, match.index))}</span>);
+      parts.push(<span key={lastIndex}>{formatTextWithLinks(displayText.substring(lastIndex, match.index))}</span>);
     }
-    let url = match[1].trim();
-    // Corrige URL relativa para apontar para o backend Railway (não para o Vercel)
-    if (url.startsWith("/uploads/")) {
-      url = `${BACKEND}${url}`;
-    }
-    const isImage = /\.(jpeg|jpg|gif|png|webp|svg|heic)$/i.test(url) || url.startsWith('data:image/');
-    
+    let attachUrl = match[1].trim();
+    if (attachUrl.startsWith("/uploads/")) attachUrl = `${BACKEND}${attachUrl}`;
+    const isImage = /\.(jpeg|jpg|gif|png|webp|svg|heic)$/i.test(attachUrl) || attachUrl.startsWith("data:image/");
     if (isImage) {
       parts.push(
         <div key={`anexo-${match.index}`} className="mt-2 mb-2 max-w-[280px] rounded-lg overflow-hidden border border-zinc-200 shadow-sm bg-white">
-          <a href={url} target="_blank" rel="noopener noreferrer" className="block p-1">
-             <img src={url} alt="Anexo do Cliente" className="w-full h-auto max-h-[220px] object-scale-down rounded hover:opacity-90 transition-opacity" />
+          <a href={attachUrl} target="_blank" rel="noopener noreferrer" className="block p-1">
+            <img src={attachUrl} alt="Anexo do Cliente" className="w-full h-auto max-h-[220px] object-scale-down rounded hover:opacity-90 transition-opacity" />
           </a>
         </div>
       );
     } else {
       parts.push(
         <div key={`anexo-${match.index}`} className="block">
-          <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 mt-2 mb-2 px-3 py-2 bg-zinc-100 text-zinc-700 rounded-lg text-xs font-semibold hover:bg-zinc-200 border border-zinc-200 shadow-sm transition-all hover:-translate-y-0.5">
+          <a href={attachUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 mt-2 mb-2 px-3 py-2 bg-zinc-100 text-zinc-700 rounded-lg text-xs font-semibold hover:bg-zinc-200 border border-zinc-200 shadow-sm transition-all hover:-translate-y-0.5">
             📎 Abrir Anexo (PDF/Outros)
           </a>
         </div>
@@ -326,10 +427,28 @@ function renderMessageContent(text: string) {
     }
     lastIndex = match.index + match[0].length;
   }
-  
-  if (lastIndex < text.length) {
-    parts.push(<span key={lastIndex}>{formatTextWithLinks(text.substring(lastIndex))}</span>);
+
+  if (lastIndex < displayText.length) {
+    parts.push(<span key={lastIndex}>{formatTextWithLinks(displayText.substring(lastIndex))}</span>);
   }
+
+  // Adiciona os rich cards de produto ao final
+  if (productUrls.length > 0 || pdfUrls.length > 0) {
+    parts.push(
+      <div key="rich-embeds" className="flex flex-col gap-2 mt-1">
+        {productUrls.map((u, i) => (
+          <AdminProductCard key={`prod-${i}`} url={u} isAgentMsg={isAgentMsg} />
+        ))}
+        {pdfUrls.map((p, i) => (
+          <a key={`pdf-${i}`} href={p.url} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 mt-1 px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-xs text-white font-semibold no-underline hover:bg-white/15 transition max-w-[260px]">
+            📄 {p.title}
+          </a>
+        ))}
+      </div>
+    );
+  }
+
   return parts;
 }
 
@@ -2380,7 +2499,7 @@ function LiveChat() {
                                       </button>
                                       {isExpanded && (
                                         <div className="mt-2 p-2 bg-zinc-50/10 border border-zinc-200/20 rounded text-[11px] font-mono text-current max-h-64 overflow-y-auto block whitespace-pre-wrap">
-                                          {renderMessageContent(msg.content)}
+                                          {renderMessageContent(msg.content, false)}
                                         </div>
                                       )}
                                     </div>
@@ -2388,7 +2507,7 @@ function LiveChat() {
                                 }
                                 // Não mostra nada se não tem texto (é só attachment)
                                 if (!msg.content?.trim()) return null;
-                                return renderMessageContent(msg.content);
+                                return renderMessageContent(msg.content, !isVisitor);
                               })()}
                             </div>
                           </div>
