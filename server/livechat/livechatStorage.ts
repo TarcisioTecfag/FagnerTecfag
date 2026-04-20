@@ -532,6 +532,11 @@ export const lcStorage = {
   },
 
   async updatePageview(id: string, data: { scrollDepth?: number; timeSpent?: number; intentTag?: string }): Promise<void> {
+    // 1. Busca o pageview para saber o visitorId e o timeSpent anterior
+    const [pv] = await db.select({ visitorId: lcPageviews.visitorId, prevTime: lcPageviews.timeSpent })
+      .from(lcPageviews).where(eq(lcPageviews.id, id)).limit(1);
+
+    // 2. Atualiza o pageview em si
     await db.update(lcPageviews)
       .set({
         scrollDepth: data.scrollDepth ?? undefined,
@@ -539,6 +544,19 @@ export const lcStorage = {
         ...(data.intentTag !== undefined ? { intentTag: data.intentTag } as any : {}),
       })
       .where(eq(lcPageviews.id, id));
+
+    // 3. Atualiza totalTimeSeconds no visitor: incrementa a diferença
+    if (pv && typeof data.timeSpent === 'number') {
+      const prev = pv.prevTime ?? 0;
+      const delta = data.timeSpent - prev; // pode ser 0 ou positivo
+      if (delta > 0) {
+        await db.execute(sql`
+          UPDATE lc_visitors
+          SET "totalTimeSeconds" = COALESCE("totalTimeSeconds", 0) + ${delta}
+          WHERE id = ${pv.visitorId}
+        `);
+      }
+    }
   },
 
   async listPageviewsByVisitor(visitorId: string, limit = 1000): Promise<LcPageview[]> {
@@ -636,7 +654,7 @@ export const lcStorage = {
       .where(eq(lcChats.id, id));
   },
 
-  async listChats(status?: string, limit = 50): Promise<LcChat[]> {
+  async listChats(status?: string, limit = 1000): Promise<LcChat[]> {
     if (status) {
       return db.select().from(lcChats)
         .where(eq(lcChats.status, status))
@@ -1642,6 +1660,8 @@ export async function ensureLiveChatSchema(): Promise<void> {
     ['lc_pageviews', '"intentTag" TEXT'],
     ['lc_pageviews', '"timeSpent" INTEGER'],
     ['lc_pageviews', '"scrollDepth" INTEGER'],
+    // Acumulador de tempo total do visitante no site (soma dos timeSpent dos pageviews)
+    ['lc_visitors', '"totalTimeSeconds" INTEGER NOT NULL DEFAULT 0'],
   ];
 
   // Cria tabela de click events se não existir

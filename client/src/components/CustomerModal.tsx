@@ -54,6 +54,8 @@ export interface VisitorForModal {
   maquinaDesejada?: string | null;
   // Link para CRM
   rdCrmDealId?: string | null;
+  // Tempo acumulado total no site (em segundos) — calculado via PAGEVIEW_UPDATE
+  totalTimeSeconds?: number | null;
 }
 
 export interface PageviewForModal {
@@ -222,8 +224,10 @@ export function CustomerModal({
   const scoreHighlight: "red" | "amber" | "emerald" | undefined =
     intentScore >= 60 ? "emerald" : intentScore >= 30 ? "amber" : intentScore >= 1 ? undefined : undefined;
 
-  // Tempo total na sessão (soma do timeSpent de todos os pageviews)
-  const totalSessionSeconds = pageviews.reduce((acc, pv) => acc + (pv.timeSpent ?? 0), 0);
+  // Tempo total: usa o acumulador do visitor (atualizado em tempo real) como fonte primária.
+  // Fallback: soma dos pageviews (quando abertos individualmente pelo modal de navegação).
+  const pvSeconds = pageviews.reduce((acc, pv) => acc + (pv.timeSpent ?? 0), 0);
+  const totalSessionSeconds = visitor.totalTimeSeconds ?? pvSeconds;
   const totalSessionTime = totalSessionSeconds > 0 ? fmtTime(totalSessionSeconds) : "--";
 
   // Funnel / Pipeline label

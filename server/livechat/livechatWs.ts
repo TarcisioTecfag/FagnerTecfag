@@ -2413,7 +2413,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             // Sem limite de 200 — o site pode ter milhares de acessos
             const [visitors, chats, stats] = await Promise.all([
               lcStorage.listAllVisitors(),
-              lcStorage.listChats(undefined, 100),
+              lcStorage.listChats(undefined, 1000),
               lcStorage.getStats(),
             ]);
 

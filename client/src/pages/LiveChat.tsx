@@ -608,7 +608,12 @@ function LiveChat() {
         fetch("/api/livechat/visitors/all", { credentials: "include" }),
         fetch("/api/livechat/pipeline", { credentials: "include" }),
       ]);
-      if (chatsRes.ok) setChats(await chatsRes.json());
+      if (chatsRes.ok) {
+        const freshChats: Chat[] = await chatsRes.json();
+        // 🛡️ Merge inteligente: nunca sobrescrever se já temos mais chats carregados.
+        // O polling de 15s não deve apagar o que o usuário já expandiu via "Mostrar mais".
+        setChats(prev => freshChats.length >= prev.length ? freshChats : prev);
+      }
       if (statsRes.ok) setStats(await statsRes.json());
       if (allVisitorsRes.ok) {
         const allV = await allVisitorsRes.json();
@@ -2858,7 +2863,7 @@ function LiveChat() {
                   </div>
 
                   {identifiedExpanded && (
-                    <div className="flex-none max-h-[40%] overflow-y-auto p-4 bg-blue-50/10 border-t border-blue-100/50">
+                    <div className="flex-1 overflow-y-auto p-4 bg-blue-50/10 border-t border-blue-100/50">
                       {identifiedVisitors.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-8 text-zinc-400">
                           <User className="w-8 h-8 mb-2 opacity-20" />
@@ -3335,8 +3340,8 @@ function LiveChat() {
                   </div>
 
                   {/* Col: Sobre o Cliente + dados por fluxo (scroll único) */}
-                  <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden" style={{ background: "rgba(139,92,246,0.03)" }}>
-                    <p className="text-[10px] font-bold uppercase tracking-wider mb-3 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#8b5cf6" }}>
+                  <div className="w-[220px] flex-shrink-0 border-r border-zinc-100 p-4 flex flex-col overflow-hidden" style={{ background: "rgba(217,119,6,0.03)" }}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider mb-3 flex-shrink-0 flex items-center gap-1.5" style={{ color: "#d97706" }}>
                       👤 Sobre o cliente
                     </p>
                     {/* scroll único para todos os campos */}
@@ -3348,8 +3353,8 @@ function LiveChat() {
                         { label: "E-mail de suporte", value: selectedVisitor.posVendaEmail, icon: "✉️" },
                         { label: "CPF / CNPJ", value: selectedVisitor.posVendaCnpjCpf, icon: "🪪" },
                       ].map(f => (
-                        <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
-                          <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
+                        <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-amber-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
+                          <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: '#d97706' }}>{f.icon} {f.label}</p>
                           <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
                             {f.value || "Aguardando"}
                           </p>
@@ -3361,7 +3366,7 @@ function LiveChat() {
                         <>
                           <div className="pt-1 pb-0.5">
                             <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#8b5cf6' }}>
-                              Pos Venda
+                              Pós Venda
                             </p>
                           </div>
                           {[
@@ -3369,7 +3374,7 @@ function LiveChat() {
                             { label: 'Nota do pedido', value: selectedVisitor.posVendaNotaPedido, icon: '📄' },
                           ].map(f => (
                             <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
-                              <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
+                              <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: '#8b5cf6' }}>{f.icon} {f.label}</p>
                               <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
                                 {f.value || 'Aguardando'}
                               </p>
@@ -3382,16 +3387,16 @@ function LiveChat() {
                       {(selectedVisitor.pipelineStage === 'pecas' || selectedVisitor.pecaDesejada) && (
                         <>
                           <div className="pt-1 pb-0.5">
-                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#8b5cf6' }}>
-                              🔧 Pecas
+                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#b45309' }}>
+                              🔧 Peças
                             </p>
                           </div>
                           {[
                             { label: 'Peca desejada', value: selectedVisitor.pecaDesejada, icon: '🔧' },
-                            { label: 'E cliente Tecfag?', value: selectedVisitor.pecasECliente, icon: '✅' },
+                            { label: 'É cliente Tecfag?', value: selectedVisitor.pecasECliente, icon: '✅' },
                           ].map(f => (
-                            <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-purple-100/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
-                              <p className="text-[9px] text-purple-400 font-semibold uppercase tracking-wide mb-0.5">{f.icon} {f.label}</p>
+                            <div key={f.label} className={`p-2 rounded-lg border shadow-sm ${f.value ? 'bg-white border-amber-200/60' : 'bg-zinc-50 border-zinc-100/60 opacity-70'}`}>
+                              <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: '#b45309' }}>{f.icon} {f.label}</p>
                               <p className={`text-[11px] font-semibold break-all leading-snug ${f.value ? 'text-zinc-700' : 'text-zinc-400 italic'}`}>
                                 {f.value || 'Aguardando'}
                               </p>
