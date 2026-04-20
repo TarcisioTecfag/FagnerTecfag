@@ -3481,11 +3481,13 @@ function LiveChat() {
                       ))}
 
                       {/* Pós Venda — campos específicos */}
-                      {(selectedVisitor.pipelineStage === 'pos_venda' || selectedVisitor.posVendaProblema || selectedVisitor.posVendaNotaPedido) && (
+                      {/* Exibe se tiver QUALQUER dado, independente do stage atual */}
+                      {(selectedVisitor.posVendaProblema || selectedVisitor.posVendaNotaPedido) && (
                         <>
                           <div className="pt-1 pb-0.5">
                             <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#8b5cf6' }}>
                               Pós Venda
+                              {selectedVisitor.pipelineStage === 'pos_venda' && <span className="text-[8px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded ml-1">atual</span>}
                             </p>
                           </div>
                           {[
@@ -3503,11 +3505,13 @@ function LiveChat() {
                       )}
 
                       {/* Pecas - campos especificos */}
-                      {(selectedVisitor.pipelineStage === 'pecas' || selectedVisitor.pecaDesejada) && (
+                      {/* Exibe se tiver QUALQUER dado, independente do stage atual */}
+                      {(selectedVisitor.pecaDesejada || selectedVisitor.pecasECliente) && (
                         <>
                           <div className="pt-1 pb-0.5">
                             <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#b45309' }}>
                               🔧 Peças
+                              {selectedVisitor.pipelineStage === 'pecas' && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded ml-1">atual</span>}
                             </p>
                           </div>
                           {[
@@ -3525,10 +3529,13 @@ function LiveChat() {
                       )}
 
                       {/* Maquinas - campos especificos */}
-                      {(selectedVisitor.pipelineStage === 'maquinas' || selectedVisitor.maqProdutoFabricado) && (
+                      {/* Exibe se tiver QUALQUER dado, independente do stage atual */}
+                      {(selectedVisitor.maqProdutoFabricado || selectedVisitor.maqVolumeProducao || selectedVisitor.maqQualificacaoSDR || selectedVisitor.maqClienteNovo) && (
                         <>
                           <div className="pt-1 pb-0.5">
-                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#ea580c' }}>⚩️ Máquinas</p>
+                            <p className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#ea580c' }}>⚩️ Máquinas
+                              {selectedVisitor.pipelineStage === 'maquinas' && <span className="text-[8px] bg-orange-100 text-orange-600 px-1 py-0.5 rounded ml-1">atual</span>}
+                            </p>
                           </div>
                           {[
                             { label: 'Produto fabricado', value: selectedVisitor.maqProdutoFabricado, icon: '🏭' },

@@ -1780,6 +1780,15 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     });
                     console.log(`[LiveChat] Dados de máquinas salvos e broadcast feito para visitante ${currentVisitorId}`);
 
+                    // FIX: Fecha o chat IMEDIATAMENTE após salvar os dados da máquina,
+                    // sem esperar a criação do deal no RD CRM (que pode demorar 10-30s).
+                    // Isso garante que o card sai de "Em Atendimento" no dashboard em tempo real.
+                    clearFollowUpTimers(currentVisitorId);
+                    await lcStorage.setChatCloseReason(chat.id, "atendimento_concluido").catch(() => {});
+                    await lcStorage.closeChat(chat.id).catch(() => {});
+                    broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id, visitorId: currentVisitorId });
+                    console.log(`[LiveChat] Chat ${chat.id} fechado imediatamente após [MAQUINAS_DADOS] — aguardando criação do deal no RD CRM em background.`);
+
                     // CNPJ data — tenta carregar do cache do banco primeiro
                     if (maqData.cnpjCpf) {
                       const cv = await lcStorage.getVisitorById(currentVisitorId);
@@ -1926,10 +1935,8 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                           );
                           // Salva o dealId no visitor para contabilizar no funil "Lead no CRM"
                           await lcStorage.setRdCrmDealId(currentVisitorId, dealId).catch(() => {});
-                          await lcStorage.setChatCloseReason(chat.id, "atendimento_concluido").catch(() => {});
-                          // FIX: Cancela follow-ups e fecha o chat após conclusão bem-sucedida do fluxo de máquinas
-                          clearFollowUpTimers(currentVisitorId);
-                          await lcStorage.closeChat(chat.id).catch(() => {});
+                          // Nota: o chat já foi fechado sincronamente antes de entrar neste bloco async.
+                          // Aqui apenas notificamos o agente sobre o card do RD CRM criado.
                           broadcastToAgents({ type: "VISITOR_NOTE_ADDED", visitorId: currentVisitorId });
                           broadcastToAgents({
                             type: "RD_CRM_OS_CREATED",
@@ -1937,8 +1944,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                             dealId,
                             dealUrl,
                           });
-                          broadcastToAgents({ type: "CHAT_CLOSED", chatId: chat.id, visitorId: currentVisitorId });
-                          console.log(`[RD CRM] ✅ Deal MÁQUINAS criado — chat ${chat.id} encerrado e follow-ups cancelados.`);
+                          console.log(`[RD CRM] ✅ Deal MÁQUINAS criado para visitante ${currentVisitorId}: ${dealId}`);
                         } catch (crmErr: any) {
                           console.error(`[RD CRM] ❌ Falha ao criar deal MÁQUINAS:`, crmErr.message);
                           await lcStorage.addVisitorNote(currentVisitorId, "RD CRM", `❌ Falha ao criar card MÁQUINAS\nMotivo: ${crmErr.message}`).catch(() => {});
@@ -2026,6 +2032,13 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                         broadcastToAgents({ type: 'VISITOR_UPDATED', visitorId: currentVisitorId, visitor: updatedFbVisitor });
                         broadcastToAgents({ type: 'VISITOR_MAQUINAS_UPDATED', visitorId: currentVisitorId, maqData: maqDataFallback });
 
+                        // FIX: Fecha o chat IMEDIATAMENTE, sem esperar o RD CRM (igual ao caminho principal)
+                        clearFollowUpTimers(currentVisitorId);
+                        await lcStorage.setChatCloseReason(chat.id, 'atendimento_concluido').catch(() => {});
+                        await lcStorage.closeChat(chat.id).catch(() => {});
+                        broadcastToAgents({ type: 'CHAT_CLOSED', chatId: chat.id, visitorId: currentVisitorId });
+                        console.log(`[LiveChat] [FALLBACK] Chat ${chat.id} fechado imediatamente — aguardando deal no RD CRM em background.`);
+
                         // Cria deal no RD CRM (mesmo fluxo do caminho normal)
                         if (isRdCrmConfigured()) {
                           // Gera nota ANTES de criar o card fallback
@@ -2066,14 +2079,10 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                               await lcStorage.addVisitorNote(currentVisitorId, 'RD CRM', `✅ [FALLBACK] Card MÁQUINAS criado!\nID: ${dealIdFb}\n${dealUrlFb}`);
                               // Salva o dealId no visitor para contabilizar no funil "Lead no CRM"
                               await lcStorage.setRdCrmDealId(currentVisitorId, dealIdFb).catch(() => {});
-                              await lcStorage.setChatCloseReason(chat.id, 'atendimento_concluido').catch(() => {});
-                              // FIX: Cancela follow-ups e fecha o chat no fallback também
-                              clearFollowUpTimers(currentVisitorId);
-                              await lcStorage.closeChat(chat.id).catch(() => {});
+                              // Nota: o chat já foi fechado antes de entrar neste bloco async.
                               broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
                               broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId: currentVisitorId, dealId: dealIdFb, dealUrl: dealUrlFb });
-                              broadcastToAgents({ type: 'CHAT_CLOSED', chatId: chat.id, visitorId: currentVisitorId });
-                              console.log(`[RD CRM] ✅ [FALLBACK] Deal MÁQUINAS criado — chat ${chat.id} encerrado.`);
+                              console.log(`[RD CRM] ✅ [FALLBACK] Deal MÁQUINAS criado para visitante ${currentVisitorId}: ${dealIdFb}`);
                             } catch (fbErr: any) {
                               console.error(`[RD CRM] ❌ [FALLBACK] Falha:`, fbErr.message);
                               await lcStorage.addVisitorNote(currentVisitorId, 'RD CRM', `❌ [FALLBACK] Falha ao criar card MÁQUINAS\n${fbErr.message}`).catch(() => {});

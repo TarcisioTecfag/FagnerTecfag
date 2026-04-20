@@ -1460,16 +1460,22 @@ export async function processVisitorMessage(
 `);
   }
 
-  // Add visitor name context (so Fagner knows who he's talking to)
-  // Se o histórico está vazio MAS o visitante já tem nome, é um retorno de sessão —
-  // o Fagner NÃO deve tratar a primeira mensagem como se fosse um cliente desconhecido.
-  if (visitorName) {
+  // Add visitor name context
+  // CRÍTICO: distinguir nickname do widget (visitorName) de nome real coletado (posVendaNome).
+  // O visitorName é o apelido que o cliente digitou no pré-chat (pode ser "bOM DIA", "teste", etc.)
+  // O posVendaNome é o nome completo coletado pelo Fagner durante o fluxo de coleta.
+  // Se só temos nickname, o Fagner DEVE perguntar o nome completo normalmente (Passo 0).
+  if (posVendaNome) {
+    // Nome real já foi coletado pelo Fagner — use diretamente sem pedir de novo
     const isReturningVisitor = session.history.length === 0;
     if (isReturningVisitor) {
-      contextParts.unshift(`## DADOS DO CLIENTE\nNome: ${visitorName}\nAVISO IMPORTANTE: Este é um cliente que JÁ CONVERSOU COM VOCÊ anteriormente. O chat atual é uma continuação (nova sessão do navegador). NÃO faça saudação de boas-vindas genérica como se fosse a primeira vez. Responda diretamente ao que ele estiver pedindo, usando o nome "${visitorName}" naturalmente. Se ele mencionar um assunto que parece continuação de conversa anterior, demonstre que se lembra do contexto.`);
+      contextParts.unshift(`## DADOS DO CLIENTE\nNome completo (coletado pelo Fagner): ${posVendaNome}\nAVISO: Este é um cliente que JÁ CONVERSOU anteriormente. Responda diretamente ao que ele pedir.`);
     } else {
-      contextParts.unshift(`## DADOS DO CLIENTE\nNome: ${visitorName}\nINSTRUÇÃO: Você JÁ SABE o nome do cliente. Use-o naturalmente quando fizer sentido, mas não force em toda frase.`);
+      contextParts.unshift(`## DADOS DO CLIENTE\nNome completo (coletado pelo Fagner): ${posVendaNome}\nINSTRUÇÃO: Você JÁ SABE o nome completo do cliente. Use-o naturalmente. NÃO peça o nome novamente.`);
     }
+  } else if (visitorName) {
+    // Só temos o nickname do widget — NÃO é um nome real coletado
+    contextParts.unshift(`## APELIDO/NICKNAME DO CLIENTE NO CHAT\nApelido: ${visitorName}\n⚠️ ATENÇÃO CRÍTICA: Este é apenas o APELIDO que o cliente digitou ao abrir o chat — NÃO é o nome completo dele.\nSe você entrar no fluxo de Máquinas, Pós Venda ou Peças, você OBRIGATORIAMENTE deve perguntar o nome completo (Passo 0 do fluxo), mesmo que já saiba o apelido.\nNUNCA use o apelido "${visitorName}" como nome real no campo "nome" dos dados coletados.`);
   }
 
   // Produto em foco (spec salvo via setProductContext no PRODUCT_INQUIRY)
