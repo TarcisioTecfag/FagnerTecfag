@@ -2127,33 +2127,6 @@ function LiveChat() {
                       </div>
                     </div>
                     <div className="flex gap-2 relative">
-                      {/* Botões Ver no CRM e Copiar — visíveis TAMBÉM na aba Arquivados */}
-                      {activeTab === "arquivados" && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              const v = allVisitors.find(x => x.id === selectedChat?.visitorId);
-                              if (v) setSelectedVisitor(v);
-                              setActiveTab("crm");
-                            }}
-                            className="h-8 text-xs gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300"
-                          >
-                            <Users className="w-3 h-3" />
-                            Ver no CRM
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleCopyHistory}
-                            className="h-8 text-xs gap-1.5 border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300"
-                            title="Copiar todo o histórico desta conversa"
-                          >
-                            📋 Copiar
-                          </Button>
-                        </>
-                      )}
 
                       {/* Botões de ação reformulados */}
                       <div className="flex items-center gap-2 flex-wrap justify-end">
