@@ -312,6 +312,7 @@ const SOURCE_NAMES = {
   CLIENTES:             'Indicação por Clientes',
   FEIRAS_EVENTOS:       'Feiras e Eventos',
   CONTATO_SITE:         'Contato pelo Site',
+  LINKTREE:             'Linktree',
   DESCONHECIDO:         'Desconhecido',
   FALLBACK:             'Referência | tecfag.com.br',
 } as const;
@@ -431,13 +432,18 @@ function resolveLeadSourceName(
     return SOURCE_NAMES.FEIRAS_EVENTOS;
   }
 
-  // ── Regra 15: Desconhecido — sem dados de origem identificáveis ───────────
+  // ── Regra 15: Linktree ────────────────────────────────────────────────────
+  if (src === 'linktree' || ref.includes('linktr.ee') || ref.includes('linktree')) {
+    return SOURCE_NAMES.LINKTREE;
+  }
+
+  // ── Regra 16: Desconhecido — sem dados de origem identificáveis ───────────
   // Nenhum UTM + nenhum referrer reconhecível = acesso direto ou dark traffic
   if (!src && !ref) {
     return SOURCE_NAMES.DESCONHECIDO;
   }
 
-  // ── Regra 16: Contato pelo Site (fallback para tudo que restou) ───────────
+  // ── Regra 17: Contato pelo Site (fallback para tudo que restou) ───────────
   // Ex: visitante que veio de um link interno, navegação direta ou fonte não mapeada
   return SOURCE_NAMES.CONTATO_SITE;
 }
@@ -939,6 +945,16 @@ async function createDeal(
 async function createNote(dealId: string, relatorio: string): Promise<void> {
   await rdRequest("POST", `/deals/${dealId}/notes`, { description: relatorio });
   console.log(`[RD CRM] Anotação criada na negociação ${dealId}`);
+}
+
+/**
+ * Adiciona uma anotação de atualização a um deal EXISTENTE no RD CRM.
+ * Usado quando o mesmo visitante solicita uma segunda máquina na mesma sessão —
+ * em vez de criar um card duplicado, registra a nova demanda como nota no card já existente.
+ */
+export async function addNoteToExistingDeal(dealId: string, nota: string): Promise<void> {
+  await rdRequest("POST", `/deals/${dealId}/notes`, { description: nota });
+  console.log(`[RD CRM] ✅ Nota de atualização adicionada ao deal existente ${dealId}`);
 }
 
 // ─── Tarefa de Ligação Imediata ───────────────────────────────────────────────
