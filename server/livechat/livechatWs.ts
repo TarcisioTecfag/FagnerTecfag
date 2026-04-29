@@ -109,18 +109,37 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
   clearFollowUpTimers(visitorId);
   const timers: FollowUpTimers = {};
 
-  // 3 minutes follow-up
+  // ── Timer de 8 min (antes: 3 min) — mais tempo para clientes consultivos ──
+  // Motivo: clientes que pedem manuais, especificações técnicas ou consultam catálogos
+  // demoram mais para responder. 3 min gerava follow-up invasivo (ex: clientes ocupados,
+  // analisando o manual recém enviado, ou em reunião). 8 min é o mínimo aceitável.
   timers.t3m = setTimeout(async () => {
     try {
       const chat = await lcStorage.getChatById(chatId);
       if (!chat || chat.status === "closed" || chat.status !== "ai_active") return;
-      
-      const msg = "Opa, você ainda está aí?";
+
+      // ── SUPRESSÃO INTELIGENTE: se o último turno da IA TERMINA em "?", o visitante
+      // está apenas PENSANDO na resposta. Follow-up seria redundante e invasivo.
+      const recentForCheck = await lcStorage.listMessagesByChat(chatId).catch(() => [] as any[]);
+      const lastAiForCheck = [...recentForCheck].reverse().find((m: any) => m.sender === 'ai');
+      const lastVisitorForCheck = [...recentForCheck].reverse().find((m: any) => m.sender === 'visitor');
+      if (lastAiForCheck && lastVisitorForCheck) {
+        const aiTs = new Date(lastAiForCheck.sentAt ?? 0).getTime();
+        const viTs = new Date(lastVisitorForCheck.sentAt ?? 0).getTime();
+        // Se o visitante respondeu DEPOIS do último AI (conversa ativa), não incomodar
+        if (viTs > aiTs) return;
+      }
+      if (lastAiForCheck?.content?.trimEnd().endsWith('?')) {
+        console.log(`[Timers] 8m follow-up suprimido — Fagner acabou de fazer uma pergunta para ${visitorId}`);
+        return;
+      }
+
+      const msg = "Opa, você ainda está aí? 😊";
       await lcStorage.createMessage({ chatId, sender: "ai", content: msg });
       sendToVisitor(visitorId, { type: "CHAT_REPLY", chatId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
       broadcastToAgents({ type: "CHAT_MESSAGE", chatId, visitorId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
-    } catch (err: any) { console.error("[Timers] 3m err:", err.message); }
-  }, 3 * 60 * 1000);
+    } catch (err: any) { console.error("[Timers] 8m err:", err.message); }
+  }, 8 * 60 * 1000);
 
   // 8 minutes follow-up
   timers.t8m = setTimeout(async () => {
@@ -336,8 +355,8 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
       await lcStorage.createMessage({ chatId, sender: "ai", content: msg });
       sendToVisitor(visitorId, { type: "CHAT_REPLY", chatId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
       broadcastToAgents({ type: "CHAT_MESSAGE", chatId, visitorId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
-    } catch (err: any) { console.error("[Timers] 8m err:", err.message); }
-  }, 8 * 60 * 1000);
+    } catch (err: any) { console.error("[Timers] 15m err:", err.message); }
+  }, 15 * 60 * 1000);
 
   // 10 minutes closure - REMOVIDO para impedir a fragmentação dos chats.
   // O chat permanecerá aberto até que o cliente saia do site (o fallback sweepOrphanedChats fechará após 90min).
@@ -1439,9 +1458,16 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 // ─── Pré-processa: garante que URLs fiquem em parágrafos próprios ─────────
                 // Também converte bullets (• linha) em parágrafos duplos para que cada
                 // campo de confirmação de dados apareça em um balão separado
+                // ⚠️ CONVERSÃO DE PATHS: /uploads/... → URL completa do backend Railway
+                // Garante que QUALQUER versão do widget (incluindo builds antigos) consiga
+                // detectar o link como PDF e renderizar o card de download corretamente.
+                const RAILWAY_BACKEND = process.env.RAILWAY_STATIC_URL
+                  || process.env.BACKEND_URL
+                  || "https://fagnertecfag-production.up.railway.app";
                 const processedReply = cleanReply
                   .replace(/(https?:\/\/[^\s)]+)/gi, "\n\n$1\n\n")
-                  .replace(/(\/uploads\/[^\s)]+)/gi, "\n\n$1\n\n")
+                  // Converte /uploads/ para URL absoluta (PDF card no widget)
+                  .replace(/(\/uploads\/[^\s)]+)/gi, `\n\n${RAILWAY_BACKEND}$1\n\n`)
                   // Cada linha de bullet "• Algo: valor" vira seu próprio parágrafo
                   .replace(/\n([•\-])/g, "\n\n$1")
                   .replace(/\n{3,}/g, "\n\n")
