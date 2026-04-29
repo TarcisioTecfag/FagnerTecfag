@@ -348,8 +348,101 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
             return;
           }
         }
-      }
-      // ─────────────────────────────────────────────────────────────────────────
+
+        // ── 🛡️ FALLBACK DE DADOS MÍNIMOS (NOVO) ──────────────────────────────────
+        // Cobre o caso: cliente deu nome + telefone mas saiu antes de fornecer email/CNPJ.
+        // O overview NUNCA foi exibido, então isOverviewPending = false → o bloco acima
+        // não disparou. Mas os dados já estão no banco (salvamento progressivo).
+        // Exemplo exato: Caroline — deu nome e telefone mas respondeu "OK ESTAREI AGUARDANDO"
+        // e saiu sem dar o email. Resultado anterior: nenhum card criado. Com este fallback:
+        // qualquer lead com nome + telefone + intenção de máquina vira card no CRM.
+        if (!visitorForOverview.rdCrmDealId && isRdCrmConfigured()) {
+          const stage = visitorForOverview.pipelineStage as string;
+
+          // Extrai nome e telefone do visitante (vários campos possíveis pelo salvamento progressivo)
+          const leadNome     = (visitorForOverview as any).posVendaNome
+                            ?? (visitorForOverview as any).maquinaClienteNome
+                            ?? visitorForOverview.name
+                            ?? null;
+          const leadTelefone = (visitorForOverview as any).posVendaTelefone
+                            ?? (visitorForOverview as any).maquinaTelefone
+                            ?? null;
+
+          if (stage === 'maquinas' && leadNome && leadTelefone) {
+            // Tem o mínimo para criar um card de prospect no CRM
+            console.log(`[Timers] 🔶 15m DADOS MÍNIMOS detectados para ${visitorId} (${leadNome} / ${leadTelefone}) — criando card parcial MÁQUINAS`);
+            (async () => {
+              try {
+                const recentMsgsPm = await lcStorage.listMessagesByChat(chatId).catch(() => [] as any[]);
+                const snippetPm = recentMsgsPm.slice(-20)
+                  .filter((m: any) => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
+                  .map((m: any) => `${m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]'} ${m.content.slice(0, 120)}`)
+                  .join('\n');
+
+                // Tenta inferir a máquina do contexto se não estiver no campo direto
+                const maqInferida = visitorForOverview.maquinaDesejada
+                  ?? (() => {
+                    // Busca no histórico de mensagens do FAGNER por menção de produto
+                    const aiMsgs = recentMsgsPm.filter((m: any) => m.sender === 'ai').map((m: any) => m.content);
+                    for (const msg of aiMsgs.reverse()) {
+                      const match = msg.match(/\b(M\d+|[A-Z]{2,4}[\s-]?\d{3,5}[A-Z]{0,3}|Codificador[^,\n.]+|Seladora[^,\n.]+|Envasadora[^,\n.]+)\b/i);
+                      if (match) return match[1].trim();
+                    }
+                    return null;
+                  })()
+                  ?? 'Interesse em equipamento (detalhes na conversa)';
+
+                const maqDataPm = {
+                  nome:             leadNome,
+                  telefone:         leadTelefone,
+                  email:            (visitorForOverview as any).maquinaEmail ?? null,
+                  cnpjCpf:          (visitorForOverview as any).maquinaCnpjCpf ?? null,
+                  maquinaDesejada:  maqInferida,
+                  detalhes:         '⚠️ Lead parcial — cliente saiu antes de concluir o cadastro. Contato iniciado pelo chat.',
+                  produtoFabricado: visitorForOverview.maquinaProdutoFabricado ?? 'Não informado',
+                  volumeProducao:   (visitorForOverview as any).maquinaVolumeProducao ?? 'Médio volume',
+                  clienteNovo:      'SIM',
+                  qualificacaoSDR:  (visitorForOverview as any).maquinaQualificacaoSDR ?? '2',
+                  cnpjData:         undefined,
+                };
+
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `⏳ [LEAD PARCIAL] Criando card MÁQUINAS com dados mínimos após 15min de inatividade\\nNome: ${leadNome}\\nTelefone: ${leadTelefone}`).catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+
+                const relatorioPm = await generateMaquinasReport({
+                  nome: maqDataPm.nome, telefone: maqDataPm.telefone,
+                  email: maqDataPm.email, cnpjCpf: maqDataPm.cnpjCpf,
+                  maquinaDesejada: maqDataPm.maquinaDesejada,
+                  detalhes: maqDataPm.detalhes,
+                  produtoFabricado: maqDataPm.produtoFabricado,
+                  volumeProducao: maqDataPm.volumeProducao,
+                  clienteNovo: maqDataPm.clienteNovo,
+                  qualificacaoSDR: maqDataPm.qualificacaoSDR,
+                  cnpjData: undefined,
+                  conversationSnippet: snippetPm,
+                  transcricaoCompleta: snippetPm,
+                });
+
+                let ownerPm: string | undefined;
+                try { ownerPm = await lcStorage.getNextOwnerForFunnel('maquinas') ?? undefined; } catch {}
+                const dealPm = await createMaquinasOS(visitorId, { ...maqDataPm, ownerId: ownerPm }, relatorioPm);
+                const dealUrlPm = `https://crm.rdstation.com/app/deals/${dealPm}`;
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [LEAD PARCIAL] Card MÁQUINAS criado!\nID: ${dealPm}\n${dealUrlPm}\n⚠️ Email/CNPJ não coletados — SDR deve completar os dados no follow-up.`).catch(() => {});
+                await lcStorage.setRdCrmDealId(visitorId, dealPm).catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+                broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId, dealId: dealPm, dealUrl: dealUrlPm });
+                console.log(`[Timers] ✅ [LEAD PARCIAL] Deal MÁQUINAS parcial criado (${dealPm}) para ${visitorId} após 15min.`);
+              } catch (pmErr: any) {
+                console.error(`[Timers] ❌ Fallback LEAD PARCIAL (maquinas) falhou:`, pmErr.message);
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `❌ Falha ao criar card parcial MÁQUINAS\n${pmErr.message}`).catch(() => {});
+                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+              }
+            })();
+            return; // não envia a mensagem de follow-up
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────────────
+
 
       const msg = "Ainda posso ajudar com algo? Qualquer dúvida é só falar! 😊";
       await lcStorage.createMessage({ chatId, sender: "ai", content: msg });
