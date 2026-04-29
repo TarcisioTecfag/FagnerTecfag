@@ -883,7 +883,18 @@ async function createDeal(
   const pipelineId = (process.env.RD_CRM_PIPELINE_OS_ID ?? "67c9f944c7fe880018b30ab1").trim();
   const stageId    = (process.env.RD_CRM_PIPELINE_OS_STAGE_ID ?? "").trim();
   // Prioridade: ownerId passado pelo chamador (rodízio do painel) > env var (fallback hardcoded)
-  const ownerId    = ((posVenda as any).ownerId || process.env.RD_CRM_OWNER_POS_VENDA_ID || "").trim();
+  const rawOwner   = ((posVenda as any).ownerId || process.env.RD_CRM_OWNER_POS_VENDA_ID || "").trim();
+
+  // ⚠️ BSON ObjectId validation: o RD CRM exige exatamente 24 caracteres hexadecimais.
+  // Se o ID configurado no painel for um UUID (ex: "6804c1df-...") ou outro formato
+  // inválido, a API retorna 422 "owner_id must be BSON::ObjectId or is in invalid format".
+  // Validamos aqui para dar um erro descritivo ao invés de um 422 genérico.
+  const BSON_ID_RE = /^[a-f0-9]{24}$/i;
+  const ownerId = BSON_ID_RE.test(rawOwner) ? rawOwner : '';
+  if (rawOwner && !ownerId) {
+    console.error(`[RD CRM] ❌ owner_id inválido (não é BSON ObjectId): "${rawOwner}". Acesse as Configurações do LiveChat e selecione novamente o operador para o funil.`);
+    throw new Error(`owner_id inválido: "${rawOwner}" — deve ser um BSON ObjectId de 24 caracteres hexadecimais. Reconfigure o operador no painel de Configurações.`);
+  }
 
   if (!stageId) throw new Error("[RD CRM] RD_CRM_PIPELINE_OS_STAGE_ID não configurado");
   if (!ownerId) throw new Error("[RD CRM] Nenhum owner configurado para Pós Venda — configure operadores no painel ou defina RD_CRM_OWNER_POS_VENDA_ID");
