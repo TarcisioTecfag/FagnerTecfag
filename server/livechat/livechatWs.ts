@@ -786,6 +786,14 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                 // 2. Reenviar mensagens recentes para sincronizar histórico
                 // Envia apenas as últimas 10 mensagens do AI/agente não vistas
+                // ⚠️ FIX ANTI-DUPLICAÇÃO: se o chat ainda está sendo processado pelo Gemini
+                // (chatsBeingProcessed), NÃO reenviamos as últimas mensagens — elas chegarão
+                // pelo pipeline normal em milissegundos. Reenviar agora causaria duplicação
+                // porque o loop de chunks ainda está em execução com delays entre balões.
+                if (chatsBeingProcessed.has(activeChat.id)) {
+                  console.log(`[LiveChat] RECONNECT — chat ${activeChat.id} ainda processando, skip healing de mensagens (evita duplicação).`);
+                  return;
+                }
                 const recentMsgs = await lcStorage.listMessagesByChat(activeChat.id);
                 const lastMsgs = recentMsgs
                   .filter((m: any) => m.sender === 'ai' || m.sender === 'agent' || m.sender === 'system')
@@ -1298,13 +1306,17 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               buffer.timer = setTimeout(async () => {
                 const bufferedContents = chatMessageBuffers.get(chat.id)?.content ?? [data.content];
 
-                // ── GUARD: chatsBeingProcessed — evita race condition de múltiplos timers ──
-                // Cenário: Gemini lento (90s timeout) → múltiplos timers criados em paralelo
-                // → todos disparam quando Claude assume → "Fagner conversando sozinho".
-                // Solução: apenas o PRIMEIRO timer a disparar processa; os demais são descartados.
+                // ── GUARD: chatsBeingProcessed — interrupção real quando nova mensagem chega ──
+                // Cenário: Gemini está gerando → visitante envia nova mensagem → novo timer dispara.
+                // Solução: cancelamos o fetch Gemini em andamento (AbortController), liberamos o
+                // lock e deixamos o novo timer (já criado com o conteúdo atualizado) processar.
                 if (chatsBeingProcessed.has(chat.id)) {
-                  console.log(`[LiveChat Buffer] Chat ${chat.id}: duplo timer ignorado (já processando).`);
-                  return;
+                  console.log(`[LiveChat Buffer] Chat ${chat.id}: nova mensagem interrompeu geração anterior — cancelando Gemini.`);
+                  cancelGeneration(chat.id);           // aborta o fetch Gemini em andamento
+                  chatsBeingProcessed.delete(chat.id); // libera o lock para o próximo timer
+                  // O buffer já foi atualizado com a nova mensagem antes deste timer.
+                  // O novo timer de 15s já foi setado e vai reprocessar com todo o conteúdo.
+                  return; // descarta ESTE timer (o novo já está ativo)
                 }
                 chatsBeingProcessed.add(chat.id);
                 chatMessageBuffers.delete(chat.id);
