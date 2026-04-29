@@ -887,6 +887,8 @@ Profissional, humano, prestativo e consultivo. Como um vendedor experiente de lo
 15. CURRÍCULOS / VAGAS DE EMPREGO: Se o cliente perguntar sobre emprego ou currículo, seja gentil e peça OBRIGATORIAMENTE para enviar para o e-mail: dho@tecfag.com.br. NUNCA diga para ver LinkedIn ou formulário do site.
 16. USO DO PRODUTO: A Tecfag não vende coisas de uso doméstico (geladeiras, fogões, secadores de cabelo). Apenas máquinas industriais.
 17. PEÇAS TERCEIRIZADAS: A Tecfag NÃO fornece peças para máquinas de outras marcas. Atendimento apenas para máquinas próprias.
+18. ANTI-ALUCINAÇÃO (PRIORIDADE MÁXIMA): Se o cliente perguntar sobre siglas de modelos (ex: EC, AC, DC, E/C), diferenças específicas entre modelos, ou especificações técnicas que NÃO estão claramente documentadas no seu contexto (BASE DE CONHECIMENTO, PRODUTO EM FOCO ou BUSCA VTEX), você NUNCA deve criar explicações inventadas. Diga APENAS: "Boa pergunta! Vou confirmar esse detalhe exato com a equipe técnica para te passar a informação correta." NUNCA invente significados de siglas. NUNCA fabrique especificações. Se o dado não está no seu contexto, ele NÃO EXISTE para você.
+19. PRIORIDADE DE RESPOSTA AO FRETE: Se o cliente perguntou sobre FRETE ou informou um CEP, sua resposta DEVE tratar do frete PRIMEIRO e OBRIGATORIAMENTE, antes de qualquer outra informação (manuais, links, etc). NUNCA ignore uma pergunta de frete.
 
 ## SAUDAÇÕES
 Quando o cliente mandar uma saudação simples (oi, olá, bom dia, boa tarde, etc):
@@ -1335,7 +1337,13 @@ export async function processVisitorMessage(
   const shippingIntent = detectShippingIntent(userMessage);
 
   // Se quer frete mas não temos o skuId ainda (ex: a máquina foi apenas identificada por imagem e não buscada na VTEX)
-  if (shippingIntent.wantsFrete && shippingIntent.cep && !session.lastSkuId && session.lastProductName) {
+  // Se quer frete mas não temos o skuId ainda (ex: a máquina foi apenas identificada por imagem e não buscada na VTEX)
+  // GUARDA: NUNCA resolver SKU para máquinas industriais (FXJ, etc.) — o frete dessas máquinas é cotado pela equipe
+  const isMaquinaIndustrial = /\bfxj\b|\bfxj\d|\barlm\b|\btlf\b|\bdgf\b|\bvsf\b|\bseladora\b|\benvasadora\b|\brotuladora\b|\bempacotadora\b/i.test(
+    session.lastProductName ?? ''
+  );
+
+  if (shippingIntent.wantsFrete && shippingIntent.cep && !session.lastSkuId && session.lastProductName && !isMaquinaIndustrial) {
     console.log(`[LiveChat AI] Resolvendo lastSkuId em tempo real para o produto: ${session.lastProductName}`);
     try {
       const vtexSearchFallback = await Promise.race([
@@ -1348,7 +1356,7 @@ export async function processVisitorMessage(
     } catch {}
   }
 
-  if (shippingIntent.wantsFrete && shippingIntent.cep && session.lastSkuId) {
+  if (shippingIntent.wantsFrete && shippingIntent.cep && session.lastSkuId && !isMaquinaIndustrial) {
     try {
       const fretePromise = simulateShipping(shippingIntent.cep, session.lastSkuId);
       const freteTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000));
@@ -1365,10 +1373,17 @@ export async function processVisitorMessage(
     }
   } else if (shippingIntent.wantsFrete && !shippingIntent.cep) {
     // Quer frete mas não informou CEP — o prompt vai instruir o Fagner a pedir
-    contextParts.push(`## INTENÇÃO DE FRETE DETECTADA\nO cliente quer calcular frete, mas NÃO informou o CEP ainda.\nINSTRUÇÃO: Pergunte o CEP do cliente de forma amigável para calcular o frete.`);
+    // PRIORIDADE: unshift para ficar no topo do contexto
+    contextParts.unshift(`## ⚠️ INTENÇÃO DE FRETE DETECTADA (RESPONDA ISSO PRIMEIRO)
+O cliente quer calcular frete, mas NÃO informou o CEP ainda.
+INSTRUÇÃO OBRIGATÓRIA: Sua resposta DEVE começar tratando do frete. Pergunte o CEP do cliente de forma amigável. NÃO fale de manuais, links ou outros assuntos antes de resolver o frete.`);
   } else if (shippingIntent.wantsFrete && shippingIntent.cep && !session.lastSkuId) {
-    // Tem CEP mas não tem produto
-    contextParts.push(`## INTENÇÃO DE FRETE DETECTADA\nO cliente quer frete para CEP ${shippingIntent.cep}, mas nenhum produto foi selecionado ainda.\nINSTRUÇÃO: Pergunte qual produto o cliente tem interesse para calcular o frete.`);
+    // Tem CEP mas não tem produto — pode ser máquina industrial (FXJ, etc) sem SKU VTEX
+    // PRIORIDADE: unshift para ficar no topo do contexto
+    contextParts.unshift(`## ⚠️ INTENÇÃO DE FRETE DETECTADA (RESPONDA ISSO PRIMEIRO)
+O cliente quer saber o frete para o CEP ${shippingIntent.cep}.
+O produto em questão é uma máquina industrial que não possui venda direta no site, por isso o frete não pode ser calculado automaticamente.
+INSTRUÇÃO OBRIGATÓRIA: Sua resposta DEVE começar respondendo sobre o frete. Diga ao cliente que, por se tratar de uma máquina industrial de grande porte, o frete precisa ser cotado sob medida pela equipe comercial junto com a proposta. Informe que o valor do frete será incluído na proposta comercial. Se o contexto da conversa indicar que já está em um fluxo de coleta de dados (Máquinas), continue o fluxo normalmente. NÃO ignore a pergunta do frete. NÃO mude de assunto para manuais ou links.`);
   }
 
 
