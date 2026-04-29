@@ -406,7 +406,11 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                   cnpjData:         undefined,
                 };
 
-                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `⏳ [LEAD PARCIAL] Criando card MÁQUINAS com dados mínimos após 15min de inatividade\\nNome: ${leadNome}\\nTelefone: ${leadTelefone}`).catch(() => {});
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM',
+                  `⏳ [LEAD PARCIAL] Criando card MÁQUINAS após 15min de inatividade.\n` +
+                  `📋 Justificativa: cliente saiu antes de completar todo o cadastro (faltou e-mail e/ou CNPJ).\n` +
+                  `Nome: ${leadNome} | Telefone: ${leadTelefone}`
+                ).catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
 
                 const relatorioPm = await generateMaquinasReport({
@@ -427,7 +431,12 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                 try { ownerPm = await lcStorage.getNextOwnerForFunnel('maquinas') ?? undefined; } catch {}
                 const dealPm = await createMaquinasOS(visitorId, { ...maqDataPm, ownerId: ownerPm }, relatorioPm);
                 const dealUrlPm = `https://crm.rdstation.com/app/deals/${dealPm}`;
-                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [LEAD PARCIAL] Card MÁQUINAS criado!\nID: ${dealPm}\n${dealUrlPm}\n⚠️ Email/CNPJ não coletados — SDR deve completar os dados no follow-up.`).catch(() => {});
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM',
+                  `✅ [LEAD PARCIAL] Card MÁQUINAS criado com dados disponíveis.\n` +
+                  `📋 Justificativa: cliente saiu antes de completar todo o cadastro — e-mail e/ou CNPJ não foram informados.\n` +
+                  `⚠️ Ação necessária: SDR deve entrar em contato para completar o cadastro e avançar a negociação.\n` +
+                  `🔗 Deal: ${dealUrlPm}\nID: ${dealPm}`
+                ).catch(() => {});
                 await lcStorage.setRdCrmDealId(visitorId, dealPm).catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
                 broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId, dealId: dealPm, dealUrl: dealUrlPm });
