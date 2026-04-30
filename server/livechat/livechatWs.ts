@@ -479,108 +479,142 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
           }
         }
 
-        // ── 🛡️ FALLBACK DE DADOS MÍNIMOS (NOVO) ──────────────────────────────────
-        // Cobre o caso: cliente deu nome + telefone mas saiu antes de fornecer email/CNPJ.
-        // O overview NUNCA foi exibido, então isOverviewPending = false → o bloco acima
-        // não disparou. Mas os dados já estão no banco (salvamento progressivo).
-        // Exemplo exato: Caroline — deu nome e telefone mas respondeu "OK ESTAREI AGUARDANDO"
-        // e saiu sem dar o email. Resultado anterior: nenhum card criado. Com este fallback:
-        // qualquer lead com nome + telefone + intenção de máquina vira card no CRM.
+        // ── 🛡️ FALLBACK UNIVERSAL DE DADOS MÍNIMOS ───────────────────────────────
+        // Captura QUALQUER lead que tenha nome + telefone, independente do stage ou
+        // de quantas etapas do fluxo foram concluídas. Nenhum lead com contato é perdido.
+        // Cobre: clientes em em_atendimento, novo_atendimento, e stages parciais.
         if (!visitorForOverview.rdCrmDealId && isRdCrmConfigured()) {
           const stage = visitorForOverview.pipelineStage as string;
+          const recentMsgsPm = await lcStorage.listMessagesByChat(chatId).catch(() => [] as any[]);
 
-          // Extrai nome e telefone do visitante (vários campos possíveis pelo salvamento progressivo)
-          const leadNome     = (visitorForOverview as any).posVendaNome
-                            ?? (visitorForOverview as any).maquinaClienteNome
-                            ?? visitorForOverview.name
-                            ?? null;
-          const leadTelefone = (visitorForOverview as any).posVendaTelefone
-                            ?? (visitorForOverview as any).maquinaTelefone
-                            ?? null;
+          // Extrai nome de todos os campos possíveis
+          const leadNome = (visitorForOverview as any).posVendaNome
+                        ?? (visitorForOverview as any).maquinaClienteNome
+                        ?? (visitorForOverview as any).pecasNome
+                        ?? visitorForOverview.name
+                        ?? null;
 
-          if (stage === 'maquinas' && leadNome && leadTelefone) {
-            // Tem o mínimo para criar um card de prospect no CRM
-            console.log(`[Timers] 🔶 15m DADOS MÍNIMOS detectados para ${visitorId} (${leadNome} / ${leadTelefone}) — criando card parcial MÁQUINAS`);
+          // Extrai telefone de todos os campos possíveis
+          let leadTelefone = (visitorForOverview as any).posVendaTelefone
+                          ?? (visitorForOverview as any).maquinaTelefone
+                          ?? (visitorForOverview as any).pecasTelefone
+                          ?? null;
+
+          // Fallback: busca telefone direto nas mensagens do visitante via regex
+          if (!leadTelefone) {
+            const visitorMsgs = recentMsgsPm.filter((m: any) => m.sender === 'visitor');
+            for (const msg of [...visitorMsgs].reverse()) {
+              const match = msg.content.replace(/\s/g, '').match(/(\d{10,11})/);
+              if (match) { leadTelefone = match[1]; break; }
+            }
+          }
+
+          if (leadNome && leadTelefone) {
+            // Infere o funil pelo stage atual, com MAQUINAS como padrão comercial
+            const funnelStage =
+              ['maquinas', 'em_atendimento', 'novo_atendimento'].includes(stage)
+                ? 'maquinas'
+                : stage === 'pecas' ? 'pecas'
+                : stage === 'pos_venda' ? 'pos_venda'
+                : 'maquinas'; // padrão: qualquer lead não classificado vai para máquinas
+
+            console.log(`[Timers] 🔶 10m LEAD MÍNIMO para ${visitorId} (${leadNome} / ${leadTelefone} / stage: ${stage}) → funil: ${funnelStage}`);
             (async () => {
               try {
-                const recentMsgsPm = await lcStorage.listMessagesByChat(chatId).catch(() => [] as any[]);
                 const snippetPm = recentMsgsPm.slice(-20)
                   .filter((m: any) => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
                   .map((m: any) => `${m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]'} ${m.content.slice(0, 120)}`)
                   .join('\n');
 
-                // Tenta inferir a máquina do contexto se não estiver no campo direto
-                const maqInferida = visitorForOverview.maquinaDesejada
+                // Infere a máquina/produto do contexto da conversa
+                const intentInferred = visitorForOverview.maquinaDesejada
                   ?? (() => {
-                    // Busca no histórico de mensagens do FAGNER por menção de produto
-                    const aiMsgs = recentMsgsPm.filter((m: any) => m.sender === 'ai').map((m: any) => m.content);
-                    for (const msg of aiMsgs.reverse()) {
-                      const match = msg.match(/\b(M\d+|[A-Z]{2,4}[\s-]?\d{3,5}[A-Z]{0,3}|Codificador[^,\n.]+|Seladora[^,\n.]+|Envasadora[^,\n.]+)\b/i);
-                      if (match) return match[1].trim();
-                    }
-                    return null;
+                    const allMsgs = recentMsgsPm.map((m: any) => m.content).join(' ');
+                    const match = allMsgs.match(/\b(seladora|envasadora|dosadora|rotuladora|embaladora|fardadora|tampadora|ensacadora|pesadora|empacotadora|capsuladora|pe[çc]a[s]?)\b/i);
+                    return match ? match[1] : null;
                   })()
-                  ?? 'Interesse em equipamento (detalhes na conversa)';
+                  ?? 'Interesse não especificado (detalhes na conversa)';
 
-                const maqDataPm = {
-                  nome:             leadNome,
-                  telefone:         leadTelefone,
-                  email:            (visitorForOverview as any).maquinaEmail ?? null,
-                  cnpjCpf:          (visitorForOverview as any).maquinaCnpjCpf ?? null,
-                  maquinaDesejada:  maqInferida,
-                  detalhes:         '⚠️ Lead parcial — cliente saiu antes de concluir o cadastro. Contato iniciado pelo chat.',
-                  produtoFabricado: visitorForOverview.maquinaProdutoFabricado ?? 'Não informado',
-                  volumeProducao:   (visitorForOverview as any).maquinaVolumeProducao ?? 'Médio volume',
-                  clienteNovo:      'SIM',
-                  qualificacaoSDR:  (visitorForOverview as any).maquinaQualificacaoSDR ?? '2',
-                  cnpjData:         undefined,
-                };
-
-                await lcStorage.addVisitorNote(visitorId, 'RD CRM',
-                  `⏳ [LEAD PARCIAL] Criando card MÁQUINAS após 15min de inatividade.\n` +
-                  `📋 Justificativa: cliente saiu antes de completar todo o cadastro (faltou e-mail e/ou CNPJ).\n` +
-                  `Nome: ${leadNome} | Telefone: ${leadTelefone}`
-                ).catch(() => {});
-                broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
-
-                const relatorioPm = await generateMaquinasReport({
-                  nome: maqDataPm.nome, telefone: maqDataPm.telefone,
-                  email: maqDataPm.email, cnpjCpf: maqDataPm.cnpjCpf,
-                  maquinaDesejada: maqDataPm.maquinaDesejada,
-                  detalhes: maqDataPm.detalhes,
-                  produtoFabricado: maqDataPm.produtoFabricado,
-                  volumeProducao: maqDataPm.volumeProducao,
-                  clienteNovo: maqDataPm.clienteNovo,
-                  qualificacaoSDR: maqDataPm.qualificacaoSDR,
-                  cnpjData: undefined,
-                  conversationSnippet: snippetPm,
-                  transcricaoCompleta: snippetPm,
-                });
-
+                let dealPm: string;
+                let dealUrlPm: string;
                 let ownerPm: string | undefined;
-                try { ownerPm = await lcStorage.getNextOwnerForFunnel('maquinas') ?? undefined; } catch {}
-                const dealPm = await createMaquinasOS(visitorId, { ...maqDataPm, ownerId: ownerPm }, relatorioPm);
-                const dealUrlPm = `https://crm.rdstation.com/app/deals/${dealPm}`;
+
+                if (funnelStage === 'pecas') {
+                  try { ownerPm = await lcStorage.getNextOwnerForFunnel('pecas') ?? undefined; } catch {}
+                  const pecaDataPm = {
+                    nome: leadNome, telefone: leadTelefone,
+                    email: (visitorForOverview as any).maquinaEmail ?? null,
+                    cnpjCpf: (visitorForOverview as any).maquinaCnpjCpf ?? null,
+                    pecaDesejada: visitorForOverview.pecaDesejada ?? intentInferred,
+                    eCliente: 'NÃO INFORMADO', cnpjData: undefined,
+                  };
+                  await lcStorage.addVisitorNote(visitorId, 'RD CRM',
+                    `⏳ [LEAD MÍNIMO] Criando card PEÇAS com nome+telefone.\nNome: ${leadNome} | Tel: ${leadTelefone}`
+                  ).catch(() => {});
+                  broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+                  const relPm = await generatePecasReport({ ...pecaDataPm, conversationSnippet: snippetPm, transcricaoCompleta: snippetPm });
+                  dealPm = await createPecasOS(visitorId, { ...pecaDataPm, ownerId: ownerPm }, relPm);
+
+                } else if (funnelStage === 'pos_venda') {
+                  try { ownerPm = await lcStorage.getNextOwnerForFunnel('pos_venda') ?? undefined; } catch {}
+                  const pvDataPm = {
+                    nome: leadNome, telefone: leadTelefone,
+                    email: null, cnpjCpf: null, notaPedido: null,
+                    problema: (visitorForOverview as any).posVendaProblema ?? 'Contato iniciado — detalhes na conversa',
+                    urgencia: 'NORMAL',
+                  };
+                  await lcStorage.addVisitorNote(visitorId, 'RD CRM',
+                    `⏳ [LEAD MÍNIMO] Criando OS PÓS VENDA com nome+telefone.\nNome: ${leadNome} | Tel: ${leadTelefone}`
+                  ).catch(() => {});
+                  broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+                  const relPm = await generatePosVendaReport({ ...pvDataPm, conversationSnippet: snippetPm, transcricaoCompleta: snippetPm });
+                  dealPm = await createPosVendaOS(visitorId, { ...pvDataPm, ownerId: ownerPm }, relPm);
+
+                } else {
+                  // MAQUINAS — padrão para em_atendimento, novo_atendimento e qualquer não classificado
+                  try { ownerPm = await lcStorage.getNextOwnerForFunnel('maquinas') ?? undefined; } catch {}
+                  const maqDataPm = {
+                    nome: leadNome,
+                    telefone: leadTelefone,
+                    email: (visitorForOverview as any).maquinaEmail ?? null,
+                    cnpjCpf: (visitorForOverview as any).maquinaCnpjCpf ?? null,
+                    maquinaDesejada: intentInferred,
+                    detalhes: `⚠️ Lead parcial (stage: ${stage || 'não detectado'}) — cliente saiu antes de concluir. Detalhes na conversa.`,
+                    produtoFabricado: visitorForOverview.maquinaProdutoFabricado ?? 'Não informado',
+                    volumeProducao: (visitorForOverview as any).maquinaVolumeProducao ?? 'Médio volume',
+                    clienteNovo: 'SIM',
+                    qualificacaoSDR: (visitorForOverview as any).maquinaQualificacaoSDR ?? '2',
+                    cnpjData: undefined,
+                  };
+                  await lcStorage.addVisitorNote(visitorId, 'RD CRM',
+                    `⏳ [LEAD MÍNIMO] Criando card MÁQUINAS com nome+telefone.\nNome: ${leadNome} | Tel: ${leadTelefone} | Stage: ${stage || 'não detectado'}`
+                  ).catch(() => {});
+                  broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+                  const relPm = await generateMaquinasReport({ ...maqDataPm, conversationSnippet: snippetPm, transcricaoCompleta: snippetPm });
+                  dealPm = await createMaquinasOS(visitorId, { ...maqDataPm, ownerId: ownerPm }, relPm);
+                }
+
+                dealUrlPm = `https://crm.rdstation.com/app/deals/${dealPm}`;
                 await lcStorage.addVisitorNote(visitorId, 'RD CRM',
-                  `✅ [LEAD PARCIAL] Card MÁQUINAS criado com dados disponíveis.\n` +
-                  `📋 Justificativa: cliente saiu antes de completar todo o cadastro — e-mail e/ou CNPJ não foram informados.\n` +
-                  `⚠️ Ação necessária: SDR deve entrar em contato para completar o cadastro e avançar a negociação.\n` +
-                  `🔗 Deal: ${dealUrlPm}\nID: ${dealPm}`
+                  `✅ [LEAD MÍNIMO] Card criado no funil ${funnelStage.toUpperCase()}!\n` +
+                  `⚠️ SDR: contatar para completar dados e avançar negociação.\n` +
+                  `🔗 ${dealUrlPm}\nID: ${dealPm}`
                 ).catch(() => {});
                 await lcStorage.setRdCrmDealId(visitorId, dealPm).catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
                 broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId, dealId: dealPm, dealUrl: dealUrlPm });
-                console.log(`[Timers] ✅ [LEAD PARCIAL] Deal MÁQUINAS parcial criado (${dealPm}) para ${visitorId} após 15min.`);
+                console.log(`[Timers] ✅ [LEAD MÍNIMO] Deal ${funnelStage} (${dealPm}) criado para ${visitorId}.`);
               } catch (pmErr: any) {
-                console.error(`[Timers] ❌ Fallback LEAD PARCIAL (maquinas) falhou:`, pmErr.message);
-                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `❌ Falha ao criar card parcial MÁQUINAS\n${pmErr.message}`).catch(() => {});
+                console.error(`[Timers] ❌ Fallback LEAD MÍNIMO falhou:`, pmErr.message);
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `❌ [LEAD MÍNIMO] Falha: ${pmErr.message}`).catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
               }
             })();
-            return; // não envia a mensagem de follow-up
+            return;
           }
         }
-        // ─────────────────────────────────────────────────────────────────────────
+        // ──────────────────────────────────────────────────────────────────────
+
 
 
       const msg = "Ainda posso ajudar com algo? Qualquer dúvida é só falar! 😊";
