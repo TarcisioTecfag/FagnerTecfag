@@ -1,4 +1,4 @@
-// server/fagner/fagnerOrchestrator.ts
+﻿// server/fagner/fagnerOrchestrator.ts
 // Orquestrador central do Fagner
 // Conecta: webhook → debounce → CNPJ/mídia → Gemini → flowEngine → CRM → transferência
 
@@ -535,44 +535,66 @@ async function processContact(session: ContactSession, combinedMessage: string):
   }
 }
 
-// ─── Fechamento forçado por abandono ─────────────────────────────────────────
-// Chamada pelo followUpService quando o cliente tem telefone mas parou de responder.
-// Cria o card CRM com os dados parciais e marca a sessão como concluída.
+// ─── Auto-close: assume confirmação e fecha o atendimento ────────────────────
+// Chamada pelo followUpService após 5 minutos sem resposta do cliente.
+// Envia mensagem de encerramento natural, cria o card e fecha a sessão.
 
 export async function forceCloseSession(session: ContactSession, reason: string): Promise<void> {
   if (session.isCompleted || session.isProcessing) return;
 
-  deps.emitLog(`[${session.contactId}] ⏱️ forceCloseSession: ${reason}`, "WARN");
+  deps.emitLog(`[${session.contactId}] ⏱️ Auto-close: ${reason}`, "WARN");
 
   session.isCompleted = true;
   cancelDebounce(session);
 
   try {
     const apiKey = await deps.getApiKey();
+    const isSim = session.contactId.startsWith("sim-");
 
-    // Adiciona observação de abandono ao flowData
-    const abandonNote = `[ABANDONO] Cliente parou de responder no meio do atendimento (${reason}). Dados parciais coletados.`;
+    // ── 1. Envia mensagens de encerramento ao cliente ─────────────────────────
+    // Fagner assume confirmação e encerra de forma natural, sem deixar o cliente sem resposta.
+    if (!isSim) {
+      const closingMessages = [
+        "Acredito que esteja certo! 😊",
+        "Já registrei todas as suas informações.",
+        "Em breve nossa equipe entrará em contato. Obrigado pelo contato com a Tecfag! 😊",
+      ];
+      for (const msg of closingMessages) {
+        await sendMessage(session.contactId, msg).catch(() => {});
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+    }
+
+    // ── 2. Garante que o fluxo está definido para criação do card ─────────────
+    // Se o fluxo não foi detectado, usa MAQUINAS como padrão —
+    // clientes que chegaram até o ponto de dar telefone são leads comerciais.
+    if (!session.currentFlow) {
+      setFlow(session, 1, "MAQUINAS");
+      deps.emitLog(`[${session.contactId}] ⚠️ Fluxo não detectado — usando MAQUINAS como fallback para criar card.`, "WARN");
+    }
+
+    // ── 3. Adiciona nota de auto-close ao flowData ────────────────────────────
+    const closeNote = `[AUTO-CLOSE] ${reason}. Fagner assumiu confirmação após 5min sem resposta.`;
     session.flowData.notes = session.flowData.notes
-      ? `${session.flowData.notes}\n${abandonNote}`
-      : abandonNote;
+      ? `${session.flowData.notes}\n${closeNote}`
+      : closeNote;
 
-    // Gera relatório com dados parciais
+    // ── 4. Gera relatório e cria o card no CRM ────────────────────────────────
     const reportJson = await generateReportJson(session, apiKey).catch(() => ({}));
     const reportText = generateReportText(session, reportJson, session.cnpjApiData as any);
 
-    // Cria card CRM se o fluxo gera card
     if (flowGeneratesCard(session)) {
       await upsertDeal(session, session.cnpjApiData as any).catch((e: any) =>
-        deps.emitLog(`[${session.contactId}] Aviso: falha ao criar card (abandono) — ${e.message}`, "WARN")
+        deps.emitLog(`[${session.contactId}] Aviso: falha ao criar card (auto-close) — ${e.message}`, "WARN")
       );
     }
 
     const operator = getTransferTarget(session);
     await saveReportToDb(deps.storage, session, reportText, reportJson, operator.name).catch((e: any) =>
-      deps.emitLog(`[${session.contactId}] Aviso: falha ao salvar relatório (abandono) — ${e.message}`, "WARN")
+      deps.emitLog(`[${session.contactId}] Aviso: falha ao salvar relatório (auto-close) — ${e.message}`, "WARN")
     );
 
-    deps.emitLog(`[${session.contactId}] ✅ Card criado por abandono. Operador: ${operator.name}`, "SUCCESS");
+    deps.emitLog(`[${session.contactId}] ✅ Auto-close concluído. Card criado. Operador: ${operator.name}`, "SUCCESS");
   } catch (err: any) {
     deps.emitLog(`[${session.contactId}] Erro em forceCloseSession: ${err.message}`, "ERROR");
   }

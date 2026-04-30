@@ -4,9 +4,10 @@
 import { ContactSession } from "./sessionManager.js";
 import { sendMessage } from "./rdConversasService.js";
 
-const FOLLOW_UP_MS   = 5  * 60_000; // 5 minutos sem resposta → follow-up
-const PAUSE_MS       = 10 * 60_000; // 10 minutos após follow-up → pausa
-const ABANDON_CLOSE_MS = 20 * 60_000; // 20 minutos de inatividade total → fechar com dados parciais
+// 5 minutos sem resposta → assume confirmação, envia mensagem e cria o card no CRM
+const ABANDON_CLOSE_MS = 5 * 60_000;
+// Fallback de pausa: sessões sem telefone ainda aguardam até o operador pegar
+const PAUSE_MS = 10 * 60_000;
 
 // Importado dinamicamente para evitar dependência circular
 let _forceCloseSession: ((session: ContactSession, reason: string) => Promise<void>) | null = null;
@@ -28,10 +29,11 @@ function randomFollowUp(): string {
 }
 
 /**
- * Verifica todas as sessões ativas e envia follow-up ou pausa conforme
- * o tempo desde a última mensagem.
- * Também aciona o fechamento por abandono quando o cliente tem telefone
- * e ficou mais de 20 minutos sem responder.
+ * Verifica todas as sessões ativas a cada 60s.
+ * Comportamento após 5 minutos de silêncio:
+ *   - Se o cliente tem telefone (contactPhone ou flowData.clientPhone):
+ *     → Fagner assume confirmação, envia mensagem de encerramento e cria o card no CRM.
+ *   - Sem telefone: pausa a sessão após 10 min.
  */
 export async function checkFollowUps(activeSessions: ContactSession[]): Promise<void> {
   const now = Date.now();
@@ -53,48 +55,32 @@ export async function checkFollowUps(activeSessions: ContactSession[]): Promise<
       continue;
     }
 
-    // ── FECHAMENTO POR ABANDONO ───────────────────────────────────────────────
-    // Se o cliente forneceu telefone mas ficou 20+ min sem responder,
-    // cria o card com os dados parciais e fecha a sessão.
-    // IMPORTANTE: verifica AMBOS os campos de telefone:
-    //   - flowData.clientPhone: informado pelo cliente durante a conversa
-    //   - contactPhone: capturado automaticamente do RD Conversas/WhatsApp no início da sessão
-    //   Sem isso, clientes do WhatsApp nunca teriam o card criado por abandono.
+    // ── FECHAMENTO POR ABANDONO (5 minutos) ──────────────────────────────────
+    // Se o cliente tem telefone e ficou 5+ min sem responder:
+    // Fagner assume que está correto, envia mensagem de encerramento e cria o card.
+    // Cobre AMBOS os campos de telefone:
+    //   - flowData.clientPhone: digitado pelo cliente na conversa
+    //   - contactPhone: capturado automaticamente do RD Conversas/WhatsApp
     const hasPhone = !!(session.flowData.clientPhone || session.contactPhone);
     if (
       sinceLastMsg >= ABANDON_CLOSE_MS &&
       hasPhone &&
       _forceCloseSession
     ) {
-      console.log(`[FollowUp] Sessão ${session.contactId} — abandono detectado (telefone coletado, 20min sem resposta). Fechando com dados parciais.`);
-      await _forceCloseSession(session, "inatividade de 20 minutos com telefone coletado").catch((e) =>
+      console.log(`[FollowUp] Sessão ${session.contactId} — 5min sem resposta com telefone coletado → assumindo confirmação.`);
+      await _forceCloseSession(session, "5 minutos sem resposta — assumindo confirmação do cliente").catch((e) =>
         console.error(`[FollowUp] Erro em forceCloseSession para ${session.contactId}:`, e)
       );
       continue;
     }
 
-    // ≥ 10 min após follow-up → pausa a sessão
-    if (
-      session.followUpCount >= 1 &&
-      session.followUpSentAt &&
-      now - session.followUpSentAt.getTime() >= PAUSE_MS
-    ) {
+    // ── SEM TELEFONE: pausa após 10 min de inatividade ────────────────────────
+    // Sessões sem telefone (cliente sumiu antes de se identificar) ficam pausadas
+    // aguardando o cliente retornar. Sem follow-up agressivo.
+    if (sinceLastMsg >= PAUSE_MS && !hasPhone) {
       session.isPaused = true;
-      console.log(`[FollowUp] Sessão ${session.contactId} pausada por inatividade.`);
+      console.log(`[FollowUp] Sessão ${session.contactId} pausada — sem telefone coletado após 10min.`);
       continue;
-    }
-
-    // ≥ 5 min sem resposta e ainda não enviou follow-up
-    if (sinceLastMsg >= FOLLOW_UP_MS && session.followUpCount === 0) {
-      try {
-        const msg = randomFollowUp();
-        await sendMessage(session.contactId, msg);
-        session.followUpCount++;
-        session.followUpSentAt = new Date();
-        console.log(`[FollowUp] Follow-up enviado para ${session.contactId}`);
-      } catch (err) {
-        console.error(`[FollowUp] Erro ao enviar follow-up para ${session.contactId}:`, err);
-      }
     }
   }
 }
