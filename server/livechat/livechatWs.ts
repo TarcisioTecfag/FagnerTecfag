@@ -109,49 +109,181 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
   clearFollowUpTimers(visitorId);
   const timers: FollowUpTimers = {};
 
-  // ── Timer de 8 min (antes: 3 min) — mais tempo para clientes consultivos ──
-  // Motivo: clientes que pedem manuais, especificações técnicas ou consultam catálogos
-  // demoram mais para responder. 3 min gerava follow-up invasivo (ex: clientes ocupados,
-  // analisando o manual recém enviado, ou em reunião). 8 min é o mínimo aceitável.
+  // ── Timer de 5 min — auto-close: Fagner assume confirmação e cria o card ──
+  // Se o visitante está em stage qualificado (maquinas/pecas/pos_venda) com dados
+  // coletados e ficou 5min sem responder, Fagner assume confirmação, envia mensagem
+  // de encerramento e cria o card no CRM automaticamente.
   timers.t3m = setTimeout(async () => {
     try {
       const chat = await lcStorage.getChatById(chatId);
       if (!chat || chat.status === "closed" || chat.status !== "ai_active") return;
 
-      // ── SUPRESSÃO INTELIGENTE: se o último turno da IA TERMINA em "?", o visitante
-      // está apenas PENSANDO na resposta. Follow-up seria redundante e invasivo.
-      const recentForCheck = await lcStorage.listMessagesByChat(chatId).catch(() => [] as any[]);
-      const lastAiForCheck = [...recentForCheck].reverse().find((m: any) => m.sender === 'ai');
-      const lastVisitorForCheck = [...recentForCheck].reverse().find((m: any) => m.sender === 'visitor');
-      if (lastAiForCheck && lastVisitorForCheck) {
-        const aiTs = new Date(lastAiForCheck.sentAt ?? 0).getTime();
-        const viTs = new Date(lastVisitorForCheck.sentAt ?? 0).getTime();
-        // Se o visitante respondeu DEPOIS do último AI (conversa ativa), não incomodar
-        if (viTs > aiTs) return;
+      // Se o visitante respondeu DEPOIS do último AI, conversa ainda ativa — não agir
+      const recentMsgs5m = await lcStorage.listMessagesByChat(chatId).catch(() => [] as any[]);
+      const lastAi5m     = [...recentMsgs5m].reverse().find((m: any) => m.sender === 'ai');
+      const lastVis5m    = [...recentMsgs5m].reverse().find((m: any) => m.sender === 'visitor');
+      if (lastAi5m && lastVis5m) {
+        const aiTs = new Date(lastAi5m.sentAt ?? 0).getTime();
+        const viTs = new Date(lastVis5m.sentAt ?? 0).getTime();
+        if (viTs > aiTs) return; // cliente respondeu recentemente, não fechar
       }
-      if (lastAiForCheck?.content?.trimEnd().endsWith('?')) {
-        console.log(`[Timers] 8m follow-up suprimido — Fagner acabou de fazer uma pergunta para ${visitorId}`);
+
+      // Verifica se o visitante está em stage qualificado com dados
+      const v5m = await lcStorage.getVisitorById(visitorId).catch(() => null);
+      if (!v5m || v5m.rdCrmDealId || !isRdCrmConfigured()) return;
+
+      const stage5m = v5m.pipelineStage ?? '';
+      const hasData5m =
+        (stage5m === 'maquinas'  && (v5m.maquinaDesejada || v5m.name)) ||
+        (stage5m === 'pecas'     && (v5m.pecaDesejada    || v5m.name)) ||
+        (stage5m === 'pos_venda' && ((v5m as any).posVendaProblema || v5m.name));
+
+      if (!['maquinas', 'pecas', 'pos_venda'].includes(stage5m) || !hasData5m) {
+        console.log(`[Timers] 5min — visitante ${visitorId} sem stage qualificado (${stage5m || 'nenhum'}), aguardando t8m.`);
         return;
       }
 
-      const msg = "Opa, você ainda está aí? 😊";
-      await lcStorage.createMessage({ chatId, sender: "ai", content: msg });
-      sendToVisitor(visitorId, { type: "CHAT_REPLY", chatId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
-      broadcastToAgents({ type: "CHAT_MESSAGE", chatId, visitorId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
-    } catch (err: any) { console.error("[Timers] 8m err:", err.message); }
-  }, 8 * 60 * 1000);
+      console.log(`[Timers] ⏰ 5min AUTO-CLOSE para ${visitorId} (estágio: ${stage5m}) — assumindo confirmação`);
 
-  // 8 minutes follow-up
+      // Cancela o t8m para não duplicar
+      const existingTimers5m = followUpTimers.get(visitorId);
+      if (existingTimers5m?.t8m) { clearTimeout(existingTimers5m.t8m); }
+
+      // Função local: envia mensagens de encerramento ao visitante
+      const send5mClosing = async () => {
+        const msgs = [
+          "Acredito que esteja certo! 😊",
+          "Já registrei todas as suas informações.",
+          "Em breve nossa equipe entrará em contato. Obrigado pelo contato com a Tecfag! 😊",
+        ];
+        for (const text of msgs) {
+          await lcStorage.createMessage({ chatId, sender: 'ai', content: text });
+          sendToVisitor(visitorId, { type: 'CHAT_REPLY', chatId, sender: 'ai', content: text, timestamp: new Date().toISOString() });
+          broadcastToAgents({ type: 'CHAT_MESSAGE', chatId, visitorId, sender: 'ai', content: text, timestamp: new Date().toISOString() });
+          await new Promise(r => setTimeout(r, 800));
+        }
+      };
+
+      const snippet5m = recentMsgs5m.slice(-20)
+        .filter((m: any) => !m.content.startsWith('[CNPJ_RESULT') && !m.content.startsWith('[CNPJ_CHECK'))
+        .map((m: any) => `${m.sender === 'visitor' ? '[CLIENTE]' : '[FAGNER]'} ${m.content.slice(0, 120)}`)
+        .join('\n');
+
+      const parseField5m = (...labels: string[]): string | null => {
+        for (const label of labels) {
+          const re = new RegExp(`^\\s*[•\\-]\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:\\s*(.+)$`, 'i');
+          const found = [...recentMsgs5m].reverse().find((m: any) => m.sender === 'ai' && re.test(m.content.trim()));
+          if (found) { const cap = found.content.trim().match(re); if (cap?.[1]) return cap[1].trim(); }
+        }
+        return null;
+      };
+
+      (async () => {
+        try {
+          if (stage5m === 'maquinas') {
+            const maqData5m = {
+              nome:             (v5m as any).maquinaClienteNome ?? v5m.name ?? 'Não informado',
+              telefone:         ((v5m as any).maquinaTelefone   ?? parseField5m('Telefone', 'Tel') ?? '') as string,
+              email:            (v5m as any).maquinaEmail       ?? parseField5m('E-mail', 'Email') ?? null,
+              cnpjCpf:          (v5m as any).maquinaCnpjCpf    ?? parseField5m('CPF/CNPJ', 'CNPJ', 'CPF') ?? null,
+              maquinaDesejada:  v5m.maquinaDesejada             ?? 'Interesse em equipamento (detalhes na conversa)',
+              detalhes:         parseField5m('Detalhes', 'Observação') ?? null,
+              produtoFabricado: v5m.maquinaProdutoFabricado     ?? parseField5m('Produto Fabricado', 'Produto') ?? 'Não definido',
+              volumeProducao:   (v5m as any).maquinaVolumeProducao ?? parseField5m('Volume de Produção', 'Volume') ?? 'Médio volume',
+              clienteNovo:      'SIM',
+              qualificacaoSDR:  (v5m as any).maquinaQualificacaoSDR ?? '2',
+              cnpjData:         v5m.posVendaCnpjData ? (typeof v5m.posVendaCnpjData === 'string' ? JSON.parse(v5m.posVendaCnpjData) : v5m.posVendaCnpjData) : undefined,
+            };
+            await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [AUTO-CLOSE 5min] Criando card MÁQUINAS após inatividade...').catch(() => {});
+            broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+            const rel5m = await generateMaquinasReport({ ...maqData5m, conversationSnippet: snippet5m, transcricaoCompleta: snippet5m });
+            let owner5m: string | undefined;
+            try { owner5m = await lcStorage.getNextOwnerForFunnel('maquinas') ?? undefined; } catch {}
+            const deal5m = await createMaquinasOS(visitorId, { ...maqData5m, ownerId: owner5m }, rel5m);
+            const dealUrl5m = `https://crm.rdstation.com/app/deals/${deal5m}`;
+            await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [AUTO-CLOSE 5min] Card MÁQUINAS criado!\nID: ${deal5m}\n${dealUrl5m}`).catch(() => {});
+            await lcStorage.setRdCrmDealId(visitorId, deal5m).catch(() => {});
+            await lcStorage.setChatCloseReason(chatId, 'atendimento_concluido').catch(() => {});
+            await send5mClosing();
+            clearFollowUpTimers(visitorId);
+            await lcStorage.closeChat(chatId).catch(() => {});
+            broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+            broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId, dealId: deal5m, dealUrl: dealUrl5m });
+            broadcastToAgents({ type: 'CHAT_CLOSED', chatId, visitorId });
+            console.log(`[Timers] ✅ [AUTO-CLOSE 5min] Deal MÁQUINAS (${deal5m}) criado — chat ${chatId} encerrado.`);
+
+          } else if (stage5m === 'pecas') {
+            const pecasData5m = {
+              nome:         (v5m as any).pecasNome    ?? v5m.name ?? 'Não informado',
+              telefone:     ((v5m as any).pecasTelefone ?? parseField5m('Telefone', 'Tel') ?? '') as string,
+              email:         parseField5m('E-mail', 'Email') ?? null,
+              cnpjCpf:       parseField5m('CPF/CNPJ', 'CNPJ', 'CPF') ?? null,
+              pecaDesejada:  v5m.pecaDesejada ?? 'Peça não especificada',
+              eCliente:      'NÃO INFORMADO',
+              cnpjData:      undefined,
+            };
+            await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [AUTO-CLOSE 5min] Criando card PEÇAS após inatividade...').catch(() => {});
+            broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+            const rel5mP = await generatePecasReport({ ...pecasData5m, conversationSnippet: snippet5m, transcricaoCompleta: snippet5m });
+            let owner5mP: string | undefined;
+            try { owner5mP = await lcStorage.getNextOwnerForFunnel('pecas') ?? undefined; } catch {}
+            const deal5mP = await createPecasOS(visitorId, { ...pecasData5m, ownerId: owner5mP }, rel5mP);
+            const dealUrl5mP = `https://crm.rdstation.com/app/deals/${deal5mP}`;
+            await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [AUTO-CLOSE 5min] Card PEÇAS criado!\nID: ${deal5mP}\n${dealUrl5mP}`).catch(() => {});
+            await lcStorage.setRdCrmDealId(visitorId, deal5mP).catch(() => {});
+            await lcStorage.setChatCloseReason(chatId, 'atendimento_concluido').catch(() => {});
+            await send5mClosing();
+            clearFollowUpTimers(visitorId);
+            await lcStorage.closeChat(chatId).catch(() => {});
+            broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+            broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId, dealId: deal5mP, dealUrl: dealUrl5mP });
+            broadcastToAgents({ type: 'CHAT_CLOSED', chatId, visitorId });
+            console.log(`[Timers] ✅ [AUTO-CLOSE 5min] Deal PEÇAS (${deal5mP}) criado.`);
+
+          } else if (stage5m === 'pos_venda') {
+            const pvData5m = {
+              nome:        (v5m as any).posVendaNome     ?? v5m.name ?? 'Não informado',
+              telefone:    ((v5m as any).posVendaTelefone ?? parseField5m('Telefone', 'Tel') ?? '') as string,
+              email:        parseField5m('E-mail', 'Email') ?? null,
+              cnpjCpf:      parseField5m('CPF/CNPJ', 'CNPJ', 'CPF', 'CNPJ/CPF') ?? null,
+              notaPedido:   parseField5m('Nota Fiscal', 'Nº da Nota', 'Pedido', 'Nota') ?? null,
+              problema:     (v5m as any).posVendaProblema ?? 'Não informado',
+              urgencia:     'NORMAL',
+            };
+            await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [AUTO-CLOSE 5min] Criando OS PÓS VENDA após inatividade...').catch(() => {});
+            broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+            const rel5mPv = await generatePosVendaReport({ ...pvData5m, conversationSnippet: snippet5m, transcricaoCompleta: snippet5m });
+            let owner5mPv: string | undefined;
+            try { owner5mPv = await lcStorage.getNextOwnerForFunnel('pos_venda') ?? undefined; } catch {}
+            const deal5mPv = await createPosVendaOS(visitorId, { ...pvData5m, ownerId: owner5mPv }, rel5mPv);
+            const dealUrl5mPv = `https://crm.rdstation.com/app/deals/${deal5mPv}`;
+            await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [AUTO-CLOSE 5min] OS PÓS VENDA criada!\nID: ${deal5mPv}\n${dealUrl5mPv}`).catch(() => {});
+            await lcStorage.setRdCrmDealId(visitorId, deal5mPv).catch(() => {});
+            await lcStorage.setChatCloseReason(chatId, 'atendimento_concluido').catch(() => {});
+            await send5mClosing();
+            clearFollowUpTimers(visitorId);
+            await lcStorage.closeChat(chatId).catch(() => {});
+            broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+            broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId, dealId: deal5mPv, dealUrl: dealUrl5mPv });
+            broadcastToAgents({ type: 'CHAT_CLOSED', chatId, visitorId });
+            console.log(`[Timers] ✅ [AUTO-CLOSE 5min] Deal PÓS VENDA (${deal5mPv}) criado.`);
+          }
+        } catch (err5m: any) {
+          console.error(`[Timers] ❌ AUTO-CLOSE 5min falhou para ${visitorId}:`, err5m.message);
+          await lcStorage.addVisitorNote(visitorId, 'RD CRM', `❌ [AUTO-CLOSE 5min] Falha: ${err5m.message}`).catch(() => {});
+          broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
+        }
+      })();
+    } catch (err: any) { console.error("[Timers] 5min err:", err.message); }
+  }, 5 * 60 * 1000);
+
+  // 10 min — safety net: cobre o caso em que o 5min não disparou (stage não qualificado ainda)
   timers.t8m = setTimeout(async () => {
     try {
       const chat = await lcStorage.getChatById(chatId);
       if (!chat || chat.status === "closed" || chat.status !== "ai_active") return;
 
-      // ── 🛡️ FALLBACK DE OVERVIEW PENDENTE ─────────────────────────────────────
-      // Se o visitante está em estágio maquinas/pecas/pos_venda, ainda não tem deal CRM
-      // e o último AI message parece ser um OVERVIEW aguardando confirmação que o cliente
-      // não respondeu → cria o card automaticamente com os dados já salvos no banco.
-      // Isso resolve o caso: "cliente respondeu tudo mas não confirmou o resumo"
+      // ── 🛡️ FALLBACK FINAL — qualquer stage qualificado sem deal CRM ────────
       const visitorForOverview = await lcStorage.getVisitorById(visitorId).catch(() => null);
       const overviewStages = ['maquinas', 'pecas', 'pos_venda'];
       if (
@@ -160,27 +292,25 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
         !visitorForOverview.rdCrmDealId &&
         isRdCrmConfigured()
       ) {
-        // Verifica se o último AI message é um OVERVIEW aguardando confirmação
         const recentMsgs = await lcStorage.listMessagesByChat(chatId).catch(() => [] as any[]);
-        const lastAiMsg = [...recentMsgs].reverse().find((m: any) => m.sender === 'ai');
-        // Expansão da regex: o Fagner às vezes diz "Estão corretos?", "Está tudo certo?", etc.
-        const isOverviewPending = lastAiMsg && /est[áão] (tudo )?correto|confirme os dados|resumo|est[áão] corretos\?/i.test(lastAiMsg.content);
+        // 10min: cria card SEMPRE que tem dados — não requer overview pendente
+        const alwaysTrue = true;
 
-        if (isOverviewPending) {
+        if (alwaysTrue) {
           const stage = visitorForOverview.pipelineStage as string;
           console.log(`[Timers] ⏰ 8m OVERVIEW PENDENTE detectado para visitante ${visitorId} (estágio: ${stage}) — criando card automaticamente`);
 
           const sendFinalMsgs = async () => {
             const msgs = [
-              "Vou entender isso como um sim! 😊",
-              "Muito obrigado pelas informações.",
-              "A nossa equipe já recebeu os seus dados e o responsável entrará em contato em breve.",
+              "Acredito que esteja certo! 😊",
+              "Já registrei todas as suas informações.",
+              "Em breve nossa equipe entrará em contato. Obrigado pelo contato com a Tecfag! 😊",
             ];
             for (const text of msgs) {
               await lcStorage.createMessage({ chatId, sender: 'ai', content: text });
               sendToVisitor(visitorId, { type: 'CHAT_REPLY', chatId, sender: 'ai', content: text, timestamp: new Date().toISOString() });
               broadcastToAgents({ type: 'CHAT_MESSAGE', chatId, visitorId, sender: 'ai', content: text, timestamp: new Date().toISOString() });
-              await new Promise(r => setTimeout(r, 800)); // typing delay visualzinho
+              await new Promise(r => setTimeout(r, 800));
             }
           };
 
@@ -217,7 +347,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                     ? (typeof visitorForOverview.posVendaCnpjData === 'string' ? JSON.parse(visitorForOverview.posVendaCnpjData) : visitorForOverview.posVendaCnpjData)
                     : undefined,
                 };
-                await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [OVERVIEW SEM RESPOSTA] Criando card MÁQUINAS após 8min de inatividade...').catch(() => {});
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [AUTO-CLOSE] Criando card MÁQUINAS após inatividade (assumindo confirmação)...').catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
 
                 const relatorioOv = await generateMaquinasReport({
@@ -237,7 +367,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                 try { ownerOv = await lcStorage.getNextOwnerForFunnel('maquinas') ?? undefined; } catch {}
                 const dealOv = await createMaquinasOS(visitorId, { ...maqDataOv, ownerId: ownerOv }, relatorioOv);
                 const dealUrlOv = `https://crm.rdstation.com/app/deals/${dealOv}`;
-                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [OVERVIEW SEM RESPOSTA] Card MÁQUINAS criado após inatividade!\nID: ${dealOv}\n${dealUrlOv}`).catch(() => {});
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', `✅ [AUTO-CLOSE] Card MÁQUINAS criado!\nID: ${dealOv}\n${dealUrlOv}`).catch(() => {});
                 await lcStorage.setRdCrmDealId(visitorId, dealOv).catch(() => {});
                 await lcStorage.setChatCloseReason(chatId, 'atendimento_concluido').catch(() => {});
                 await sendFinalMsgs();
@@ -246,7 +376,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
                 broadcastToAgents({ type: 'RD_CRM_OS_CREATED', visitorId, dealId: dealOv, dealUrl: dealUrlOv });
                 broadcastToAgents({ type: 'CHAT_CLOSED', chatId, visitorId });
-                console.log(`[Timers] ✅ [OVERVIEW SEM RESPOSTA] Deal MÁQUINAS criado (${dealOv}) após 8min — chat ${chatId} encerrado.`);
+                console.log(`[Timers] ✅ [AUTO-CLOSE] Deal MÁQUINAS criado (${dealOv}) — chat ${chatId} encerrado.`);
               } catch (ovErr: any) {
                 console.error(`[Timers] ❌ Fallback OVERVIEW SEM RESPOSTA (maquinas) falhou:`, ovErr.message);
                 await lcStorage.addVisitorNote(visitorId, 'RD CRM', `❌ Falha ao criar card por inatividade no OVERVIEW\n${ovErr.message}`).catch(() => {});
@@ -269,7 +399,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                   cnpjData:          undefined,
                 };
                 
-                await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [OVERVIEW SEM RESPOSTA] Criando card PEÇAS após 8min de inatividade...').catch(() => {});
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [AUTO-CLOSE] Criando card PEÇAS após inatividade (assumindo confirmação)...').catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
                 
                 const relatorioOv = await generatePecasReport({
@@ -315,7 +445,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                   urgencia:          'NORMAL', // default fallback
                 };
                 
-                await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [OVERVIEW SEM RESPOSTA] Criando OS PÓS VENDA após 8min de inatividade...').catch(() => {});
+                await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [AUTO-CLOSE] Criando OS PÓS VENDA após inatividade (assumindo confirmação)...').catch(() => {});
                 broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
                 
                 const relatorioOv = await generatePosVendaReport({
@@ -458,7 +588,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
       sendToVisitor(visitorId, { type: "CHAT_REPLY", chatId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
       broadcastToAgents({ type: "CHAT_MESSAGE", chatId, visitorId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
     } catch (err: any) { console.error("[Timers] 15m err:", err.message); }
-  }, 15 * 60 * 1000);
+  }, 10 * 60 * 1000);
 
   // 10 minutes closure - REMOVIDO para impedir a fragmentação dos chats.
   // O chat permanecerá aberto até que o cliente saia do site (o fallback sweepOrphanedChats fechará após 90min).
