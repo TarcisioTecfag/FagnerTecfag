@@ -105,6 +105,45 @@ export async function broadcastPipelineUpdateExternal(visitorId: string, stage: 
 
 // ─── Follow-up Timers (3m, 8m, 10m limit) ────────────────────────────────────
 
+/**
+ * Gera o texto de alerta de dados incompletos para ser incluído no relatório do CRM.
+ * Lista os campos ausentes e explica o motivo da criação automática do card.
+ */
+function buildParcialAlert(params: {
+  funnel: 'maquinas' | 'pecas' | 'pos_venda';
+  nome?: string | null;
+  telefone?: string | null;
+  email?: string | null;
+  cnpjCpf?: string | null;
+  produto?: string | null; // maquinaDesejada ou pecaDesejada
+  stage?: string;
+  reason: 'auto_close_5min' | 'overview_timeout_10min' | 'minimal_data_10min';
+}): string {
+  const missing: string[] = [];
+  if (!params.email) missing.push('E-mail');
+  if (!params.cnpjCpf) missing.push('CPF/CNPJ');
+  if (!params.produto || params.produto.includes('Interesse') || params.produto.includes('especificado') || params.produto.includes('detalhes na conversa')) {
+    missing.push('Produto/máquina específica');
+  }
+
+  const motivo = params.reason === 'auto_close_5min'
+    ? 'Cliente não respondeu por 5 minutos após o Fagner apresentar o resumo dos dados — Fagner assumiu confirmação automaticamente.'
+    : params.reason === 'overview_timeout_10min'
+    ? 'Cliente não confirmou o overview apresentado pelo Fagner e ficou inativo por 10 minutos — card criado com os dados já coletados.'
+    : `Cliente forneceu contato (nome + telefone) mas saiu antes de completar o cadastro. Stage no momento da saída: "${params.stage || 'não detectado'}".`;
+
+  const lines = [
+    `Motivo: ${motivo}`,
+  ];
+  if (missing.length > 0) {
+    lines.push(`Dados não coletados: ${missing.join(', ')}.`);
+    lines.push(`Acao necessaria: SDR deve solicitar essas informacoes ao fazer o primeiro contato.`);
+  } else {
+    lines.push(`Todos os dados principais foram coletados — apenas a confirmacao final estava pendente.`);
+  }
+  return lines.join('\n');
+}
+
 function startFollowUpTimers(visitorId: string, chatId: string): void {
   clearFollowUpTimers(visitorId);
   const timers: FollowUpTimers = {};
@@ -196,7 +235,9 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
             };
             await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [AUTO-CLOSE 5min] Criando card MÁQUINAS após inatividade...').catch(() => {});
             broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
-            const rel5m = await generateMaquinasReport({ ...maqData5m, conversationSnippet: snippet5m, transcricaoCompleta: snippet5m });
+            const rel5m = await generateMaquinasReport({ ...maqData5m, conversationSnippet: snippet5m, transcricaoCompleta: snippet5m,
+              parcialAlert: buildParcialAlert({ funnel: 'maquinas', email: maqData5m.email, cnpjCpf: maqData5m.cnpjCpf, produto: maqData5m.maquinaDesejada, stage: stage5m, reason: 'auto_close_5min' }),
+            });
             let owner5m: string | undefined;
             try { owner5m = await lcStorage.getNextOwnerForFunnel('maquinas') ?? undefined; } catch {}
             const deal5m = await createMaquinasOS(visitorId, { ...maqData5m, ownerId: owner5m }, rel5m);
@@ -224,7 +265,9 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
             };
             await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [AUTO-CLOSE 5min] Criando card PEÇAS após inatividade...').catch(() => {});
             broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
-            const rel5mP = await generatePecasReport({ ...pecasData5m, conversationSnippet: snippet5m, transcricaoCompleta: snippet5m });
+            const rel5mP = await generatePecasReport({ ...pecasData5m, conversationSnippet: snippet5m, transcricaoCompleta: snippet5m,
+              parcialAlert: buildParcialAlert({ funnel: 'pecas', email: pecasData5m.email, cnpjCpf: pecasData5m.cnpjCpf, produto: pecasData5m.pecaDesejada, stage: stage5m, reason: 'auto_close_5min' }),
+            });
             let owner5mP: string | undefined;
             try { owner5mP = await lcStorage.getNextOwnerForFunnel('pecas') ?? undefined; } catch {}
             const deal5mP = await createPecasOS(visitorId, { ...pecasData5m, ownerId: owner5mP }, rel5mP);
@@ -252,7 +295,9 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
             };
             await lcStorage.addVisitorNote(visitorId, 'RD CRM', '⏳ [AUTO-CLOSE 5min] Criando OS PÓS VENDA após inatividade...').catch(() => {});
             broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
-            const rel5mPv = await generatePosVendaReport({ ...pvData5m, conversationSnippet: snippet5m, transcricaoCompleta: snippet5m });
+            const rel5mPv = await generatePosVendaReport({ ...pvData5m, conversationSnippet: snippet5m, transcricaoCompleta: snippet5m,
+              parcialAlert: buildParcialAlert({ funnel: 'pos_venda', email: pvData5m.email, cnpjCpf: pvData5m.cnpjCpf, stage: stage5m, reason: 'auto_close_5min' }),
+            });
             let owner5mPv: string | undefined;
             try { owner5mPv = await lcStorage.getNextOwnerForFunnel('pos_venda') ?? undefined; } catch {}
             const deal5mPv = await createPosVendaOS(visitorId, { ...pvData5m, ownerId: owner5mPv }, rel5mPv);
@@ -362,6 +407,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                   cnpjData: maqDataOv.cnpjData,
                   conversationSnippet: snippetOv,
                   transcricaoCompleta: snippetOv,
+                  parcialAlert: buildParcialAlert({ funnel: 'maquinas', email: maqDataOv.email, cnpjCpf: maqDataOv.cnpjCpf, produto: maqDataOv.maquinaDesejada, stage, reason: 'overview_timeout_10min' }),
                 });
                 let ownerOv: string | undefined;
                 try { ownerOv = await lcStorage.getNextOwnerForFunnel('maquinas') ?? undefined; } catch {}
@@ -406,6 +452,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                   ...pecasDataOv,
                   conversationSnippet: snippetOv,
                   transcricaoCompleta: snippetOv,
+                  parcialAlert: buildParcialAlert({ funnel: 'pecas', email: pecasDataOv.email, cnpjCpf: pecasDataOv.cnpjCpf, produto: pecasDataOv.pecaDesejada, stage, reason: 'overview_timeout_10min' }),
                 });
                 
                 let ownerOv: string | undefined;
@@ -452,6 +499,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                   ...pvDataOv,
                   conversationSnippet: snippetOv,
                   transcricaoCompleta: snippetOv,
+                  parcialAlert: buildParcialAlert({ funnel: 'pos_venda', email: pvDataOv.email, cnpjCpf: pvDataOv.cnpjCpf, stage, reason: 'overview_timeout_10min' }),
                 });
                 
                 let ownerOv: string | undefined;
@@ -552,7 +600,9 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                     `⏳ [LEAD MÍNIMO] Criando card PEÇAS com nome+telefone.\nNome: ${leadNome} | Tel: ${leadTelefone}`
                   ).catch(() => {});
                   broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
-                  const relPm = await generatePecasReport({ ...pecaDataPm, conversationSnippet: snippetPm, transcricaoCompleta: snippetPm });
+                  const relPm = await generatePecasReport({ ...pecaDataPm, conversationSnippet: snippetPm, transcricaoCompleta: snippetPm,
+                    parcialAlert: buildParcialAlert({ funnel: 'pecas', email: pecaDataPm.email, cnpjCpf: pecaDataPm.cnpjCpf, produto: pecaDataPm.pecaDesejada, stage, reason: 'minimal_data_10min' }),
+                  });
                   dealPm = await createPecasOS(visitorId, { ...pecaDataPm, ownerId: ownerPm }, relPm);
 
                 } else if (funnelStage === 'pos_venda') {
@@ -567,7 +617,9 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                     `⏳ [LEAD MÍNIMO] Criando OS PÓS VENDA com nome+telefone.\nNome: ${leadNome} | Tel: ${leadTelefone}`
                   ).catch(() => {});
                   broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
-                  const relPm = await generatePosVendaReport({ ...pvDataPm, conversationSnippet: snippetPm, transcricaoCompleta: snippetPm });
+                  const relPm = await generatePosVendaReport({ ...pvDataPm, conversationSnippet: snippetPm, transcricaoCompleta: snippetPm,
+                    parcialAlert: buildParcialAlert({ funnel: 'pos_venda', email: pvDataPm.email, cnpjCpf: pvDataPm.cnpjCpf, stage, reason: 'minimal_data_10min' }),
+                  });
                   dealPm = await createPosVendaOS(visitorId, { ...pvDataPm, ownerId: ownerPm }, relPm);
 
                 } else {
@@ -590,7 +642,9 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                     `⏳ [LEAD MÍNIMO] Criando card MÁQUINAS com nome+telefone.\nNome: ${leadNome} | Tel: ${leadTelefone} | Stage: ${stage || 'não detectado'}`
                   ).catch(() => {});
                   broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId });
-                  const relPm = await generateMaquinasReport({ ...maqDataPm, conversationSnippet: snippetPm, transcricaoCompleta: snippetPm });
+                  const relPm = await generateMaquinasReport({ ...maqDataPm, conversationSnippet: snippetPm, transcricaoCompleta: snippetPm,
+                    parcialAlert: buildParcialAlert({ funnel: 'maquinas', email: maqDataPm.email, cnpjCpf: maqDataPm.cnpjCpf, produto: maqDataPm.maquinaDesejada, stage, reason: 'minimal_data_10min' }),
+                  });
                   dealPm = await createMaquinasOS(visitorId, { ...maqDataPm, ownerId: ownerPm }, relPm);
                 }
 

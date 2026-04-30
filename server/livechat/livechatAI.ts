@@ -1,4 +1,4 @@
-/**
+﻿/**
  * server/livechat/livechatAI.ts
  *
  * Motor IA do Live Chat — Conversa livre com Gemini (sem fluxo de triagem)
@@ -1860,8 +1860,10 @@ export interface PosVendaReportInput {
   notaPedido?: string | null;
   problema: string;
   cnpjData?: any;
-  conversationSnippet?: string;  // snippet compacto para contexto do Gemini
-  transcricaoCompleta?: string;  // transcrição completa para seção do relatório
+  conversationSnippet?: string;
+  transcricaoCompleta?: string;
+  /** Preenchido quando o card foi criado automaticamente com dados incompletos. */
+  parcialAlert?: string | null;
 }
 
 const SEP = "-------------------------------------------------------";
@@ -1885,6 +1887,16 @@ export async function generatePosVendaReport(input: PosVendaReportInput): Promis
   // ─── Cabeçalho ────────────────────────────────────────────────────────────
   lines.push(`RELATÓRIO DE TRIAGEM — FAGNER IA`);
   lines.push(`=======================================================`);
+
+  // ALERTA DE DADOS INCOMPLETOS (somente em cards criados automaticamente por timeout)
+  if (input.parcialAlert) {
+    lines.push('!!! ATENCAO: CARD CRIADO AUTOMATICAMENTE COM DADOS INCOMPLETOS !!!');
+    lines.push('=======================================================');
+    lines.push(input.parcialAlert);
+    lines.push('=======================================================');
+    lines.push('');
+  }
+
   lines.push(``);
 
   // ─── Problema Principal (destaque) ────────────────────────────────────────
@@ -1995,6 +2007,9 @@ export interface MaquinasReportInput {
   cnpjData?: any;
   conversationSnippet?: string;
   transcricaoCompleta?: string;
+  /** Preenchido quando o card foi criado automaticamente com dados incompletos.
+   *  Descreve o que faltou e por quê o card foi criado assim. */
+  parcialAlert?: string | null;
 }
 
 const SDR_LABELS: Record<string, string> = {
@@ -2024,6 +2039,15 @@ export async function generateMaquinasReport(input: MaquinasReportInput): Promis
   lines.push(`RELATÓRIO DE TRIAGEM — FAGNER IA`);
   lines.push(`──────────────────────────────────────────────────`);
   lines.push(``);
+
+  // ─── ALERTA DE DADOS INCOMPLETOS (somente em cards criados automaticamente) ─────
+  if (input.parcialAlert) {
+    lines.push(`⚠️ ATENÇÃO — CARD CRIADO AUTOMATICAMENTE COM DADOS INCOMPLETOS`);
+    lines.push(`⚠️ ────────────────────────────────────────────────`);
+    lines.push(input.parcialAlert);
+    lines.push(`⚠️ ────────────────────────────────────────────────`);
+    lines.push(``);
+  }
 
   // ─── Identificação do Cliente ──────────────────────────────────────────────
   lines.push(`IDENTIFICAÇÃO DO CLIENTE:`);
@@ -2196,6 +2220,8 @@ export interface PecasReportInput {
   cnpjData?: any;
   conversationSnippet?: string;
   transcricaoCompleta?: string;
+  /** Preenchido quando o card foi criado automaticamente com dados incompletos. */
+  parcialAlert?: string | null;
 }
 
 /**
@@ -2214,6 +2240,15 @@ export async function generatePecasReport(input: PecasReportInput): Promise<stri
   lines.push(`RELATÓRIO DE TRIAGEM — FAGNER IA (PEÇAS)`);
   lines.push(`──────────────────────────────────────────────────`);
   lines.push(``);
+
+  // ─── ALERTA DE DADOS INCOMPLETOS ───────────────────────────────────────────────
+  if (input.parcialAlert) {
+    lines.push(`⚠️ ATENÇÃO — CARD CRIADO AUTOMATICAMENTE COM DADOS INCOMPLETOS`);
+    lines.push(`⚠️ ────────────────────────────────────────────────`);
+    lines.push(input.parcialAlert);
+    lines.push(`⚠️ ────────────────────────────────────────────────`);
+    lines.push(``);
+  }
 
   lines.push(`IDENTIFICAÇÃO DO CLIENTE:`);
   lines.push(`Nome: ${input.nome}`);
