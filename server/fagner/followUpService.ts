@@ -56,9 +56,14 @@ export async function checkFollowUps(activeSessions: ContactSession[]): Promise<
     // ── FECHAMENTO POR ABANDONO ───────────────────────────────────────────────
     // Se o cliente forneceu telefone mas ficou 20+ min sem responder,
     // cria o card com os dados parciais e fecha a sessão.
+    // IMPORTANTE: verifica AMBOS os campos de telefone:
+    //   - flowData.clientPhone: informado pelo cliente durante a conversa
+    //   - contactPhone: capturado automaticamente do RD Conversas/WhatsApp no início da sessão
+    //   Sem isso, clientes do WhatsApp nunca teriam o card criado por abandono.
+    const hasPhone = !!(session.flowData.clientPhone || session.contactPhone);
     if (
       sinceLastMsg >= ABANDON_CLOSE_MS &&
-      session.flowData.clientPhone &&
+      hasPhone &&
       _forceCloseSession
     ) {
       console.log(`[FollowUp] Sessão ${session.contactId} — abandono detectado (telefone coletado, 20min sem resposta). Fechando com dados parciais.`);

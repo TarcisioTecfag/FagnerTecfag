@@ -102,11 +102,17 @@ const FLOW_KEYWORDS: Record<string, { flow: FlowType; sub: SubFlowType }> = {
   problema: { flow: 3, sub: "3_AT" },
   erro: { flow: 3, sub: "3_AT" },
   // Fluxo 4 — Pós Venda
+  // ATENÇÃO: usar APENAS frases compostas/específicas para evitar falsos positivos.
+  // 'pedido' e 'entrega' sozinhos são palavras genéricas que aparecem em contexto comercial normal.
   rastrear: { flow: 4, sub: "4A_RASTREAR" },
   rastreio: { flow: 4, sub: "4A_RASTREAR" },
-  entrega: { flow: 4, sub: "4A_RASTREAR" },
-  pedido: { flow: 4, sub: "4A_RASTREAR" },
+  "rastrear meu pedido": { flow: 4, sub: "4A_RASTREAR" },
+  "rastrear pedido": { flow: 4, sub: "4A_RASTREAR" },
   "meu pedido": { flow: 4, sub: "4A_RASTREAR" },
+  "onde está meu pedido": { flow: 4, sub: "4A_RASTREAR" },
+  "status do pedido": { flow: 4, sub: "4A_RASTREAR" },
+  "prazo de entrega": { flow: 4, sub: "4A_RASTREAR" },
+  "quando chega meu": { flow: 4, sub: "4A_RASTREAR" },
   "nota do pedido": { flow: 4, sub: "4B_NF" },
   // Fluxo 5 — Outros
   currículo: { flow: 5, sub: "5B_CURRICULO" },
