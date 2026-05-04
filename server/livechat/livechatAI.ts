@@ -1,4 +1,4 @@
-﻿/**
+/**
  * server/livechat/livechatAI.ts
  *
  * Motor IA do Live Chat — Conversa livre com Gemini (sem fluxo de triagem)
@@ -52,8 +52,6 @@ const NOISE_PATTERNS: RegExp[] = [
 const NOISE_REPLIES: string[] = [
   "Nosso horário é de segunda a sexta, das 8h às 18h! Posso ajudar com alguma dúvida sobre nossas máquinas? 😊",
   "Atendemos de segunda a sexta, das 8h às 18h. Em que posso te ajudar?",
-  "Sou o Fagner, representante comercial da Tecfag! Posso te ajudar a encontrar a máquina certa para sua produção.",
-  "Pode perguntar! Estou aqui para ajudar com máquinas e equipamentos industriais.",
 ];
 
 
@@ -108,6 +106,14 @@ const PECAS_PATTERNS: RegExp[] = [
   /quero.{0,10}(uma|umas|uma?).{0,10}pe[çc]a/i,
   /preciso.{0,10}(de )?pe[çc]a[s]?/i,
   /tem.{0,15}pe[çc]a[s]?/i,
+  // Componentes específicos reconhecíveis como peças de reposição
+  /\b(correia[s]?|rolamento[s]?|resistência[s]?|faca[s]?|lâmina[s]?|mola[s]?|borracha[s]?|vedação|gaxeta|rela[çc]amento|relação)\b/i,
+  // "para máquina" com peça implícita
+  /\b(correia|correia[s]?|polia[s]?)\s.{0,15}(seladora|envasadora|empacotadora|lacrador|m[aá]quina)/i,
+  // Compra de insumos industriais
+  /compra.{0,15}(de\s)?(insumo[s]?|consumív[ei][sl]|componente[s]?)/i,
+  /insumo[s]?.{0,20}(comprar|pedir|solicitar|preciso|quero|valor|pre[çc]o)/i,
+  /preciso.{0,15}(de\s)?(insumo|componente)/i,
 ];
 
 // Máquinas: detecção de intenção de orçamento/cotação de máquinas grandes ou indisponíveis
@@ -165,19 +171,23 @@ export function isObviousNoise(message: string): { isNoise: boolean; reply: stri
     return { isNoise: false, reply: '' };
   }
 
-  // Mensagens completamente vazias ou apenas uma letra solta sem ser validWord
+  // Mensagens completamente vazias, símbolos soltos ou muito curtas (ex: "?", "!", "..")
+  // → Silêncio absoluto: NÃO enviamos nenhuma mensagem ao cliente.
+  // O sistema simplesmente ignora, sem bordão nem resposta.
   if (trimmed.length < 2) {
-    return { isNoise: true, reply: NOISE_REPLIES[3] };
+    return { isNoise: false, reply: '' };
   }
+
   for (const pattern of NOISE_PATTERNS) {
     if (pattern.test(trimmed)) {
-      // Seleciona resposta baseada no tipo de ruído
-      const reply = /hora|horário|funciona|fecha|abre/i.test(trimmed)
-        ? NOISE_REPLIES[0]
-        : /robô|robo|ia|bot|virtual/i.test(trimmed)
-          ? NOISE_REPLIES[2]
-          : NOISE_REPLIES[3];
-      return { isNoise: true, reply };
+      // Só responde para horário — padrão genérico e seguro.
+      // Para "robô/ia/bot": deixa o Gemini responder naturalmente com a persona.
+      // Para outros ruídos: silêncio (não expõe bordões ao cliente).
+      if (/hora|horário|funciona|fecha|abre/i.test(trimmed)) {
+        return { isNoise: true, reply: NOISE_REPLIES[0] };
+      }
+      // Qualquer outro padrão de ruído → silêncio (não responde nada)
+      return { isNoise: false, reply: '' };
     }
   }
   return { isNoise: false, reply: '' };

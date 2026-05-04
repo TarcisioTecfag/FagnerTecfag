@@ -781,6 +781,8 @@ export const lcStorage = {
     totalChatsToday: number;
     totalVisitorsToday: number;
     totalVisitorsAll: number;
+    totalIdentifiedAll: number;
+    totalOfflineAll: number;
   }> {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -790,6 +792,8 @@ export const lcStorage = {
     const [chatsToday] = await db.select({ c: sql<number>`count(*)` }).from(lcChats).where(sql`"startedAt"::date = ${today}::date`);
     const [visitorsToday] = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors).where(sql`"firstSeenAt"::date = ${today}::date`);
     const [visitorsAll]   = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors);
+    const [identifiedAll] = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors).where(sql`"name" IS NOT NULL AND "name" != ''`);
+    const [offlineAll]    = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors).where(eq(lcVisitors.isOnline, "false"));
 
     return {
       onlineVisitors: Number(online?.c ?? 0),
@@ -798,6 +802,8 @@ export const lcStorage = {
       totalChatsToday: Number(chatsToday?.c ?? 0),
       totalVisitorsToday: Number(visitorsToday?.c ?? 0),
       totalVisitorsAll: Number(visitorsAll?.c ?? 0),
+      totalIdentifiedAll: Number(identifiedAll?.c ?? 0),
+      totalOfflineAll: Number(offlineAll?.c ?? 0),
     };
   },
 

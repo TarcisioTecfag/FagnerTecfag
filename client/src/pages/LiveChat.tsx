@@ -88,6 +88,7 @@ interface Visitor {
   category: string;
   engagementScore: number;
   purchaseIntentScore?: number;           // #4 — Score de intenção de compra (0-100)
+  totalTimeSeconds?: number;              // Tempo total acumulado no site (em segundos) — campo TEMPO
   aiBriefing?: {                          // #7 — Briefing estruturado gerado pela IA
     produtoInteresse?: string;
     fabricaO?: string;
@@ -158,6 +159,8 @@ interface Stats {
   totalChatsToday: number;
   totalVisitorsToday: number;
   totalVisitorsAll: number;
+  totalIdentifiedAll?: number;
+  totalOfflineAll?: number;
 }
 
 interface Pageview {
@@ -2850,7 +2853,9 @@ function LiveChat() {
               <h3 className="text-xs font-semibold text-zinc-500 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-zinc-300" />
                 Visitantes Offline
-                <span className="text-zinc-400 font-normal text-[11px]">({filteredVisitors.filter(v => v.isOnline !== "true").length} recentes)</span>
+                <span className="text-zinc-400 font-normal text-[11px]">
+                  ({stats?.totalOfflineAll?.toLocaleString('pt-BR') ?? filteredVisitors.filter(v => v.isOnline !== "true").length} recentes)
+                </span>
                 {!offlineExpanded && (
                   <span className="text-[10px] text-zinc-400 italic font-normal">— clique para carregar</span>
                 )}
@@ -2968,7 +2973,7 @@ function LiveChat() {
                     <h3 className="text-xs font-semibold text-blue-700 flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full bg-blue-400" />
                       Visitantes Identificados
-                      <span className="text-blue-500 font-normal text-[11px]">({identifiedVisitors.length} com nome)</span>
+                      <span className="text-blue-500 font-normal text-[11px]">({stats?.totalIdentifiedAll?.toLocaleString('pt-BR') ?? identifiedVisitors.length} com nome)</span>
                       {!identifiedExpanded && (
                         <span className="text-[10px] text-blue-400 italic font-normal">— clique para carregar</span>
                       )}
