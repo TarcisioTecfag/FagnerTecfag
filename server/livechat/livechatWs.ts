@@ -525,7 +525,8 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
             })();
             return;
           }
-        }
+        } // fecha if(alwaysTrue)
+      } // fecha if(visitorForOverview && overviewStages)
 
         // ── 🛡️ FALLBACK UNIVERSAL DE DADOS MÍNIMOS ───────────────────────────────
         // Captura QUALQUER lead que tenha nome + telefone, independente do stage ou
@@ -667,15 +668,13 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
             return;
           }
         }
-        // ──────────────────────────────────────────────────────────────────────
 
-
-
-      const msg = "Ainda posso ajudar com algo? Qualquer dúvida é só falar! 😊";
-      await lcStorage.createMessage({ chatId, sender: "ai", content: msg });
-      sendToVisitor(visitorId, { type: "CHAT_REPLY", chatId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
-      broadcastToAgents({ type: "CHAT_MESSAGE", chatId, visitorId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
-    } catch (err: any) { console.error("[Timers] 15m err:", err.message); }
+        // ── Mensagem de follow-up final (só chega aqui se não havia lead para criar card) ──
+        const msg = "Ainda posso ajudar com algo? Qualquer dúvida é só falar! 😊";
+        await lcStorage.createMessage({ chatId, sender: "ai", content: msg });
+        sendToVisitor(visitorId, { type: "CHAT_REPLY", chatId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
+        broadcastToAgents({ type: "CHAT_MESSAGE", chatId, visitorId, sender: "ai", content: msg, timestamp: new Date().toISOString() });
+      } catch (err: any) { console.error("[Timers] 8m err:", err.message); }
   }, 10 * 60 * 1000);
 
   // 10 minutes closure - REMOVIDO para impedir a fragmentação dos chats.
