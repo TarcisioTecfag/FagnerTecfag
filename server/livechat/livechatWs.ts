@@ -965,12 +965,20 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             startProactiveTimer(visitorId);
 
             // Create initial pageview
-            await lcStorage.createPageview({
+            const initialPv = await lcStorage.createPageview({
               visitorId,
               url: data.currentPage ?? "",
               pageTitle: data.pageTitle,
             });
             await lcStorage.incrementVisitorPages(visitorId);
+
+            // ── Envia o pageviewId inicial de volta ao widget ──────────────────
+            // Sem isso, currentPageviewId no widget fica null e o flushPageTime()
+            // aborta cedo, fazendo o campo "TEMPO" nunca ser preenchido.
+            ws.send(JSON.stringify({
+              type: "VISITOR_PAGE_UPDATE",
+              pageviewId: initialPv.id,
+            }));
 
             // ── RECUPERAÇÃO PÓS-RECONEXÃO (MPA/F5) ───────────────────
             // A VTEX é MPA: cada navegação desmonta o widget e fecha o WS.
