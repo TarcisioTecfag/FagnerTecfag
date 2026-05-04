@@ -164,6 +164,7 @@ export const lcVisitors = pgTable("lc_visitors", {
   category: text("category").notNull().default("visitor"),   // 'visitor', 'lead_warm', 'lead_hot', 'customer', 'returning'
   engagementScore: integer("engagementScore").notNull().default(0),
   purchaseIntentScore: integer("purchaseIntentScore").notNull().default(0),  // 0-100 — score de intenção de compra
+  totalTimeSeconds: integer("totalTimeSeconds").notNull().default(0),        // Tempo total acumulado no site (soma dos timeSpent dos pageviews)
   aiBriefing: jsonb("aiBriefing").$type<{
     produtoInteresse?: string;
     fabricaO?: string;

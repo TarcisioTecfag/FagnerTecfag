@@ -1119,15 +1119,18 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               await lcStorage.incrementPurchaseIntentScore(visitorId, 5);
             }
             // ── Notifica painel admin com totalTimeSeconds atualizado ──────────
-            // Sem isso, o tempo é salvo no banco mas o painel nunca atualiza
-            // e o campo TEMPO fica "--" para sempre (necessitaria F5).
+            // Usa raw SQL para garantir leitura do valor real mesmo que o schema
+            // Drizzle não inclua o campo (o `getVisitorById` retorna LcVisitor tipado).
             try {
-              const updatedVisitor = await lcStorage.getVisitorById(visitorId);
-              if (updatedVisitor) {
+              const rows = await db.execute(sql`
+                SELECT "totalTimeSeconds" FROM lc_visitors WHERE id = ${visitorId} LIMIT 1
+              `);
+              const totalTimeSeconds = (rows.rows?.[0] as any)?.totalTimeSeconds ?? 0;
+              if (totalTimeSeconds > 0) {
                 broadcastToAgents({
                   type: "VISITOR_TIME_UPDATE",
                   visitorId,
-                  totalTimeSeconds: (updatedVisitor as any).totalTimeSeconds ?? 0,
+                  totalTimeSeconds,
                 });
               }
             } catch { /* não crítico — o dado está salvo no banco */ }
