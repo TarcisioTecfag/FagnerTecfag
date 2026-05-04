@@ -2993,27 +2993,25 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 try {
                   const visitorNow = await lcStorage.getVisitorById(currentVisitorId);
                   // Todos os stages onde o atendimento já foi encerrado ou é um fluxo gerenciado
-                  const PROTECTED_STAGES = [
-                    'outros',
+                  // ── Decide se inicia ou cancela os timers de auto-close ─────────
+                  // Dois motivos para NÃO iniciar o timer:
+                  //   1. Stage TERMINAL — conversa encerrada, não faz sentido monitorar
+                  //   2. Deal JÁ EXISTE no CRM — auto-close criaria duplicata
+                  // Stages ATIVOS (maquinas/pecas/pos_venda) DEVEM receber o timer:
+                  // são exatamente onde o auto-close é mais útil.
+                  const TERMINAL_STAGES = [
                     'finalizado_com_venda',
                     'finalizado_sem_venda',
-                    'pos_venda',
-                    'maquinas',
-                    'pecas',
                     'vendido',
                     'sem_resposta',
+                    'outros',
                   ];
-                  // Também protege pela presença de tags de dados NA RESPOSTA ATUAL
-                  // (o banco pode ainda não ter sido atualizado quando chegamos aqui)
-                  const hasConclusionTag = posVendaTagMatch !== null
-                    || maquinasTagMatch !== null
-                    || pecasTagMatch !== null
-                    || hasSale;
+                  const isTerminal    = TERMINAL_STAGES.includes(visitorNow?.pipelineStage ?? '');
+                  const dealExists    = !!visitorNow?.rdCrmDealId;
 
-                  if (PROTECTED_STAGES.includes(visitorNow?.pipelineStage ?? '') || hasConclusionTag) {
-                    // Garante que timers anteriores também sejam cancelados
+                  if (isTerminal || dealExists || hasConclusionTag) {
                     clearFollowUpTimers(currentVisitorId);
-                    console.log(`[LiveChat] Follow-up timers bloqueados — estágio: ${visitorNow?.pipelineStage}${hasConclusionTag ? ' (tag de conclusão detectada)' : ''}`);
+                    console.log(`[LiveChat] Follow-up timers bloqueados — stage: ${visitorNow?.pipelineStage} | deal: ${visitorNow?.rdCrmDealId ?? 'nenhum'} | conclusão: ${hasConclusionTag}`);
                   } else {
                     startFollowUpTimers(currentVisitorId, chat.id);
                   }
