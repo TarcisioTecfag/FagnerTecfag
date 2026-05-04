@@ -878,6 +878,22 @@ function LiveChat() {
             }
             break;
 
+          case "VISITOR_TIME_UPDATE":
+            // Atualiza totalTimeSeconds em tempo real — disparado pelo servidor a cada 30s
+            // quando o widget envia PAGEVIEW_UPDATE com o tempo acumulado na página.
+            setVisitors((prev) => prev.map((v) =>
+              v.id === data.visitorId ? { ...v, totalTimeSeconds: data.totalTimeSeconds } : v
+            ));
+            setAllVisitors((prev) => prev.map((v) =>
+              v.id === data.visitorId ? { ...v, totalTimeSeconds: data.totalTimeSeconds } : v
+            ));
+            // Atualiza o CustomerModal se estiver aberto para este visitante
+            setHistoryModal(prev => prev && prev.visitor.id === data.visitorId
+              ? { ...prev, visitor: { ...prev.visitor, totalTimeSeconds: data.totalTimeSeconds } }
+              : prev
+            );
+            break;
+
           case "RETURNING_HOT_LEAD": {
             // #6 — Lead quente voltou ao site: toast especial com link de visita
             const leadUrl = data.currentPageTitle || data.currentPage || "site";

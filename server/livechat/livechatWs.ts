@@ -1118,6 +1118,19 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             if (data.timeSpent >= 120 && data.intentTag && data.intentTag !== 'navegacao_geral') {
               await lcStorage.incrementPurchaseIntentScore(visitorId, 5);
             }
+            // ── Notifica painel admin com totalTimeSeconds atualizado ──────────
+            // Sem isso, o tempo é salvo no banco mas o painel nunca atualiza
+            // e o campo TEMPO fica "--" para sempre (necessitaria F5).
+            try {
+              const updatedVisitor = await lcStorage.getVisitorById(visitorId);
+              if (updatedVisitor) {
+                broadcastToAgents({
+                  type: "VISITOR_TIME_UPDATE",
+                  visitorId,
+                  totalTimeSeconds: (updatedVisitor as any).totalTimeSeconds ?? 0,
+                });
+              }
+            } catch { /* não crítico — o dado está salvo no banco */ }
             break;
           }
 
