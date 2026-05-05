@@ -66,6 +66,10 @@ import LeadScoringCard       from "../components/dashboard/LeadScoringCard";
 import PreChatPagesCard      from "../components/dashboard/PreChatPagesCard";
 import ReportExportModal     from "../components/dashboard/ReportExportModal";
 import { useStatsData }      from "../components/dashboard/useStatsData";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as UICalendar } from "@/components/ui/calendar";
+import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -3686,54 +3690,89 @@ function LiveChat() {
                 Selecione um período para filtrar <strong>todas as abas</strong> do Live Chat, incluindo as métricas do B.I. e histórico do CRM.
               </p>
 
-              <style>{`
-                .glass-date-input::-webkit-calendar-picker-indicator {
-                  background: transparent;
-                  bottom: 0;
-                  color: transparent;
-                  cursor: pointer;
-                  height: auto;
-                  left: 0;
-                  position: absolute;
-                  right: 0;
-                  top: 0;
-                  width: auto;
-                }
-              `}</style>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                     Data Inicial
                   </label>
-                  <div className="relative group flex items-center bg-zinc-50 border border-zinc-200 rounded-xl hover:border-red-300 hover:shadow-sm transition-all focus-within:border-red-400 focus-within:ring-2 focus-within:ring-red-100 overflow-hidden">
-                    <Calendar className="w-4 h-4 text-zinc-400 absolute left-3 pointer-events-none group-focus-within:text-red-500 transition-colors" />
-                    <input
-                      type="date"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                      max={dateTo || new Date().toISOString().split("T")[0]}
-                      className="glass-date-input w-full pl-10 pr-3 py-2.5 text-sm font-semibold focus:outline-none bg-transparent text-zinc-700 cursor-pointer"
-                      style={{ colorScheme: "light" }}
-                    />
-                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className={cn(
+                          "w-full flex items-center justify-start text-left bg-zinc-50 border border-zinc-200 rounded-xl hover:border-red-300 hover:shadow-sm transition-all focus:border-red-400 focus:ring-2 focus:ring-red-100 overflow-hidden pl-3 pr-3 py-2.5 text-sm font-semibold text-zinc-700",
+                          !dateFrom && "text-zinc-400"
+                        )}
+                      >
+                        <Calendar className="w-4 h-4 text-zinc-400 mr-2 shrink-0" />
+                        {dateFrom ? new Date(dateFrom + "T00:00:00").toLocaleDateString("pt-BR") : "Selecionar data"}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 z-[100]" align="start">
+                      <UICalendar
+                        mode="single"
+                        locale={ptBR}
+                        selected={dateFrom ? new Date(dateFrom + "T00:00:00") : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            const y = date.getFullYear();
+                            const m = String(date.getMonth() + 1).padStart(2, '0');
+                            const d = String(date.getDate()).padStart(2, '0');
+                            setDateFrom(`${y}-${m}-${d}`);
+                          } else {
+                            setDateFrom("");
+                          }
+                        }}
+                        disabled={(date) => {
+                          const maxDate = dateTo ? new Date(dateTo + "T00:00:00") : new Date();
+                          return date > maxDate;
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                     Data Final
                   </label>
-                  <div className="relative group flex items-center bg-zinc-50 border border-zinc-200 rounded-xl hover:border-red-300 hover:shadow-sm transition-all focus-within:border-red-400 focus-within:ring-2 focus-within:ring-red-100 overflow-hidden">
-                    <Calendar className="w-4 h-4 text-zinc-400 absolute left-3 pointer-events-none group-focus-within:text-red-500 transition-colors" />
-                    <input
-                      type="date"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                      min={dateFrom || undefined}
-                      max={new Date().toISOString().split("T")[0]}
-                      className="glass-date-input w-full pl-10 pr-3 py-2.5 text-sm font-semibold focus:outline-none bg-transparent text-zinc-700 cursor-pointer"
-                      style={{ colorScheme: "light" }}
-                    />
-                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className={cn(
+                          "w-full flex items-center justify-start text-left bg-zinc-50 border border-zinc-200 rounded-xl hover:border-red-300 hover:shadow-sm transition-all focus:border-red-400 focus:ring-2 focus:ring-red-100 overflow-hidden pl-3 pr-3 py-2.5 text-sm font-semibold text-zinc-700",
+                          !dateTo && "text-zinc-400"
+                        )}
+                      >
+                        <Calendar className="w-4 h-4 text-zinc-400 mr-2 shrink-0" />
+                        {dateTo ? new Date(dateTo + "T00:00:00").toLocaleDateString("pt-BR") : "Selecionar data"}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 z-[100]" align="start">
+                      <UICalendar
+                        mode="single"
+                        locale={ptBR}
+                        selected={dateTo ? new Date(dateTo + "T00:00:00") : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            const y = date.getFullYear();
+                            const m = String(date.getMonth() + 1).padStart(2, '0');
+                            const d = String(date.getDate()).padStart(2, '0');
+                            setDateTo(`${y}-${m}-${d}`);
+                          } else {
+                            setDateTo("");
+                          }
+                        }}
+                        disabled={(date) => {
+                          const today = new Date();
+                          const minDate = dateFrom ? new Date(dateFrom + "T00:00:00") : undefined;
+                          if (date > today) return true;
+                          if (minDate && date < minDate) return true;
+                          return false;
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 

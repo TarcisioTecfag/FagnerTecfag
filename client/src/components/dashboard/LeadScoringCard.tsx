@@ -1,6 +1,6 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import DashboardCard from "./DashboardCard";
-import { useStatsData, periodToDates } from "./useStatsData";
+import { useStatsData, periodToDates, getPeriodLabel } from "./useStatsData";
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload?.length) {
@@ -90,7 +90,7 @@ const LeadScoringCard = ({ period = "14d", delay = 0 }: { period?: string; delay
             </div>
 
             <div className="pt-5 border-t border-border">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Leads Quentes — 30 Dias</h4>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Leads Quentes — {getPeriodLabel(period)}</h4>
               {trend.some(t => t.count > 0) ? (
                 <div className="flex items-end gap-0.5 h-10 bg-muted/40 rounded-lg px-2 pt-1.5 pb-1">
                   {trend.map((t, i) => (

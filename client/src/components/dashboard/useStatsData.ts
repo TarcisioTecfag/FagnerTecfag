@@ -37,3 +37,9 @@ export function periodToDates(period: string): { dateFrom: string; dateTo: strin
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   return { dateFrom: fmt(from), dateTo: fmt(to) };
 }
+
+export function getPeriodLabel(period: string): string {
+  if (period === "all") return "Todo o Período";
+  if (period.startsWith("custom|")) return "Período Selecionado";
+  return `Últimos ${parseInt(period) || 14} Dias`;
+}

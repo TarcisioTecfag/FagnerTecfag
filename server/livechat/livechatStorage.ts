@@ -1214,14 +1214,25 @@ export const lcStorage = {
     `)) as any;
     const trendRows = trendR?.rows ?? trendR ?? [];
 
-    const dFrom = dateFrom ? new Date(dateFrom + "T00:00:00") : new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-    const dTo = dateTo ? new Date(dateTo + "T00:00:00") : new Date();
+    let actualDFrom = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    let actualDTo = new Date();
     
-    const daysDiff = Math.max(0, Math.min(365, Math.floor((dTo.getTime() - dFrom.getTime()) / (1000 * 60 * 60 * 24))));
+    if (dateFrom === "2000-01-01") {
+      actualDFrom = Array.isArray(trendRows) && trendRows.length > 0
+        ? new Date(trendRows[0].date + "T00:00:00")
+        : new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    } else if (dateFrom) {
+      actualDFrom = new Date(dateFrom + "T00:00:00");
+    }
+    if (dateTo) {
+      actualDTo = new Date(dateTo + "T00:00:00");
+    }
+    
+    const daysDiff = Math.max(0, Math.min(365, Math.floor((actualDTo.getTime() - actualDFrom.getTime()) / (1000 * 60 * 60 * 24))));
     
     const filledTrend = [];
     for (let i = 0; i <= daysDiff; i++) {
-      const d = new Date(dFrom.getTime() + i * 24 * 60 * 60 * 1000);
+      const d = new Date(actualDFrom.getTime() + i * 24 * 60 * 60 * 1000);
       const key = d.toISOString().slice(0, 10);
       const found = Array.isArray(trendRows) ? trendRows.find((r: any) => r.date === key) : null;
       
@@ -1587,14 +1598,25 @@ export const lcStorage = {
     const trendRows: { date: string; count: number }[] = (trendR?.rows ?? trendR ?? [])
       .map((r: any) => ({ date: String(r.date ?? ''), count: Number(r.count ?? 0) }));
 
-    const dFrom = dateFrom ? new Date(dateFrom + "T00:00:00") : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const dTo = dateTo ? new Date(dateTo + "T00:00:00") : new Date();
+    let actualDFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    let actualDTo = new Date();
     
-    const daysDiff = Math.max(0, Math.min(365, Math.floor((dTo.getTime() - dFrom.getTime()) / (1000 * 60 * 60 * 24))));
+    if (dateFrom === "2000-01-01") {
+      actualDFrom = trendRows.length > 0
+        ? new Date(trendRows[0].date + "T00:00:00")
+        : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    } else if (dateFrom) {
+      actualDFrom = new Date(dateFrom + "T00:00:00");
+    }
+    if (dateTo) {
+      actualDTo = new Date(dateTo + "T00:00:00");
+    }
+    
+    const daysDiff = Math.max(0, Math.min(365, Math.floor((actualDTo.getTime() - actualDFrom.getTime()) / (1000 * 60 * 60 * 24))));
     
     const filledTrend: { date: string; count: number }[] = [];
     for (let i = 0; i <= daysDiff; i++) {
-      const d = new Date(dFrom.getTime() + i * 24 * 60 * 60 * 1000);
+      const d = new Date(actualDFrom.getTime() + i * 24 * 60 * 60 * 1000);
       const key = d.toISOString().slice(0, 10);
       const found = trendRows.find(r => r.date === key);
       filledTrend.push({ date: key, count: found?.count ?? 0 });

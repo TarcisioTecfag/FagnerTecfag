@@ -1,6 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip, CartesianGrid } from "recharts";
 import DashboardCard from "./DashboardCard";
-import { useStatsData, periodToDates } from "./useStatsData";
+import { useStatsData, periodToDates, getPeriodLabel } from "./useStatsData";
 
 const getColor = (rate: number) =>
   rate >= 15 ? "hsl(var(--chart-green))" : rate >= 8 ? "hsl(var(--chart-orange))" : "hsl(var(--chart-red))";
@@ -104,7 +104,7 @@ const ActivationRateCard = ({ period = "14d", delay = 0 }: { period?: string; de
           {/* Right: Chart */}
           <div className="flex-1 min-h-[220px]">
             <div className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Últimos {parseInt(period)} Dias
+              {getPeriodLabel(period)}
             </div>
             {trend.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
