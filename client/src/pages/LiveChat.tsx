@@ -1,4 +1,4 @@
-/**
+﻿/**
  * client/src/pages/LiveChat.tsx
  *
  * Painel de monitoramento do Live Chat â€” REFATORADO
@@ -365,21 +365,28 @@ function renderMessageContent(text: string, isAgentMsg = false) {
   }
 
   const BACKEND = (import.meta.env.VITE_BACKEND_URL || "https://fagnertecfag-production.up.railway.app").replace(/\/$/, "");
+  const BACKEND_HOST = BACKEND.replace(/^https?:\/\//, "");
 
-  // ── Regex de detecção ──────────────────────────────────────────────────────
+  // Normaliza URLs sem protocolo (ex: dominio.com/uploads/...) para https://dominio.com/uploads/...
+  const normalizedText = text.replace(
+    new RegExp(`(?<![:/])\\b(${BACKEND_HOST.replace(/\\./g, "\\\\.")}\/[^\\s)]+)`, "gi"),
+    "https://$1"
+  );
+
+  // Regex de deteccao
   const TECFAG_URL_REGEX = /https?:\/\/(?:www\.)?tecfag\.com\.br\/[^\s)]+/gi;
-  const PDF_URL_REGEX = /https?:\/\/[^\s)]+\.pdf(?:\?[^\s)]*)? /gi;
+  const PDF_URL_REGEX = /https?:\/\/[^\s)]+\.pdf(?:\?[^\s)]*)?/gi;
   const BACKEND_PDF_REGEX = /\/uploads\/[^\s)]+\.pdf/gi;
   const ANEXO_REGEX = /\[Anexo_Cliente:\s*(.+?)\]/g;
 
-  // Extrai rich embeds da mensagem (igual ao widget)
+  // Extrai rich embeds — PDFs detectados para agentes E para IA
   const productUrls: string[] = [];
   const pdfUrls: { url: string; title: string }[] = [];
-  let processedText = text;
+  let processedText = normalizedText;
 
+  // Produto Tecfag — apenas mensagens do agente humano
   if (isAgentMsg) {
-    // Produto Tecfag
-    const productMatches = Array.from(text.matchAll(new RegExp(TECFAG_URL_REGEX.source, "gi")));
+    const productMatches = Array.from(normalizedText.matchAll(new RegExp(TECFAG_URL_REGEX.source, "gi")));
     for (const m of productMatches) {
       const u = m[0];
       if (!u.toLowerCase().endsWith(".pdf") && !u.includes("/checkout?")) {
@@ -387,13 +394,27 @@ function renderMessageContent(text: string, isAgentMsg = false) {
         processedText = processedText.replace(u, "").trim();
       }
     }
-    // PDF links
-    const pdfMatches = Array.from(processedText.matchAll(new RegExp(PDF_URL_REGEX.source, "gi")));
-    for (const m of pdfMatches) {
-      const u = m[0];
-      pdfUrls.push({ url: u, title: u.split("/").pop()?.split("?")[0] || "Manual.pdf" });
-      processedText = processedText.replace(u, "").trim();
-    }
+  }
+
+  // PDF com https:// — agente + IA
+  const pdfMatches = Array.from(processedText.matchAll(new RegExp(PDF_URL_REGEX.source, "gi")));
+  for (const m of pdfMatches) {
+    const u = m[0].trim();
+    const rawName = u.split("/").pop()?.split("?")[0] || "Manual.pdf";
+    const title = decodeURIComponent(rawName).replace(/-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}-?/i, " ").replace(/\.pdf$/i,"").trim() + ".pdf";
+    pdfUrls.push({ url: u, title });
+    processedText = processedText.replace(m[0], "").trim();
+  }
+
+  // PDF com /uploads/ relativo — converte para URL absoluta
+  const backendPdfMatches = Array.from(processedText.matchAll(new RegExp(BACKEND_PDF_REGEX.source, "gi")));
+  for (const m of backendPdfMatches) {
+    const relPath = m[0].trim();
+    const absUrl = `${BACKEND}${relPath}`;
+    const rawName = relPath.split("/").pop() || "Manual.pdf";
+    const title = decodeURIComponent(rawName).replace(/-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}-?/i, " ").replace(/\.pdf$/i,"").trim() + ".pdf";
+    pdfUrls.push({ url: absUrl, title });
+    processedText = processedText.replace(relPath, "").trim();
   }
 
   // Anexos do cliente ([Anexo_Cliente: url])
