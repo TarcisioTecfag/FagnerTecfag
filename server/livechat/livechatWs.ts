@@ -1819,11 +1819,19 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 const RAILWAY_BACKEND = process.env.RAILWAY_STATIC_URL
                   || process.env.BACKEND_URL
                   || "https://fagnertecfag-production.up.railway.app";
+
+                // Extrai o hostname do backend para detectar URLs sem protocolo
+                const RAILWAY_HOST = RAILWAY_BACKEND.replace(/^https?:\/\//, '');
+
                 const processedReply = cleanReply
+                  // 1. Normaliza URLs sem protocolo que usam o domínio do Railway
+                  //    Ex: "fagnertecfag-production.up.railway.app/uploads/..." → "https://..."
+                  .replace(new RegExp(`(?<!https?://)\\b(${RAILWAY_HOST.replace(/\./g, '\\.')}[^\\s)]+)`, 'gi'), 'https://$1')
+                  // 2. Isola URLs completas (com https://) em parágrafos próprios
                   .replace(/(https?:\/\/[^\s)]+)/gi, "\n\n$1\n\n")
-                  // Converte /uploads/ para URL absoluta (PDF card no widget)
+                  // 3. Converte /uploads/ relativo para URL absoluta (fallback)
                   .replace(/(\/uploads\/[^\s)]+)/gi, `\n\n${RAILWAY_BACKEND}$1\n\n`)
-                  // Cada linha de bullet "• Algo: valor" vira seu próprio parágrafo
+                  // 4. Cada linha de bullet "• Algo: valor" vira seu próprio parágrafo
                   .replace(/\n([•\-])/g, "\n\n$1")
                   .replace(/\n{3,}/g, "\n\n")
                   .trim();

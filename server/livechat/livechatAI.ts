@@ -55,6 +55,8 @@ const NOISE_REPLIES: string[] = [
 ];
 
 
+
+
 // ─── Detecção de intenção de ESTÁGIO (regex, zero custo LLM) ─────────────────
 // Identifica se o cliente se enquadra em "outros", "pos_venda" ou "maquinas"
 // Prioridade: pos_venda > maquinas > outros
@@ -177,6 +179,7 @@ export function isObviousNoise(message: string): { isNoise: boolean; reply: stri
   if (trimmed.length < 2) {
     return { isNoise: false, reply: '' };
   }
+
 
   for (const pattern of NOISE_PATTERNS) {
     if (pattern.test(trimmed)) {
@@ -873,10 +876,15 @@ Profissional, humano, prestativo e consultivo. Como um vendedor experiente de lo
 ## MANUAIS E DOCUMENTOS TÉCNICOS
 1. Quando o cliente pedir um MANUAL de produto, verifique se há informação sobre ele na BASE DE CONHECIMENTO do contexto.
 2. Se houver documento/manual na base de conhecimento E houver um "Link de Download", você DEVE fornecer esse link para o cliente.
-3. INSTRUÇÃO: Quando for mandar o link do pdf, coloque-o OBRIGATORIAMENTE em uma linha SOZINHA (com quebra de linha antes e depois), usando o caminho exato que consta no documento da base de conhecimento. O sistema converterá automaticamente em um botão de download para o cliente. NÃO adicione texto junto ao link na mesma linha.
-4. NUNCA diga "vou solicitar com a equipe técnica" para pedidos de manual. Você TEM acesso à base de manuais.
-5. Se não encontrar o manual específico na base, diga: "Esse manual específico não está em minha base no momento, mas posso te ajudar com as dúvidas sobre a máquina! Qual sua dúvida?"
-6. Se encontrar o manual na base, OBRIGATORIAMENTE envie o 'Link de Download' exato (/uploads/... ou http...) que consta no documento, de forma direta e sem colocar outras palavras junto ao link.
+3. INSTRUÇÃO CRÍTICA DO LINK: Copie EXATAMENTE o valor do campo 'Link de Download' do contexto, sem alterar nada. Esse valor começa com /uploads/ (ex: /uploads/arquivo.pdf). Coloque-o em uma linha SOZINHA, com quebra de linha antes e depois. O sistema converte automaticamente para botão de download. NÃO adicione texto na mesma linha do link.
+4. PROIBIDO: Nunca junte o domínio do site ao caminho. Nunca escreva algo como "fagnertecfag-production.up.railway.app/uploads/..." — isso quebra o sistema. Envie APENAS o /uploads/... exato do contexto.
+5. NUNCA diga "vou solicitar com a equipe técnica" para pedidos de manual. Você TEM acesso à base de manuais.
+6. Se não encontrar o manual específico na base, diga: "Esse manual específico não está em minha base no momento, mas posso te ajudar com as dúvidas sobre a máquina! Qual sua dúvida?"
+7. FORMATO OBRIGATÓRIO — exemplos:
+   ❌ ERRADO: "fagnertecfag-production.up.railway.app/uploads/abc.pdf" (domínio sem https://)
+   ❌ ERRADO: "vou deixar o link: /uploads/abc.pdf aqui para você" (texto junto ao link)
+   ✅ CORRETO: linha 1 de texto, linha em branco, /uploads/abc.pdf, linha em branco, linha 2 de texto
+
 
 ## COMPORTAMENTO COMERCIAL — REGRAS ANTI-PRESSÃO (OBRIGATÓRIO)
 1. NUNCA ofereça calcular frete proativamente. O frete só é calculado quando:
