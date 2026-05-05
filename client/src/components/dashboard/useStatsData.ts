@@ -19,8 +19,17 @@ export function useStatsData<T>(url: string): { data: T | null; loading: boolean
   return { data, loading, refetch: () => setTick((t) => t + 1) };
 }
 
-/** Calcula dateFrom/dateTo a partir de um período como "7d", "14d", "30d" */
 export function periodToDates(period: string): { dateFrom: string; dateTo: string } {
+  if (period.startsWith("custom|")) {
+    const parts = period.split("|");
+    return { 
+       dateFrom: parts[1] || "2000-01-01", 
+       dateTo: parts[2] || new Date().toISOString().slice(0, 10) 
+    };
+  }
+  if (period === "all") {
+    return { dateFrom: "2000-01-01", dateTo: new Date().toISOString().slice(0, 10) };
+  }
   const days = parseInt(period) || 14;
   const to = new Date();
   const from = new Date();
