@@ -382,3 +382,31 @@ export async function buildCart(orderData: VtexOrderData): Promise<BuildCartResu
 
   return { orderFormId, checkoutLink, total, couponApplied, freteInfo };
 }
+
+/**
+ * Busca os detalhes completos de um pedido já realizado via VTEX OMS API.
+ * Requer credenciais de Admin (AppKey e AppToken).
+ */
+export async function fetchVtexOrder(orderId: string): Promise<any> {
+  const url = `${VTEX_API_BASE}/api/oms/pvt/orders/${orderId}`;
+  console.log(`[VTEX OMS] Buscando pedido: ${orderId}`);
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: vtexHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[VTEX OMS Error] Falha ao buscar pedido ${orderId}:`, response.status, errorText);
+      throw new Error(`Falha ao buscar pedido na VTEX: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (err: any) {
+    console.error(`[VTEX OMS Exception] Erro ao buscar pedido ${orderId}:`, err);
+    throw err;
+  }
+}

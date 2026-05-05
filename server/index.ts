@@ -71,6 +71,7 @@ import {
   listTemplates,
   isConfigured as rdIsConfigured,
 } from "./fagner/rdConversasService.js";
+import { fetchVtexOrder } from "./livechat/vtexCheckoutService.js";
 
 // ─── In-memory log buffer (circular, max 500 entries) ────────────────────────
 const LOG_BUFFER: { message: string; level: string; timestamp: string }[] = [];
@@ -531,6 +532,91 @@ app.post("/api/livechat/audio-upload", requireAuth, (req, res, next) => {
   }
 
   return res.status(201).json({ url: `${backendUrl}${filePath}`, mimeType: req.file!.mimetype });
+});
+
+
+// ─── Webhooks Externos ────────────────────────────────────────────────────────
+
+// POST /api/webhooks/vtex/order
+// Recebe notificações da VTEX quando um pedido muda de status (ex: payment-approved)
+app.post("/api/webhooks/vtex/order", async (req, res) => {
+  try {
+    const { OrderId, State } = req.body;
+    
+    // Filtramos apenas pagamentos aprovados (ou faturados, se configurado assim na VTEX)
+    // A VTEX também manda Domain: "Fulfillment" mas OrderId e State são garantidos
+    if (!OrderId || State !== "payment-approved") {
+      return res.status(200).send("Ignored state or missing OrderId");
+    }
+
+    console.log(`[VTEX Webhook] Recebido pedido ${OrderId} no status ${State}. Buscando detalhes...`);
+    const orderData = await fetchVtexOrder(OrderId);
+
+    // Verifica se o cupom do Fagner foi usado (marketingData.coupon)
+    const coupon = orderData?.marketingData?.coupon?.toUpperCase() || "";
+    if (coupon !== "FAGNER5") {
+      console.log(`[VTEX Webhook] Pedido ${OrderId} ignorado (Cupom: ${coupon || "Nenhum"}). Não é do Fagner.`);
+      return res.status(200).send("Not a Fagner order");
+    }
+
+    const document = orderData?.clientProfileData?.document || "";
+    const email = orderData?.clientProfileData?.email || "";
+    const value = ((orderData?.value || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    console.log(`[VTEX Webhook] FAGNER5 DETECTADO no pedido ${OrderId}! Cliente: ${document} | ${email}. Buscando visitante no CRM...`);
+
+    // Busca o visitante no banco de dados local (Fagner CRM) pelo CPF/CNPJ ou Email
+    // Como o Fagner sempre pede esses dados antes de gerar o link, o match é quase garantido.
+    const query = `
+      SELECT id, "pipelineStage" 
+      FROM visitors 
+      WHERE "cnpjCpf" = $1 OR "email" = $2 
+      ORDER BY "lastActive" DESC 
+      LIMIT 1
+    `;
+    // Clean formatting of document if necessary (VTEX usually sends raw numbers, our DB might too)
+    const cleanDoc = document.replace(/\\D/g, "");
+    const result = await pool.query(query, [cleanDoc, email]);
+
+    if (result.rows.length > 0) {
+      const visitorId = result.rows[0].id;
+      const currentStage = result.rows[0].pipelineStage;
+
+      console.log(`[VTEX Webhook] Match encontrado! Visitante ${visitorId} (Stage atual: ${currentStage}). Movendo para vendido e anotando.`);
+
+      // Garante que o card esteja na coluna "vendido"
+      if (currentStage !== "vendido") {
+        await lcStorage.updateVisitorPipeline(visitorId, "vendido");
+      }
+
+      // Adiciona uma nota destacada de sucesso
+      const noteText = `✅ COMPRA CONFIRMADA NA VTEX! Pagamento Aprovado.\nPedido: #${OrderId}\nValor Total: ${value}\nCupom Aplicado: ${coupon}`;
+      const savedNote = await lcStorage.addVisitorNote(visitorId, noteText, 'system');
+
+      // Notifica o frontend (Dashboard) em tempo real via WebSocket
+      const { broadcastToAgents } = await import("./livechat/livechatWs.js");
+      broadcastToAgents({
+        type: "PIPELINE_UPDATE",
+        visitorId,
+        newStage: "vendido"
+      });
+      broadcastToAgents({
+        type: "VISITOR_NOTE_ADDED",
+        visitorId,
+        note: savedNote
+      });
+
+      return res.status(200).json({ success: true, visitorId, note: savedNote });
+    } else {
+      console.warn(`[VTEX Webhook] ATENÇÃO: Nenhuma sessão do Fagner encontrada para o CPF ${document} ou email ${email} no pedido ${OrderId}.`);
+      return res.status(200).send("No matching visitor found");
+    }
+
+  } catch (err: any) {
+    console.error(`[VTEX Webhook] Erro ao processar webhook:`, err.message);
+    // Sempre retornar 200 para a VTEX para evitar retries infinitos (salvo em caso de falha de DB temporária)
+    return res.status(200).send("Error processed");
+  }
 });
 
 
