@@ -375,7 +375,7 @@ export async function buildCart(orderData: VtexOrderData): Promise<BuildCartResu
   }
 
   // 8. Monta result
-  const checkoutLink = `${VTEX_STORE_URL}/checkout/#/orderform/${orderFormId}`;
+  const checkoutLink = `${VTEX_STORE_URL}/checkout/?orderFormId=${orderFormId}#/cart`;
   const total = formatPrice(preco * quantidade);
 
   console.log(`[VTEX Checkout] 🎉 Cart completo! Link: ${checkoutLink}`);
