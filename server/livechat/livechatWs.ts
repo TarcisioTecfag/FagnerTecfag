@@ -528,6 +528,12 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
         } // fecha if(alwaysTrue)
       } // fecha if(visitorForOverview && overviewStages)
 
+        // Se o cliente já está num estágio final, não precisamos de fallback nem de mensagem de follow-up
+        const FINAL_STAGES = ['finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta', 'outros'];
+        if (FINAL_STAGES.includes(visitorForOverview.pipelineStage as string)) {
+          return;
+        }
+
         // ── 🛡️ FALLBACK UNIVERSAL DE DADOS MÍNIMOS ───────────────────────────────
         // Captura QUALQUER lead que tenha nome + telefone, independente do stage ou
         // de quantas etapas do fluxo foram concluídas. Nenhum lead com contato é perdido.
