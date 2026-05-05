@@ -3643,88 +3643,103 @@ function LiveChat() {
         )}
 
         {/* ─── Tab: Estatísticas (Melhoria 4) */}
-        {activeTab === "stats" && <StatsTab />}
+        {activeTab === "stats" && <StatsTab dateFilterActive={dateFilterActive} customFrom={dateFrom} customTo={dateTo} />}
       </div>
 
       {/* ══════════════ FILTER MODAL ══════════════ */}
       {filterOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
+          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" }}
           onClick={(e) => { if (e.target === e.currentTarget) setFilterOpen(false); }}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl border border-zinc-200/60 w-full max-w-sm mx-4 overflow-hidden"
-            style={{ animation: "popIn 0.25s cubic-bezier(.22,1,.36,1)" }}
+            className="bg-white rounded-[24px] shadow-2xl w-full max-w-md mx-4 overflow-hidden relative"
+            style={{
+              animation: "popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+              border: "1px solid rgba(0,0,0,0.04)",
+              boxShadow: "0 40px 80px -20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0,0,0,0.02)"
+            }}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100"
-              style={{ background: "linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)" }}
-            >
-              <div className="flex items-center gap-2.5">
-                <Filter className="w-4 h-4 text-white" />
-                <h2 className="text-sm font-bold text-white">Filtro por Período</h2>
+            {/* Header Redesigned */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100 bg-white relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-red-50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
+              <div className="flex items-center gap-3 relative z-10">
+                <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center border border-red-100">
+                  <Filter className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-zinc-800 tracking-tight">Filtro por Período</h2>
+                  <p className="text-[11px] text-zinc-500 font-medium">Análise de tráfego e B.I.</p>
+                </div>
               </div>
-              <button onClick={() => setFilterOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all">
-                <X className="w-3.5 h-3.5" />
+              <button onClick={() => setFilterOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-50 hover:bg-zinc-100 border border-zinc-200/60 text-zinc-400 hover:text-zinc-600 transition-all z-10">
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              <p className="text-xs text-zinc-500 leading-relaxed">
-                Selecione um período para filtrar <strong>todas as abas</strong> do Live Chat — Chats, Visitantes, CRM e Estatísticas.
+            <div className="p-6 space-y-6 bg-white relative z-10">
+              <p className="text-xs text-zinc-500 leading-relaxed font-medium">
+                Selecione um período para filtrar <strong>todas as abas</strong> do Live Chat, incluindo as métricas do B.I. e histórico do CRM.
               </p>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-red-500" />
-                    De
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                    Data Inicial
                   </label>
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    max={dateTo || new Date().toISOString().split("T")[0]}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 transition-all bg-zinc-50"
-                  />
+                  <div className="relative group">
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      max={dateTo || new Date().toISOString().split("T")[0]}
+                      className="w-full pl-3 pr-4 py-2.5 text-sm font-semibold rounded-xl border-2 border-zinc-100 focus:outline-none focus:border-red-400 focus:bg-white transition-all bg-zinc-50/50 text-zinc-700 hover:border-zinc-200"
+                      style={{ colorScheme: "light" }}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-red-500" />
-                    Até
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                    Data Final
                   </label>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    min={dateFrom || undefined}
-                    max={new Date().toISOString().split("T")[0]}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 transition-all bg-zinc-50"
-                  />
+                  <div className="relative group">
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      min={dateFrom || undefined}
+                      max={new Date().toISOString().split("T")[0]}
+                      className="w-full pl-3 pr-4 py-2.5 text-sm font-semibold rounded-xl border-2 border-zinc-100 focus:outline-none focus:border-red-400 focus:bg-white transition-all bg-zinc-50/50 text-zinc-700 hover:border-zinc-200"
+                      style={{ colorScheme: "light" }}
+                    />
+                  </div>
                 </div>
               </div>
 
               {dateFilterActive && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
-                  <Filter className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-                  <p className="text-xs text-red-700">
-                    Filtro ativo: <strong>
-                      {dateFrom ? new Date(dateFrom + "T00:00:00").toLocaleDateString("pt-BR") : 'início'}
-                      {' → '}
-                      {dateTo ? new Date(dateTo + "T00:00:00").toLocaleDateString("pt-BR") : 'hoje'}
-                    </strong>
-                  </p>
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50/50 border border-red-100/50 animate-pop-in">
+                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm border border-red-100 shrink-0">
+                    <Calendar className="w-4 h-4 text-red-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider mb-0.5">Filtro Ativo</p>
+                    <p className="text-xs font-bold text-red-700 truncate">
+                      {dateFrom ? new Date(dateFrom + "T00:00:00").toLocaleDateString("pt-BR") : 'Início'}
+                      <span className="text-red-400 mx-1.5 font-normal">→</span>
+                      {dateTo ? new Date(dateTo + "T00:00:00").toLocaleDateString("pt-BR") : 'Hoje'}
+                    </p>
+                  </div>
                 </div>
               )}
 
-              <div className="flex gap-2 pt-1">
+              <div className="flex gap-3 pt-2">
                 {dateFilterActive && (
                   <button
                     onClick={() => { setDateFilterActive(false); setDateFrom(""); setDateTo(""); setFilterOpen(false); }}
-                    className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-all flex items-center justify-center gap-1.5"
+                    className="flex-1 py-3 rounded-xl text-xs font-bold border-2 border-zinc-100 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 transition-all flex items-center justify-center gap-2"
                   >
-                    <RotateCcw className="w-3 h-3" /> Limpar Filtro
+                    <RotateCcw className="w-4 h-4" /> Limpar
                   </button>
                 )}
                 <button
@@ -3736,10 +3751,10 @@ function LiveChat() {
                     const toStr = dateTo ? new Date(dateTo + "T00:00:00").toLocaleDateString("pt-BR") : 'hoje';
                     toast({ title: "📅 Filtro aplicado", description: `Período: ${fromStr} → ${toStr}` });
                   }}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 flex items-center justify-center gap-1.5"
-                  style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
+                  className="flex-1 py-3 rounded-xl text-xs font-bold text-white transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-500/20 hover:shadow-xl hover:shadow-red-500/30 active:scale-95"
+                  style={{ background: "linear-gradient(135deg, #ef4444, #dc2626)" }}
                 >
-                  <Filter className="w-3 h-3" /> Aplicar Filtro
+                  <Filter className="w-4 h-4" /> Aplicar Filtro
                 </button>
               </div>
             </div>
@@ -4518,24 +4533,9 @@ function VSComparisonPanel() {
         <span className="text-base mt-0.5">📌</span>
         <p>
           Dados do Jivos baseados na análise de <strong className="text-zinc-400">14.405 mensagens reais</strong> (V4 — Inteligência Operacional).
-          79,8% eram triagem & ruído sem valor comercial. 0 leads capturados automaticamente. 0 cards criados.
-          Depois do Fagner IA: <strong className="text-zinc-400">autonomia de 87%</strong>, dados de todos os leads armazenados, cards no CRM abertos em tempo real.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-const PERIODS = [
-  { label: "7 dias",  value: "7d"  },
-  { label: "14 dias", value: "14d" },
-  { label: "30 dias", value: "30d" },
-];
-
-// ─── StatsTab — Container Principal ───────────────────────────────────────────
 function StatsTab() {
   const [period, setPeriod] = useState("14d");
-  const [period, setPeriod] = useState("14d");
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [vsMode, setVsMode] = useState(false);
 
   return (
@@ -4544,9 +4544,9 @@ function StatsTab() {
       <div className="flex items-center justify-between mb-8 px-1">
         <div>
           <h2 className="text-lg font-bold text-zinc-800">Estatísticas do Site</h2>
-          <p className="text-sm text-zinc-400 mt-0.5">Live Chat — Monitoramento do Fagner</p>
+          <p className="text-sm text-zinc-400 mt-0.5">Fagner Site — Monitoramento em Tempo Real</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setReportModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-white text-zinc-700 border border-zinc-200 shadow-sm transition-all hover:bg-zinc-50 active:scale-95"
@@ -4554,7 +4554,7 @@ function StatsTab() {
             <FileText className="w-4 h-4 text-zinc-500" />
             Exportar Relatórios
           </button>
-          <div className="w-px h-6 bg-zinc-200 mx-1" />
+          <div className="w-px h-6 bg-zinc-200" />
           <div className="flex items-center gap-2">
             {PERIODS.map((p) => (
               <button
@@ -4570,44 +4570,71 @@ function StatsTab() {
               </button>
             ))}
           </div>
-          <div className="w-px h-6 bg-zinc-200 mx-1" />
+          <div className="w-px h-6 bg-zinc-200" />
+          {/* Botão VS — Comparativo Jivos vs Fagner IA */}
           <button
             onClick={() => setVsMode(!vsMode)}
             title="Comparativo: Jivos (antes) vs Fagner IA (agora)"
-            className={`px-3 py-2 rounded-lg text-xs font-black tracking-widest transition-all duration-300 border ${vsMode ? "bg-gradient-to-r from-red-600 to-dc2626 text-white border-red-500 shadow-lg shadow-red-500/30 scale-105" : "bg-white text-zinc-500 border-zinc-200 hover:border-red-300 hover:text-red-500"}`}
+            className={`px-3 py-2 rounded-lg text-xs font-black tracking-widest transition-all duration-300 border ${
+              vsMode
+                ? "bg-red-600 text-white border-red-500 shadow-lg scale-105"
+                : "bg-white text-zinc-400 border-zinc-200 hover:border-red-300 hover:text-red-500"
+            }`}
           >
-            ⚡ VS
+            VS
           </button>
         </div>
       </div>
 
       <ReportExportModal open={reportModalOpen} onClose={() => setReportModalOpen(false)} />
 
-      <div className="space-y-10 pb-8 px-1">
-        {/* ── Seção: Saúde da Plataforma ── */}
-        <section>
-          <div className="flex items-center gap-2 mb-6">
-            <div className="h-1 w-6 rounded-full bg-primary" />
-            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Saúde da Plataforma</h3>
-          </div>
-          <div className="space-y-6">
-            <ActivationRateCard  period={period} delay={0}   />
-            <ContainmentRateCard period={period} delay={100} />
-            <LatencyCard         period={period} delay={200} />
-          </div>
-        </section>
+      {vsMode ? (
+        <VSComparisonPanel />
+      ) : (
+        <div className="space-y-10 pb-8 px-1">
+          {/* Seção: Saúde da Plataforma */}
+          <section>
+            <div className="flex items-center gap-2 mb-6">
+              <div className="h-1 w-6 rounded-full bg-primary" />
+              <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Saúde da Plataforma</h3>
+            </div>
+            <div className="space-y-6">
+              <ActivationRateCard  period={period} delay={0}   />
+              <ContainmentRateCard period={period} delay={100} />
+              <LatencyCard         period={period} delay={200} />
+            </div>
+          </section>
 
-        {/* ── Seção: Conversão & Leads ── */}
-        <section>
-          <div className="flex items-center gap-2 mb-6">
-            <div className="h-1 w-6 rounded-full" style={{ background: "hsl(var(--chart-purple))" }} />
-            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Conversão &amp; Leads</h3>
-          </div>
-          <div className="space-y-6">
-            <FunnelCard      period={period} delay={0}   />
-            <LeadScoringCard period={period} delay={100} />
-            <PreChatPagesCard               delay={200} />
-          </div>
+          {/* Seção: Conversão & Leads */}
+          <section>
+            <div className="flex items-center gap-2 mb-6">
+              <div className="h-1 w-6 rounded-full" style={{ background: "hsl(var(--chart-purple))" }} />
+              <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Conversão &amp; Leads</h3>
+            </div>
+            <div className="space-y-6">
+              <FunnelCard      period={period} delay={0}   />
+              <LeadScoringCard period={period} delay={100} />
+              <PreChatPagesCard               delay={200} />
+            </div>
+          </section>
+
+          {/* Seção: Comportamento & Retenção */}
+          <section>
+            <div className="flex items-center gap-2 mb-6">
+              <div className="h-1 w-6 rounded-full" style={{ background: "hsl(var(--chart-green))" }} />
+              <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Comportamento &amp; Retenção</h3>
+            </div>
+            <div className="space-y-6">
+              <UnhandledIntentsCard delay={0}   />
+              <RetentionCohortCard  delay={100} />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
         </section>
 
         {/* ── Seção: Comportamento & Retenção ── */}
