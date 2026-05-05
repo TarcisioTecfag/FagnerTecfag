@@ -2920,16 +2920,11 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 // ── Detectar [VTEX_ORDER_DADOS:{...}] — todos os dados coletados ───────
                 const vtexOrderMatch = rawReply.match(/\[VTEX_ORDER_DADOS:([\s\S]*?)\]/);
                 if (vtexOrderMatch) {
-                  // Captura estado do cupom ANTES do IIFE (closure segura)
-                  const cupomParaAplicar = rawReply.includes('[VTEX_CUPOM:true]') ? 'FAGNER5' : undefined;
                   (async () => {
                     let orderData: VtexOrderData | null = null;
                     try {
                       orderData = JSON.parse(vtexOrderMatch[1].trim()) as VtexOrderData;
-                      // Injeta cupom no orderData se o cliente aceitou
-                      if (cupomParaAplicar) {
-                        (orderData as any).couponCode = cupomParaAplicar;
-                      }
+                      // O couponCode agora vem direto do JSON, não precisa mais injetar aqui
                     } catch (parseErr: any) {
                       console.warn('[VTEX Order] Falha ao parsear VTEX_ORDER_DADOS:', parseErr.message);
                       return;
