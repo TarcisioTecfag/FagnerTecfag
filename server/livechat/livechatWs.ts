@@ -1808,6 +1808,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   .replace(/\[CNPJ_CHECK:[^\]]+\]/gi, "")        // ← prevenção extra
                   .replace(/\[CNPJ_RESULT:[\s\S]*?\]/gi, "")     // ← prevenção extra
                   .replace(/\[CRASH:[^\]]*\]/gi, "")
+                  .replace(/\[VTEX_PEDIDO_INICIADO\]/gi, "")
+                  .replace(/\[VTEX_ORDER_DADOS:[\s\S]*?\]/gi, "")
+                  .replace(/\[VTEX_CUPOM:[^\]]*\]/gi, "")
                   .trim();
 
                 // ─── Pré-processa: garante que URLs fiquem em parágrafos próprios ─────────
@@ -2892,7 +2895,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 if (rawReply.includes('[VTEX_PEDIDO_INICIADO]')) {
                   try {
                     await lcStorage.updateVisitorPipeline(currentVisitorId, 'vendido');
-                    broadcastToAgents({ type: 'PIPELINE_UPDATED', visitorId: currentVisitorId, stage: 'vendido' });
+                    // BUG FIX: era 'PIPELINE_UPDATED' (com D) — frontend escuta 'PIPELINE_UPDATE'
+                    broadcastToAgents({ type: 'PIPELINE_UPDATE', visitorId: currentVisitorId, stage: 'vendido',
+                      visitor: await lcStorage.getVisitorById(currentVisitorId) });
                     await lcStorage.addVisitorNote(currentVisitorId, 'VTEX', '🛒 Cliente autorizou pedido — Fagner iniciando coleta de dados para checkout.');
                     broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
                     console.log(`[VTEX Order] card do visitante ${currentVisitorId} movido para "vendido"`);
@@ -2901,13 +2906,25 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   }
                 }
 
+                // ── Detectar [VTEX_CUPOM:true] — cliente aceitou o cupom de 5% ────────────
+                const hasCupomTag = rawReply.includes('[VTEX_CUPOM:true]');
+                if (hasCupomTag) {
+                  console.log(`[VTEX Order] 🎫 Tag [VTEX_CUPOM:true] detectada — cupom FAGNER5 será aplicado no carrinho`);
+                }
+
                 // ── Detectar [VTEX_ORDER_DADOS:{...}] — todos os dados coletados ───────
                 const vtexOrderMatch = rawReply.match(/\[VTEX_ORDER_DADOS:([\s\S]*?)\]/);
                 if (vtexOrderMatch) {
+                  // Captura estado do cupom ANTES do IIFE (closure segura)
+                  const cupomParaAplicar = rawReply.includes('[VTEX_CUPOM:true]') ? 'FAGNER5' : undefined;
                   (async () => {
                     let orderData: VtexOrderData | null = null;
                     try {
                       orderData = JSON.parse(vtexOrderMatch[1].trim()) as VtexOrderData;
+                      // Injeta cupom no orderData se o cliente aceitou
+                      if (cupomParaAplicar) {
+                        (orderData as any).couponCode = cupomParaAplicar;
+                      }
                     } catch (parseErr: any) {
                       console.warn('[VTEX Order] Falha ao parsear VTEX_ORDER_DADOS:', parseErr.message);
                       return;
@@ -2919,6 +2936,9 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
 
                       // 2. Garante que o card está em "vendido" (caso [VTEX_PEDIDO_INICIADO] não tenha sido lido)
                       await lcStorage.updateVisitorPipeline(currentVisitorId, 'vendido');
+                      // Emite PIPELINE_UPDATE correto para o painel admin
+                      broadcastToAgents({ type: 'PIPELINE_UPDATE', visitorId: currentVisitorId, stage: 'vendido',
+                        visitor: await lcStorage.getVisitorById(currentVisitorId) });
 
                       // 3. Monta cart completo na VTEX
                       const { orderFormId, checkoutLink, total, freteInfo } = await buildCart(orderData!);
@@ -2951,33 +2971,32 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                         total,
                       });
 
-                      // 6. Envia link ao cliente (substitui a mensagem vaga do Fagner)
+                      // 6. Envia link ao cliente — FRAGMENTADO em múltiplos balões
                       const freteTexto = freteInfo.deliveryDays > 0
                         ? `${freteInfo.carrier} — ${freteInfo.priceFormatted} (${freteInfo.deliveryDays} dias úteis)`
                         : `A combinar com nossa equipe`;
-                      const linkMsg = [
-                        `🛒 *Pedido pronto para finalizar!*`,
-                        ``,
-                        `📦 Produto: ${nomeProduto}`,
-                        `💰 Total: ${total}`,
-                        `🚚 Frete: ${freteTexto}`,
-                        ``,
-                        `Para finalizar, basta clicar no link abaixo e escolher sua forma de pagamento (PIX, Boleto ou Cartão) — todos os seus dados já estão preenchidos!`,
-                        ``,
-                        checkoutLink,
-                        ``,
-                        `_O link fica ativo por 1 hora. Se precisar de um novo é só pedir! 😊_`,
-                      ].join('\n');
 
-                      await lcStorage.createMessage({ chatId: chat.id, sender: 'ai', content: linkMsg });
-                      sendToVisitor(currentVisitorId, {
-                        type: 'CHAT_REPLY', chatId: chat.id, sender: 'ai',
-                        content: linkMsg, timestamp: new Date().toISOString(),
-                      });
-                      broadcastToAgents({
-                        type: 'CHAT_MESSAGE', chatId: chat.id, visitorId: currentVisitorId,
-                        sender: 'ai', content: linkMsg, timestamp: new Date().toISOString(),
-                      });
+                      const cupomAplicado = (orderData as any).couponCode;
+                      const checkoutBubbles = [
+                        `🛒 Pedido pronto para finalizar!`,
+                        `📦 Produto: ${nomeProduto}\n💰 Total: ${total}\n🚚 Frete: ${freteTexto}${cupomAplicado ? `\n🎫 Cupom aplicado: ${cupomAplicado} (5% de desconto já incluído!)` : ''}`,
+                        `Para finalizar, basta clicar no link abaixo e escolher sua forma de pagamento (PIX, Boleto ou Cartão) — todos os seus dados já estão preenchidos!`,
+                        checkoutLink,
+                        `_O link fica ativo por 1 hora. Se precisar de um novo é só pedir!_`,
+                      ];
+
+                      for (const bubble of checkoutBubbles) {
+                        await lcStorage.createMessage({ chatId: chat.id, sender: 'ai', content: bubble });
+                        sendToVisitor(currentVisitorId, {
+                          type: 'CHAT_REPLY', chatId: chat.id, sender: 'ai',
+                          content: bubble, timestamp: new Date().toISOString(),
+                        });
+                        broadcastToAgents({
+                          type: 'CHAT_MESSAGE', chatId: chat.id, visitorId: currentVisitorId,
+                          sender: 'ai', content: bubble, timestamp: new Date().toISOString(),
+                        });
+                        await new Promise(r => setTimeout(r, 600)); // delay entre balões
+                      }
 
                       console.log(`[VTEX Order] ✅ Link gerado para ${currentVisitorId}: ${checkoutLink}`);
 

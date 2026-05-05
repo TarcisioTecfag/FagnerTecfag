@@ -47,6 +47,8 @@ export interface VtexProductInfo {
   priceMax:     number | null;   // centavos
   priceFormatted: string;        // "R$ X.XXX,00" ou "Consultar"
   available:    boolean;
+  skuId:        string | null;   // ID numérico do primeiro SKU disponível (para checkout)
+  refId:        string | null;   // Código de referência do produto (ex: FX800C)
 }
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
@@ -104,11 +106,13 @@ function extractSpecs(product: any): VtexProductSpec[] {
   return specs;
 }
 
-/** Extrai preço do primeiro SKU disponível */
-function extractPrice(product: any): { min: number | null; max: number | null; available: boolean } {
+/** Extrai preço e skuId do primeiro SKU disponível */
+function extractPrice(product: any): { min: number | null; max: number | null; available: boolean; skuId: string | null; refId: string | null } {
   let min: number | null = null;
   let max: number | null = null;
   let available = false;
+  let skuId: string | null = null;
+  let refId: string | null = null;
 
   const items: any[] = product.items ?? [];
   for (const item of items) {
@@ -121,12 +125,27 @@ function extractPrice(product: any): { min: number | null; max: number | null; a
       if (price > 0) {
         if (min === null || price < min) min = price * 100; // → centavos
         if (max === null || price > max) max = price * 100;
-        if (qty > 0) available = true;
+        if (qty > 0) {
+          available = true;
+          // Captura skuId e refId do primeiro item disponível
+          if (!skuId) {
+            skuId = item.itemId ?? null;         // ID numérico VTEX (ex: "12345")
+            refId = item.referenceId?.[0]?.Value // Código de referência (ex: "FX800C")
+              ?? item.ean
+              ?? null;
+          }
+        }
       }
     }
   }
 
-  return { min, max, available };
+  // Fallback: usa o primeiro item mesmo que sem estoque
+  if (!skuId && items.length > 0) {
+    skuId = items[0].itemId ?? null;
+    refId = items[0].referenceId?.[0]?.Value ?? items[0].ean ?? null;
+  }
+
+  return { min, max, available, skuId, refId };
 }
 
 // ─── Função Principal ─────────────────────────────────────────────────────────
@@ -198,6 +217,8 @@ export async function getProductBySlug(slug: string): Promise<VtexProductInfo | 
         priceMax:     pricing.max,
         priceFormatted,
         available:    pricing.available,
+        skuId:        pricing.skuId,
+        refId:        pricing.refId,
       };
 
       console.log(`[VTEX Catalog] ✅ Produto encontrado: "${info.productName}" — ${specs.length} specs`);
@@ -227,6 +248,14 @@ export function formatProductContextForAI(info: VtexProductInfo): string {
 
   if (info.description) {
     lines.push(`\nDescrição:\n${info.description}`);
+  }
+
+  // SKU ID numérico para o checkout — OBRIGATÓRIO para o campo skuId no [VTEX_ORDER_DADOS]
+  if (info.skuId) {
+    lines.push(`\nSKU ID (para pedido): ${info.skuId}`);
+  }
+  if (info.refId) {
+    lines.push(`Código de referência: ${info.refId}`);
   }
 
   if (info.specs.length > 0) {

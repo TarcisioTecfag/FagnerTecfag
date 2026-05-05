@@ -31,6 +31,18 @@ function vtexHeaders(): Record<string, string> {
   };
 }
 
+/**
+ * Headers para a Checkout PUBLIC API — sem credenciais de admin.
+ * A VTEX Checkout /pub/ não aceita AppKey/Token e pode rejeitar autenticadas.
+ * Usadas em: createOrderForm, addItem, setClientProfile, setShippingAddress, applyCoupon.
+ */
+function vtexPublicHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "Accept":       "application/json",
+  };
+}
+
 // ─── Tipos Públicos ───────────────────────────────────────────────────────────
 
 export interface OrderDataPF {
@@ -47,6 +59,7 @@ export interface OrderDataPF {
   cep:           string;
   addressNumber: string;
   complement?:   string;
+  couponCode?:   string;           // código do cupom a aplicar (ex: FAGNER5)
 }
 
 export interface OrderDataPJ {
@@ -65,6 +78,7 @@ export interface OrderDataPJ {
   cep:               string;
   addressNumber:     string;
   complement?:       string;
+  couponCode?:       string;         // código do cupom a aplicar (ex: FAGNER5)
 }
 
 export type VtexOrderData = OrderDataPF | OrderDataPJ;
@@ -73,6 +87,7 @@ export interface BuildCartResult {
   orderFormId:   string;
   checkoutLink:  string;
   total:         string;            // preço formatado "R$ X.XXX,00"
+  couponApplied: boolean;           // true se o cupom foi aplicado com sucesso
   freteInfo: {
     carrier:      string;
     deliveryDays: number;
@@ -113,7 +128,7 @@ async function createOrderForm(): Promise<string> {
   const url = `${VTEX_API_BASE}/api/checkout/pub/orderForm`;
   const res = await fetch(url, {
     method: "POST",
-    headers: vtexHeaders(),
+    headers: vtexPublicHeaders(),  // Checkout PUBLIC API: sem credenciais admin
     body: JSON.stringify({}),
     signal: AbortSignal.timeout(8000),
   });
@@ -133,7 +148,7 @@ async function addItem(orderFormId: string, skuId: string, qty: number): Promise
   const url = `${VTEX_API_BASE}/api/checkout/pub/orderForm/${orderFormId}/items`;
   const res = await fetch(url, {
     method:  "POST",
-    headers: vtexHeaders(),
+    headers: vtexPublicHeaders(),   // PUBLIC API
     body: JSON.stringify({
       orderItems: [{ id: skuId, quantity: qty, seller: "1" }],
     }),
@@ -182,7 +197,7 @@ async function setClientProfile(orderFormId: string, data: VtexOrderData): Promi
 
   const res = await fetch(url, {
     method:  "POST",
-    headers: vtexHeaders(),
+    headers: vtexPublicHeaders(),   // PUBLIC API
     body:    JSON.stringify(payload),
     signal:  AbortSignal.timeout(8000),
   });
@@ -220,7 +235,7 @@ async function setShippingAddress(
 
   const res = await fetch(url, {
     method:  "POST",
-    headers: vtexHeaders(),
+    headers: vtexPublicHeaders(),   // PUBLIC API
     body:    JSON.stringify(payload),
     signal:  AbortSignal.timeout(8000),
   });
@@ -293,6 +308,32 @@ function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+/**
+ * Aplica cupom de desconto ao carrinho VTEX.
+ * @returns true se aplicado com sucesso, false em caso de erro (não bloqueia o fluxo)
+ */
+async function applyCoupon(orderFormId: string, couponCode: string): Promise<boolean> {
+  const url = `${VTEX_API_BASE}/api/checkout/pub/orderForm/${orderFormId}/coupons`;
+  try {
+    const res = await fetch(url, {
+      method:  "POST",
+      headers: vtexPublicHeaders(),
+      body:    JSON.stringify({ text: couponCode }),
+      signal:  AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`[VTEX Checkout] ⚠️ Cupom ${couponCode} não aplicado (HTTP ${res.status}): ${body.slice(0, 200)}`);
+      return false;
+    }
+    console.log(`[VTEX Checkout] 🎫 Cupom ${couponCode} aplicado com sucesso!`);
+    return true;
+  } catch (err: any) {
+    console.warn(`[VTEX Checkout] ⚠️ Falha ao aplicar cupom ${couponCode}:`, err.message);
+    return false;
+  }
+}
+
 // ─── Função Principal ─────────────────────────────────────────────────────────
 
 /**
@@ -325,11 +366,19 @@ export async function buildCart(orderData: VtexOrderData): Promise<BuildCartResu
   await new Promise(r => setTimeout(r, 300));
   const freteInfo = await selectBestShipping(skuId, orderData.cep, quantidade);
 
-  // 7. Monta result
-  const checkoutLink = `${VTEX_STORE_URL}/checkout?orderFormId=${orderFormId}`;
+  // 7. Aplica cupom se fornecido (não-bloqueante — falha não impede o checkout)
+  let couponApplied = false;
+  const couponCode = (orderData as any).couponCode as string | undefined;
+  if (couponCode) {
+    await new Promise(r => setTimeout(r, 300));
+    couponApplied = await applyCoupon(orderFormId, couponCode);
+  }
+
+  // 8. Monta result
+  const checkoutLink = `${VTEX_STORE_URL}/checkout/#/orderform/${orderFormId}`;
   const total = formatPrice(preco * quantidade);
 
   console.log(`[VTEX Checkout] 🎉 Cart completo! Link: ${checkoutLink}`);
 
-  return { orderFormId, checkoutLink, total, freteInfo };
+  return { orderFormId, checkoutLink, total, couponApplied, freteInfo };
 }

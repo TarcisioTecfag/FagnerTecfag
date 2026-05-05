@@ -425,7 +425,7 @@ function renderMessageContent(text: string, isAgentMsg = false) {
   const anexoRegex = new RegExp(ANEXO_REGEX.source, "g");
 
   // Limpa texto de tags internas antes de exibir
-  const INTERNAL_TAG_REGEX = /\[(?:PRODUTO_IDENTIFICADO|PRODUCT_IDENTIFIED|SCORE|OUTCOME|STAGE|VTEX_PEDIDO_INICIADO|VTEX_ORDER_DADOS|VTEX_CHECKOUT_REQUEST|MAQUINAS_DADOS|POS_VENDA_DADOS|PECAS_DADOS|CNPJ_CHECK|CNPJ_RESULT|LOG_OCULTO)[^\]]*\]/gi;
+  const INTERNAL_TAG_REGEX = /\[(?:PRODUTO_IDENTIFICADO|PRODUCT_IDENTIFIED|SCORE|OUTCOME|STAGE|VTEX_PEDIDO_INICIADO|VTEX_ORDER_DADOS|VTEX_CHECKOUT_REQUEST|VTEX_CUPOM|MAQUINAS_DADOS|POS_VENDA_DADOS|PECAS_DADOS|CNPJ_CHECK|CNPJ_RESULT|LOG_OCULTO)[^\]]*\]/gi;
   const displayText = processedText.replace(INTERNAL_TAG_REGEX, "").replace(/\s{2,}/g, " ").trim();
 
   while ((match = anexoRegex.exec(displayText)) !== null) {
