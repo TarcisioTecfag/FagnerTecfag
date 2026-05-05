@@ -1509,11 +1509,7 @@ async function getPecasPipelineIds(): Promise<{ pipelineId: string; stageId: str
     const list: any[] = Array.isArray(pipelines) ? pipelines : (Array.isArray(pipelines?.data) ? pipelines.data : []);
     console.log(`[RD CRM] Pipelines disponíveis:`, list.map((p: any) => `${p.name}(${p.id})`).join(' | '));
 
-    const found = list.find((p: any) =>
-      p.name?.toLowerCase().includes('peça') ||
-      p.name?.toLowerCase().includes('peca') ||
-      p.name === FUNIL_NAME
-    );
+    const found = list.find((p: any) => p.name === FUNIL_NAME);
 
     if (found) {
       _pecasPipelineId = found.id;

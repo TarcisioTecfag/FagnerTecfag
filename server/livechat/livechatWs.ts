@@ -928,7 +928,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               'pecas',              // FIX: idem para peças
               'finalizado_com_venda',
               'finalizado_sem_venda',
-              'vendido',
+              'finalizado_com_venda',
               'sem_resposta',       // FIX: não resetar quem está classified como sem_resposta
             ];
             if (visitor && !visitor.pipelineStage) {
@@ -1470,7 +1470,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
               const FINAL_STAGES = [
                 'maquinas', 'pecas', 'pos_venda',
                 'finalizado_com_venda', 'finalizado_sem_venda',
-                'sem_resposta', 'outros', 'vendido',
+                'sem_resposta', 'outros', 'finalizado_com_venda',
               ];
               const currentVisitorStage = (await lcStorage.getVisitorById(visitorId))?.pipelineStage ?? '';
               if (!FINAL_STAGES.includes(currentVisitorStage)) {
@@ -1990,7 +1990,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 const isMaquinasStage = currentStageNow === 'maquinas' || hasMaquinasDados;
                 const isPecasStage    = currentStageNow === 'pecas'    || hasPecasDados;
                 // 🛡️ PROTEÇÃO AMPLIADA: todos os estágios qualificados nunca retrocedem para sem_resposta
-                const PROTECTED_NO_SALE_STAGES = ['maquinas', 'pecas', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros', 'vendido'];
+                const PROTECTED_NO_SALE_STAGES = ['maquinas', 'pecas', 'pos_venda', 'finalizado_com_venda', 'finalizado_sem_venda', 'outros'];
                 const isProtectedStage = PROTECTED_NO_SALE_STAGES.includes(currentStageNow) || hasMaquinasDados || hasPecasDados;
 
                 if (hasSale) {
@@ -2894,13 +2894,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                 // Move o card imediatamente para "vendido" antes da coleta de dados
                 if (rawReply.includes('[VTEX_PEDIDO_INICIADO]')) {
                   try {
-                    await lcStorage.updateVisitorPipeline(currentVisitorId, 'vendido');
-                    // BUG FIX: era 'PIPELINE_UPDATED' (com D) — frontend escuta 'PIPELINE_UPDATE'
-                    broadcastToAgents({ type: 'PIPELINE_UPDATE', visitorId: currentVisitorId, stage: 'vendido',
+                    await lcStorage.updateVisitorPipeline(currentVisitorId, 'finalizado_com_venda');
+                    broadcastToAgents({ type: 'PIPELINE_UPDATE', visitorId: currentVisitorId, stage: 'finalizado_com_venda',
                       visitor: await lcStorage.getVisitorById(currentVisitorId) });
                     await lcStorage.addVisitorNote(currentVisitorId, 'VTEX', '🛒 Cliente autorizou pedido — Fagner iniciando coleta de dados para checkout.');
                     broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
-                    console.log(`[VTEX Order] card do visitante ${currentVisitorId} movido para "vendido"`);
+                    console.log(`[VTEX Order] card do visitante ${currentVisitorId} movido para "finalizado_com_venda"`);
                   } catch (e: any) {
                     console.error('[VTEX Order] Falha ao mover para vendido:', e.message);
                   }
@@ -2934,10 +2933,10 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                       await lcStorage.addVisitorNote(currentVisitorId, 'VTEX', '⏳ Montando carrinho e calculando frete...');
                       broadcastToAgents({ type: 'VISITOR_NOTE_ADDED', visitorId: currentVisitorId });
 
-                      // 2. Garante que o card está em "vendido" (caso [VTEX_PEDIDO_INICIADO] não tenha sido lido)
-                      await lcStorage.updateVisitorPipeline(currentVisitorId, 'vendido');
+                      // 2. Garante que o card está em "finalizado_com_venda" (caso [VTEX_PEDIDO_INICIADO] não tenha sido lido)
+                      await lcStorage.updateVisitorPipeline(currentVisitorId, 'finalizado_com_venda');
                       // Emite PIPELINE_UPDATE correto para o painel admin
-                      broadcastToAgents({ type: 'PIPELINE_UPDATE', visitorId: currentVisitorId, stage: 'vendido',
+                      broadcastToAgents({ type: 'PIPELINE_UPDATE', visitorId: currentVisitorId, stage: 'finalizado_com_venda',
                         visitor: await lcStorage.getVisitorById(currentVisitorId) });
 
                       // 3. Monta cart completo na VTEX
@@ -3029,7 +3028,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   const TERMINAL_STAGES = [
                     'finalizado_com_venda',
                     'finalizado_sem_venda',
-                    'vendido',
+                    'finalizado_com_venda',
                     'sem_resposta',
                     'outros',
                   ];
@@ -3047,7 +3046,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   // (nunca iniciar follow-up para stages finais mesmo em caso de exceção)
                   try {
                     const vFallback = await lcStorage.getVisitorById(currentVisitorId);
-                    const SAFE_STAGES = ['maquinas','pecas','pos_venda','outros','finalizado_com_venda','finalizado_sem_venda','sem_resposta','vendido'];
+                    const SAFE_STAGES = ['maquinas','pecas','pos_venda','outros','finalizado_com_venda','finalizado_sem_venda','sem_resposta'];
                     if (SAFE_STAGES.includes(vFallback?.pipelineStage ?? '')) {
                       clearFollowUpTimers(currentVisitorId);
                     } else {
@@ -3323,7 +3322,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
             // Evita enviar "Opa, você ainda está aí?" para clientes cuja conversa já foi encerrada.
             const activeChat = await lcStorage.getActiveChatByVisitor(visitorId);
             if (activeChat) {
-              const CONCLUDED_STAGES = ['pos_venda', 'maquinas', 'pecas', 'outros', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta', 'vendido'];
+              const CONCLUDED_STAGES = ['pos_venda', 'maquinas', 'pecas', 'outros', 'finalizado_com_venda', 'finalizado_sem_venda', 'sem_resposta'];
               const visitorForCheck = await lcStorage.getVisitorById(visitorId);
               const isConcluded = CONCLUDED_STAGES.includes(visitorForCheck?.pipelineStage ?? '');
               if (!isConcluded) {

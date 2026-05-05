@@ -585,8 +585,8 @@ app.post("/api/webhooks/vtex/order", async (req, res) => {
       console.log(`[VTEX Webhook] Match encontrado! Visitante ${visitorId} (Stage atual: ${currentStage}). Movendo para vendido e anotando.`);
 
       // Garante que o card esteja na coluna "vendido"
-      if (currentStage !== "vendido") {
-        await lcStorage.updateVisitorPipeline(visitorId, "vendido");
+      if (currentStage !== "finalizado_com_venda") {
+        await lcStorage.updateVisitorPipeline(visitorId, "finalizado_com_venda");
       }
 
       // Adiciona uma nota destacada de sucesso
@@ -598,7 +598,8 @@ app.post("/api/webhooks/vtex/order", async (req, res) => {
       broadcastToAgents({
         type: "PIPELINE_UPDATE",
         visitorId,
-        newStage: "vendido"
+        stage: "finalizado_com_venda",
+        visitor: await lcStorage.getVisitorById(visitorId)
       });
       broadcastToAgents({
         type: "VISITOR_NOTE_ADDED",
