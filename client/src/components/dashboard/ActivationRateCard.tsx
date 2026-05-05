@@ -113,7 +113,7 @@ const ActivationRateCard = ({ period = "14d", delay = 0 }: { period?: string; de
                   <XAxis dataKey="day" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={30} unit="%" />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.5 }} />
-                  <Bar dataKey="rate" radius={[6, 6, 0, 0]} animationDuration={800} animationBegin={200}>
+                  <Bar dataKey="rate" minPointSize={3} radius={[6, 6, 0, 0]} animationDuration={800} animationBegin={200}>
                     {trend.map((entry, i) => (
                       <Cell key={i} fill={getColor(entry.rate)} />
                     ))}

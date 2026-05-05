@@ -2892,7 +2892,7 @@ function LiveChat() {
                 <div className="w-2 h-2 rounded-full bg-zinc-300" />
                 Visitantes Offline
                 <span className="text-zinc-400 font-normal text-[11px]">
-                  ({stats?.totalOfflineAll?.toLocaleString('pt-BR') ?? filteredVisitors.filter(v => v.isOnline !== "true").length} recentes)
+                  ({filteredVisitors.filter(v => v.isOnline !== "true").length} recentes)
                 </span>
                 {!offlineExpanded && (
                   <span className="text-[10px] text-zinc-400 italic font-normal">— clique para carregar</span>
@@ -2995,6 +2995,7 @@ function LiveChat() {
             {/* ── Identified Visitors Section ── */}
             {(() => {
               const identifiedVisitors = allVisitors.filter(v =>
+                passesDateFilter(v.lastSeenAt) &&
                 v.name && v.name.trim() !== "" && (
                   !sq ||
                   (v.name ?? "").toLowerCase().includes(sq) ||
@@ -3011,7 +3012,7 @@ function LiveChat() {
                     <h3 className="text-xs font-semibold text-blue-700 flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full bg-blue-400" />
                       Visitantes Identificados
-                      <span className="text-blue-500 font-normal text-[11px]">({stats?.totalIdentifiedAll?.toLocaleString('pt-BR') ?? identifiedVisitors.length} com nome)</span>
+                      <span className="text-blue-500 font-normal text-[11px]">({identifiedVisitors.length} com nome)</span>
                       {!identifiedExpanded && (
                         <span className="text-[10px] text-blue-400 italic font-normal">— clique para carregar</span>
                       )}
@@ -3123,12 +3124,13 @@ function LiveChat() {
               ].map((col) => {
                 // Aplica o filtro de search no kanban: filtra por nome do visitante
                 const allItems = pipelineData[col.stage] || [];
-                const items = sq
-                  ? allItems.filter((v: Visitor) =>
-                      (v.name ?? "").toLowerCase().includes(sq) ||
-                      (v.city ?? "").toLowerCase().includes(sq)
-                    )
-                  : allItems;
+                const items = allItems.filter((v: Visitor) => 
+                  passesDateFilter(v.lastSeenAt || v.firstSeenAt) &&
+                  (!sq ||
+                    (v.name ?? "").toLowerCase().includes(sq) ||
+                    (v.city ?? "").toLowerCase().includes(sq)
+                  )
+                );
                 const isCollapsed = collapsedStages.has(col.stage);
                 const toggleCollapse = () => setCollapsedStages(prev => {
                   const next = new Set(prev);
@@ -3684,34 +3686,51 @@ function LiveChat() {
                 Selecione um período para filtrar <strong>todas as abas</strong> do Live Chat, incluindo as métricas do B.I. e histórico do CRM.
               </p>
 
+              <style>{`
+                .glass-date-input::-webkit-calendar-picker-indicator {
+                  background: transparent;
+                  bottom: 0;
+                  color: transparent;
+                  cursor: pointer;
+                  height: auto;
+                  left: 0;
+                  position: absolute;
+                  right: 0;
+                  top: 0;
+                  width: auto;
+                }
+              `}</style>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                     Data Inicial
                   </label>
-                  <div className="relative group">
+                  <div className="relative group flex items-center bg-zinc-50 border border-zinc-200 rounded-xl hover:border-red-300 hover:shadow-sm transition-all focus-within:border-red-400 focus-within:ring-2 focus-within:ring-red-100 overflow-hidden">
+                    <Calendar className="w-4 h-4 text-zinc-400 absolute left-3 pointer-events-none group-focus-within:text-red-500 transition-colors" />
                     <input
                       type="date"
                       value={dateFrom}
                       onChange={(e) => setDateFrom(e.target.value)}
                       max={dateTo || new Date().toISOString().split("T")[0]}
-                      className="w-full pl-3 pr-4 py-2.5 text-sm font-semibold rounded-xl border-2 border-zinc-100 focus:outline-none focus:border-red-400 focus:bg-white transition-all bg-zinc-50/50 text-zinc-700 hover:border-zinc-200"
+                      className="glass-date-input w-full pl-10 pr-3 py-2.5 text-sm font-semibold focus:outline-none bg-transparent text-zinc-700 cursor-pointer"
                       style={{ colorScheme: "light" }}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                     Data Final
                   </label>
-                  <div className="relative group">
+                  <div className="relative group flex items-center bg-zinc-50 border border-zinc-200 rounded-xl hover:border-red-300 hover:shadow-sm transition-all focus-within:border-red-400 focus-within:ring-2 focus-within:ring-red-100 overflow-hidden">
+                    <Calendar className="w-4 h-4 text-zinc-400 absolute left-3 pointer-events-none group-focus-within:text-red-500 transition-colors" />
                     <input
                       type="date"
                       value={dateTo}
                       onChange={(e) => setDateTo(e.target.value)}
                       min={dateFrom || undefined}
                       max={new Date().toISOString().split("T")[0]}
-                      className="w-full pl-3 pr-4 py-2.5 text-sm font-semibold rounded-xl border-2 border-zinc-100 focus:outline-none focus:border-red-400 focus:bg-white transition-all bg-zinc-50/50 text-zinc-700 hover:border-zinc-200"
+                      className="glass-date-input w-full pl-10 pr-3 py-2.5 text-sm font-semibold focus:outline-none bg-transparent text-zinc-700 cursor-pointer"
                       style={{ colorScheme: "light" }}
                     />
                   </div>
@@ -4572,12 +4591,17 @@ const PERIODS = [
   { label: "7 dias",  value: "7d"  },
   { label: "14 dias", value: "14d" },
   { label: "30 dias", value: "30d" },
+  { label: "Todos",   value: "all" },
 ];
 
-function StatsTab() {
+function StatsTab({ dateFilterActive, customFrom, customTo }: { dateFilterActive?: boolean; customFrom?: string; customTo?: string }) {
   const [period, setPeriod] = useState("14d");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [vsMode, setVsMode] = useState(false);
+
+  const effectivePeriod = dateFilterActive 
+    ? (customFrom && customTo ? `custom|${customFrom}|${customTo}` : "all")
+    : period;
 
   return (
     <div className="h-full overflow-y-auto animate-tab-enter">
@@ -4637,9 +4661,9 @@ function StatsTab() {
               <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Saúde da Plataforma</h3>
             </div>
             <div className="space-y-6">
-              <ActivationRateCard  period={period} delay={0}   />
-              <ContainmentRateCard period={period} delay={100} />
-              <LatencyCard         period={period} delay={200} />
+              <ActivationRateCard  period={effectivePeriod} delay={0}   />
+              <ContainmentRateCard period={effectivePeriod} delay={100} />
+              <LatencyCard         period={effectivePeriod} delay={200} />
             </div>
           </section>
           <section>
@@ -4648,8 +4672,8 @@ function StatsTab() {
               <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Conversão &amp; Leads</h3>
             </div>
             <div className="space-y-6">
-              <FunnelCard      period={period} delay={0}   />
-              <LeadScoringCard period={period} delay={100} />
+              <FunnelCard      period={effectivePeriod} delay={0}   />
+              <LeadScoringCard period={effectivePeriod} delay={100} />
               <PreChatPagesCard               delay={200} />
             </div>
           </section>

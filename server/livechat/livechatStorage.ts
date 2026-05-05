@@ -1213,16 +1213,33 @@ export const lcStorage = {
       GROUP BY 1 ORDER BY 1 ASC
     `)) as any;
     const trendRows = trendR?.rows ?? trendR ?? [];
+
+    const dFrom = dateFrom ? new Date(dateFrom + "T00:00:00") : new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    const dTo = dateTo ? new Date(dateTo + "T00:00:00") : new Date();
+    
+    const daysDiff = Math.max(0, Math.min(365, Math.floor((dTo.getTime() - dFrom.getTime()) / (1000 * 60 * 60 * 24))));
+    
+    const filledTrend = [];
+    for (let i = 0; i <= daysDiff; i++) {
+      const d = new Date(dFrom.getTime() + i * 24 * 60 * 60 * 1000);
+      const key = d.toISOString().slice(0, 10);
+      const found = Array.isArray(trendRows) ? trendRows.find((r: any) => r.date === key) : null;
+      
+      const t = found ? Number(found.total ?? 0) : 0;
+      const a = found ? Number(found.activated ?? 0) : 0;
+      filledTrend.push({
+        date: key,
+        total: t,
+        activated: a,
+        rate: t > 0 ? Math.round((a / t) * 100) : 0,
+      });
+    }
+
     return {
       totalSessions: total,
       chatActivated: activated,
       activationRate: total > 0 ? Math.round((activated / total) * 100) : 0,
-      trend: Array.isArray(trendRows) ? trendRows.map((r: any) => ({
-        date:      r.date,
-        total:     Number(r.total ?? 0),
-        activated: Number(r.activated ?? 0),
-        rate:      Number(r.total) > 0 ? Math.round((Number(r.activated) / Number(r.total)) * 100) : 0,
-      })) : [],
+      trend: filledTrend,
     };
   },
 
@@ -1548,19 +1565,21 @@ export const lcStorage = {
       : dateTo   ? `AND "lastSeenAt"::timestamptz <= '${dateTo}T23:59:59Z'`
       : '';
     const g = (r: any) => Number(r?.rows?.[0]?.c ?? r?.[0]?.c ?? 0);
+    const trendWhere = dateFrom && dateTo
+      ? `"lastSeenAt" >= '${dateFrom}' AND "lastSeenAt" <= '${dateTo}T23:59:59Z'`
+      : `"lastSeenAt" >= TO_CHAR(NOW() - INTERVAL '30 days', 'YYYY-MM-DD')`;
+
     const [hotR, warmR, totalR, trendR] = await Promise.all([
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE category = 'lead_hot' ${dwLast}`)) as any,
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE category = 'lead_warm' ${dwLast}`)) as any,
       db.execute(sql.raw(`SELECT COUNT(*)::int AS c FROM lc_visitors WHERE 1=1 ${dwLast}`)) as any,
       db.execute(sql.raw(`
         SELECT
-          -- lastSeenAt é TEXT: usa SUBSTRING para extrair apenas YYYY-MM-DD
-          -- mais robusto que ::timestamptz quando o formato pode variar
           SUBSTRING("lastSeenAt", 1, 10) AS date,
           COUNT(*)::int AS count
         FROM lc_visitors
         WHERE category IN ('lead_hot','customer')
-          AND "lastSeenAt" >= TO_CHAR(NOW() - INTERVAL '30 days', 'YYYY-MM-DD')
+          AND ${trendWhere}
         GROUP BY 1 ORDER BY 1 ASC
       `)) as any,
     ]);
@@ -1568,10 +1587,14 @@ export const lcStorage = {
     const trendRows: { date: string; count: number }[] = (trendR?.rows ?? trendR ?? [])
       .map((r: any) => ({ date: String(r.date ?? ''), count: Number(r.count ?? 0) }));
 
-    // Preenche dias sem dados com 0 para garantir sparkline contínua (30 dias)
+    const dFrom = dateFrom ? new Date(dateFrom + "T00:00:00") : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const dTo = dateTo ? new Date(dateTo + "T00:00:00") : new Date();
+    
+    const daysDiff = Math.max(0, Math.min(365, Math.floor((dTo.getTime() - dFrom.getTime()) / (1000 * 60 * 60 * 24))));
+    
     const filledTrend: { date: string; count: number }[] = [];
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
+    for (let i = 0; i <= daysDiff; i++) {
+      const d = new Date(dFrom.getTime() + i * 24 * 60 * 60 * 1000);
       const key = d.toISOString().slice(0, 10);
       const found = trendRows.find(r => r.date === key);
       filledTrend.push({ date: key, count: found?.count ?? 0 });
