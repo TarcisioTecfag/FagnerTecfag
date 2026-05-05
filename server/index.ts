@@ -619,6 +619,49 @@ app.post("/api/webhooks/vtex/order", async (req, res) => {
   }
 });
 
+// GET /api/setup-vtex-hook
+// Endpoint temporário para auto-configurar o webhook na VTEX usando as chaves de API já presentes no backend
+app.get("/api/setup-vtex-hook", async (req, res) => {
+  const account = process.env.VTEX_ACCOUNT_NAME || "tecfag";
+  const url = `https://${account}.vtexcommercestable.com.br/api/orders/hook/config`;
+  
+  const payload = {
+    filter: {
+      type: "FromWorkflow",
+      status: ["payment-approved"]
+    },
+    hook: {
+      url: "https://fagnertecfag-production.up.railway.app/api/webhooks/vtex/order",
+      headers: {}
+    }
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-VTEX-API-AppKey": process.env.VTEX_APP_KEY || "",
+        "X-VTEX-API-AppToken": process.env.VTEX_APP_TOKEN || ""
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const bodyText = await response.text();
+    let data;
+    try { data = JSON.parse(bodyText); } catch { data = bodyText; }
+
+    if (!response.ok) {
+      return res.status(response.status).json({ success: false, error: "Falha na VTEX", details: data });
+    }
+
+    return res.json({ success: true, message: "🚀 Webhook do Fagner configurado com sucesso na VTEX!", vtexResponse: data });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // ─── Auth routes ─────────────────────────────────────────────────────────────
 
