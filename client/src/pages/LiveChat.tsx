@@ -4283,120 +4283,285 @@ function LiveChat() {
 
 // ─── VSComparisonPanel — Jivos vs Fagner IA ───────────────────────────────────
 function VSComparisonPanel() {
+  // Busca dados reais do sistema
+  const { data: containData } = useStatsData<{
+    aiResolved: number; humanEscalated: number; totalChats: number; containmentRate: number;
+  }>("/api/livechat/stats/containment?dateFrom=2000-01-01&dateTo=2099-01-01");
+
+  const { data: activData } = useStatsData<{
+    activationRate: number; totalActivated: number; totalSessions: number;
+  }>("/api/livechat/stats/activation?dateFrom=2000-01-01&dateTo=2099-01-01");
+
+  const containRate  = containData?.containmentRate  ?? 0;
+  const totalChats   = containData?.totalChats        ?? 0;
+  const aiResolved   = containData?.aiResolved        ?? 0;
+  const humanEsc     = containData?.humanEscalated    ?? 0;
+  const totalSess    = activData?.totalSessions       ?? 0;
+  const totalActiv   = activData?.totalActivated      ?? 0;
+
+  // Itens de comparação enriquecidos
   const metrics = [
-    { icon: "🗑️", label: "Triagem & Ruído",                  desc: "Msgs sem valor que consomem tempo humano",          jivos: "79,8%", fagner: "0%"       },
-    { icon: "👤", label: "Atendimento Humano Necessário",     desc: "% dos chats que precisam de intervenção humana",    jivos: "99%",   fagner: "13%"      },
-    { icon: "🤖", label: "Containment Rate (IA resolve só)",  desc: "Chats resolvidos sem intervenção humana",           jivos: "1%",    fagner: "87%"      },
-    { icon: "📋", label: "Leads Capturados Automaticamente",  desc: "Nome, telefone, CNPJ coletados sem esforço",        jivos: "0",     fagner: "100%"     },
-    { icon: "💼", label: "Cards de CRM Criados",              desc: "Oportunidades abertas no RD Station",               jivos: "0",     fagner: "Auto"     },
-    { icon: "⚡", label: "Tempo de Primeira Resposta",        desc: "Quanto tempo o cliente espera para ser atendido",   jivos: "15–40min", fagner: "< 3s"  },
-    { icon: "🧠", label: "Dados do Lead Armazenados",         desc: "Scoring, produto, briefing, intenção",              jivos: "Nenhum", fagner: "Completo"},
+    {
+      icon: "🗑️",
+      label: "Triagem & Ruído",
+      context: "No Jivos, 79,8% das mensagens eram saudações rasas, capturas de contato sem contexto e respostas sem valor. Nenhum dado era aproveitado para o time de vendas.",
+      jivosVal: "79,8%", jivosLabel: "das mensagens eram lixo",
+      fagnerVal: "0%",   fagnerLabel: "de triagem manual",
+      highlight: "#16a34a",
+    },
+    {
+      icon: "⚡",
+      label: "Tempo de Primeira Resposta",
+      context: "O Jivos dependia de triagem humana. O cliente esperava entre 15 e 40 minutos. O Fagner IA responde em streaming em menos de 3 segundos, 24h/dia.",
+      jivosVal: "~25min", jivosLabel: "tempo médio de espera",
+      fagnerVal: "< 3s",  fagnerLabel: "resposta em streaming",
+      highlight: "#d97706",
+    },
+    {
+      icon: "🤖",
+      label: "Autonomia da IA (Containment Rate)",
+      context: `Com ${totalChats.toLocaleString("pt-BR")} chats analisados, o Fagner IA resolveu ${aiResolved.toLocaleString("pt-BR")} de forma autônoma. Apenas ${humanEsc} precisaram de intervenção humana. No Jivos, 99% dos chats demandavam um operador.`,
+      jivosVal: "1%",           jivosLabel: "resolvido sem humano",
+      fagnerVal: `${containRate}%`, fagnerLabel: "containment rate real",
+      highlight: "#2563eb",
+    },
+    {
+      icon: "📋",
+      label: "Leads Capturados Automaticamente",
+      context: `O Fagner IA coleta nome, telefone, CNPJ e produto de interesse de cada visitante sem depender de formulário. Dos ${totalSess.toLocaleString("pt-BR")} visitantes únicos, ${totalActiv.toLocaleString("pt-BR")} foram ativados para conversas qualificadas. No Jivos: 0 coletas automáticas.`,
+      jivosVal: "0",        jivosLabel: "leads automáticos",
+      fagnerVal: totalActiv > 0 ? totalActiv.toLocaleString("pt-BR") : "Auto", fagnerLabel: "leads com briefing completo",
+      highlight: "#7c3aed",
+    },
+    {
+      icon: "💼",
+      label: "Cards de CRM Criados (RD Station)",
+      context: "Cada lead qualificado pelo Fagner IA abre automaticamente uma oportunidade no RD Station CRM com nome, telefone, produto de interesse e funil correto. No Jivos: processo 100% manual, propenso a erros e esquecimentos.",
+      jivosVal: "Manual", jivosLabel: "processo 100% humano",
+      fagnerVal: "Auto",  fagnerLabel: "criados em tempo real",
+      highlight: "#dc2626",
+    },
+    {
+      icon: "🧠",
+      label: "Dados Armazenados por Lead",
+      context: "O Fagner IA registra scoring de compra (0–100), produto de interesse, sentimento, volume desejado, histórico de páginas visitadas e briefing gerado por IA. No Jivos: nenhum dado estruturado era salvo por visitante.",
+      jivosVal: "Nenhum",  jivosLabel: "dado estruturado salvo",
+      fagnerVal: "7 campos", fagnerLabel: "por visitante identificado",
+      highlight: "#0891b2",
+    },
   ];
 
-  const barRows = [
-    { label: "Triagem & Ruído",           jivosW: 79.8, fagnerW: 0,   jivosColor: "#a855f7", fagnerColor: "#10b981" },
-    { label: "Interesse Real de Compra",  jivosW: 15.5, fagnerW: 100, jivosColor: "#f59e0b", fagnerColor: "#dc2626" },
-    { label: "Atendimento Autônomo IA",   jivosW: 1,    fagnerW: 87,  jivosColor: "#64748b", fagnerColor: "#dc2626" },
+  const kpis = [
+    { icon: "🗑️", value: "−79,8%",         label: "Ruído Eliminado",      sub: `${(14405 * 0.798).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ".")} mensagens inúteis eliminadas`,  color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
+    { icon: "⚡",  value: "< 3s",            label: "Resposta Instantânea", sub: "vs. 15–40 min no Jivos. Disponível 24h/dia, 7 dias/semana",                                           color: "#d97706", bg: "#fffbeb", border: "#fde68a" },
+    { icon: "🤖", value: `${containRate}%`, label: "Autonomia Real (IA)",  sub: `${aiResolved.toLocaleString("pt-BR")} chats resolvidos sem nenhuma intervenção humana`,                color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
   ];
 
   return (
-    <div className="space-y-8 pb-8 px-1 animate-tab-enter">
+    <div className="space-y-8 pb-10 px-1">
 
-      {/* ── Hero VS Banner ── */}
-      <div className="relative rounded-2xl overflow-hidden p-6" style={{ background: "linear-gradient(135deg,#1a0000,#2d0a0a 50%,#0a0a1a)", border: "1px solid rgba(220,38,38,0.3)" }}>
-        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: "repeating-linear-gradient(45deg,#dc2626 0px,#dc2626 1px,transparent 1px,transparent 12px)" }} />
-        <div className="relative z-10 flex items-center justify-between flex-wrap gap-4">
+      {/* ── Banner Hero ── */}
+      <div
+        className="rounded-2xl overflow-hidden border border-red-100 shadow-sm"
+        style={{ background: "linear-gradient(135deg,#fff5f5 0%,#fff 55%,#fef9f0 100%)", animationFillMode: "both" }}
+      >
+        <div className="px-7 py-6 flex items-center justify-between flex-wrap gap-5">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-2xl font-black text-white/30 line-through">JIVOS</span>
-              <span className="text-3xl font-black text-red-400">⚡ VS</span>
-              <span className="text-2xl font-black text-white">FAGNER IA</span>
+              <span className="text-2xl font-black text-zinc-200 line-through decoration-red-400 decoration-2">JIVOS</span>
+              <span className="bg-red-600 text-white text-sm font-black px-3 py-1 rounded-xl tracking-widest shadow-sm">VS</span>
+              <span className="text-2xl font-black text-zinc-900">FAGNER IA</span>
             </div>
-            <p className="text-sm text-zinc-400 max-w-lg">
-              Comparativo baseado em análise real de <strong className="text-zinc-200">14.405 mensagens</strong> do Jivos vs. dados do Fagner IA em produção.
+            <p className="text-sm text-zinc-500 max-w-lg leading-relaxed">
+              Comparativo baseado em <strong className="text-zinc-700">14.405 mensagens reais</strong> analisadas do sistema Jivos + dados ao vivo do Fagner IA em produção.
             </p>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="text-center"><div className="text-2xl font-black text-zinc-500 line-through">Jivos</div><div className="text-xs text-zinc-600 mt-1">Sistema Anterior</div></div>
-            <div className="text-2xl text-red-400 font-black">→</div>
-            <div className="text-center"><div className="text-2xl font-black text-red-400">Fagner IA</div><div className="text-xs text-zinc-400 mt-1">Atual</div></div>
+          <div className="flex items-center gap-8">
+            <div className="text-center">
+              <div className="text-xl font-black text-zinc-300 line-through">Jivos</div>
+              <div className="text-[11px] text-zinc-400 mt-1 font-medium uppercase tracking-wide">Sistema anterior</div>
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <div className="w-8 h-px bg-zinc-300" />
+              <div className="text-red-500 font-bold text-lg leading-none">→</div>
+              <div className="text-[10px] text-zinc-400 font-medium">evolução</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xl font-black text-red-600">Fagner IA</div>
+              <div className="text-[11px] text-zinc-400 mt-1 font-medium uppercase tracking-wide">Plataforma atual</div>
+            </div>
           </div>
         </div>
+        <div className="h-0.5 w-full" style={{ background: "linear-gradient(90deg,transparent,#dc2626 30%,#f97316 70%,transparent)" }} />
       </div>
 
-      {/* ── KPIs de destaque ── */}
+      {/* ── 3 KPIs destaque ── */}
       <div className="grid grid-cols-3 gap-4">
-        {[
-          { icon: "🗑️", label: "Ruído Eliminado",      value: "-79,8%", sub: "de triagem humana zerada",       color: "#10b981" },
-          { icon: "⚡", label: "Resposta Instantânea", value: "< 3s",   sub: "antes 15–40min de espera",       color: "#f59e0b" },
-          { icon: "🤖", label: "Autonomia da IA",       value: "87%",   sub: "chats resolvidos sem humano",     color: "#dc2626" },
-        ].map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl p-5 flex flex-col gap-2" style={{ background: "rgba(15,23,42,0.6)", border: `1px solid ${kpi.color}30` }}>
-            <span className="text-2xl">{kpi.icon}</span>
-            <div className="text-3xl font-black" style={{ color: kpi.color }}>{kpi.value}</div>
-            <div className="text-sm font-semibold text-white">{kpi.label}</div>
-            <div className="text-xs text-zinc-500">{kpi.sub}</div>
+        {kpis.map((kpi, i) => (
+          <div
+            key={kpi.label}
+            className="rounded-2xl border p-5 shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5"
+            style={{ background: kpi.bg, borderColor: kpi.border, animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
+          >
+            <span className="text-2xl block mb-3">{kpi.icon}</span>
+            <div className="text-3xl font-black mb-1 tabular-nums" style={{ color: kpi.color }}>{kpi.value}</div>
+            <div className="text-sm font-bold text-zinc-700 mb-1">{kpi.label}</div>
+            <div className="text-xs text-zinc-500 leading-relaxed">{kpi.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* ── Métricas linha a linha ── */}
-      <div className="space-y-3">
-        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest px-1">Comparativo Métrica a Métrica</h3>
-        {metrics.map((m) => (
-          <div key={m.label} className="rounded-xl p-4 grid grid-cols-[1fr_auto_1fr] items-center gap-4" style={{ background: "rgba(15,23,42,0.5)", border: "1px solid rgba(255,255,255,0.05)" }}>
-            <div className="opacity-60">
-              <div className="text-xs font-bold text-zinc-500 uppercase mb-1">Jivos</div>
-              <div className="text-xl font-black text-zinc-400 line-through decoration-red-500/60">{m.jivos}</div>
-            </div>
-            <div className="flex flex-col items-center gap-1 max-w-[160px]">
-              <span className="text-lg">{m.icon}</span>
-              <span className="text-xs font-semibold text-zinc-300 text-center leading-tight">{m.label}</span>
-              <span className="text-[10px] text-zinc-600 text-center leading-tight">{m.desc}</span>
-            </div>
-            <div className="flex flex-col gap-1 items-end">
-              <div className="flex items-center gap-1"><span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">✓ Melhor</span><span className="text-xs font-bold text-red-400 uppercase">Fagner IA</span></div>
-              <div className="text-xl font-black text-red-400">{m.fagner}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Gráfico de barras visual ── */}
-      <div className="rounded-2xl p-6" style={{ background: "rgba(15,23,42,0.6)", border: "1px solid rgba(255,255,255,0.06)" }}>
-        <h3 className="text-sm font-bold text-zinc-300 mb-5 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
-          Distribuição do Esforço de Atendimento
-        </h3>
-        <div className="space-y-4">
-          {barRows.map((row) => (
-            <div key={row.label} className="space-y-1">
-              <div className="flex justify-between text-xs text-zinc-500 mb-1">
-                <span>{row.label}</span>
-                <span className="text-zinc-400">{row.jivosW}% <span className="text-red-400 font-bold">→ {row.fagnerW}%</span></span>
+      {/* ── Barras de progresso comparativo ── */}
+      <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="h-1 w-5 rounded-full bg-red-500" />
+          <h3 className="text-sm font-bold text-zinc-600 uppercase tracking-wide">Distribuição do Esforço de Atendimento</h3>
+        </div>
+        <div className="space-y-6">
+          {[
+            {
+              label:    "Triagem & Ruído (tempo desperdiçado)",
+              jivosW:   79.8, jivosLabel: "79,8% das msgs eram ruído",
+              fagnerW:  0,    fagnerLabel: "Zerado — IA filtra tudo",
+              fagnerColor: "#16a34a",
+            },
+            {
+              label:    "Atendimento com Dado Real de Compra",
+              jivosW:   15.5, jivosLabel: "15,5% tinham intenção real",
+              fagnerW:  100,  fagnerLabel: "100% rastreado com scoring",
+              fagnerColor: "#dc2626",
+            },
+            {
+              label:    `Chats Resolvidos pela IA (${containRate}% containment)`,
+              jivosW:   1,    jivosLabel: "1% — quase tudo era humano",
+              fagnerW:  containRate, fagnerLabel: `${containRate}% autônomo`,
+              fagnerColor: "#2563eb",
+            },
+          ].map((row, i) => (
+            <div key={row.label} style={{ animationDelay: `${i * 80}ms`, animationFillMode: "both" }}>
+              <div className="flex justify-between items-end mb-2">
+                <span className="text-sm font-semibold text-zinc-700">{row.label}</span>
               </div>
-              <div className="flex gap-1.5 h-4 rounded-full overflow-hidden bg-zinc-900">
-                <div className="flex-1 flex">
-                  <div className="h-full rounded-l-full" style={{ width: `${row.jivosW}%`, background: row.jivosColor, opacity: 0.35 }} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[11px] text-zinc-400 mb-1.5 font-medium">Jivos (antes)</div>
+                  <div className="h-3 bg-zinc-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-zinc-300 transition-all duration-700" style={{ width: `${row.jivosW}%` }} />
+                  </div>
+                  <div className="text-[11px] text-zinc-500 mt-1">{row.jivosLabel}</div>
                 </div>
-                <div className="w-px bg-zinc-700" />
-                <div className="flex-1 flex justify-end">
-                  <div className="h-full rounded-r-full" style={{ width: `${row.fagnerW}%`, background: row.fagnerColor, boxShadow: `0 0 8px ${row.fagnerColor}80` }} />
+                <div>
+                  <div className="text-[11px] font-medium mb-1.5" style={{ color: row.fagnerColor }}>Fagner IA (agora)</div>
+                  <div className="h-3 bg-zinc-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${row.fagnerW}%`, background: row.fagnerColor, boxShadow: `0 0 6px ${row.fagnerColor}50` }} />
+                  </div>
+                  <div className="text-[11px] mt-1 font-semibold" style={{ color: row.fagnerColor }}>{row.fagnerLabel}</div>
                 </div>
               </div>
             </div>
           ))}
         </div>
-        <div className="flex gap-6 mt-4 text-[10px] text-zinc-500">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-zinc-500 opacity-40 inline-block" />Jivos (antes)</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-red-500 inline-block" />Fagner IA (agora)</span>
+      </div>
+
+      {/* ── Métricas detalhadas com contexto ── */}
+      <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-zinc-50 flex items-center gap-2">
+          <div className="h-1 w-5 rounded-full bg-red-500" />
+          <h3 className="text-sm font-bold text-zinc-600 uppercase tracking-wide">Análise Detalhada — Indicador por Indicador</h3>
+        </div>
+        <div className="divide-y divide-zinc-50">
+          {metrics.map((m, i) => (
+            <div
+              key={m.label}
+              className="px-6 py-5 hover:bg-zinc-50/60 transition-all duration-200 group"
+              style={{ animationDelay: `${i * 60}ms`, animationFillMode: "both" }}
+            >
+              <div className="grid grid-cols-[auto_1fr_auto_auto] gap-4 items-start">
+                {/* Ícone */}
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 shadow-sm border border-zinc-100 bg-white group-hover:scale-110 transition-transform duration-200">
+                  {m.icon}
+                </div>
+                {/* Label + contexto */}
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-zinc-800 mb-1">{m.label}</div>
+                  <div className="text-xs text-zinc-500 leading-relaxed">{m.context}</div>
+                </div>
+                {/* Jivos */}
+                <div className="text-right min-w-[100px]">
+                  <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Jivos</div>
+                  <div className="text-base font-black text-zinc-300 line-through decoration-red-300 tabular-nums">{m.jivosVal}</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5">{m.jivosLabel}</div>
+                </div>
+                {/* Fagner */}
+                <div className="text-right min-w-[120px]">
+                  <div className="flex items-center justify-end gap-1 mb-1">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold" style={{ background: `${m.highlight}15`, color: m.highlight, border: `1px solid ${m.highlight}30` }}>✓ Melhor</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: m.highlight }}>Fagner IA</span>
+                  </div>
+                  <div className="text-base font-black tabular-nums" style={{ color: m.highlight }}>{m.fagnerVal}</div>
+                  <div className="text-[10px] mt-0.5" style={{ color: `${m.highlight}99` }}>{m.fagnerLabel}</div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* ── Nota de rodapé ── */}
-      <div className="rounded-xl px-5 py-4 text-xs text-zinc-500 flex items-start gap-3" style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.04)" }}>
-        <span className="text-base mt-0.5">📌</span>
-        <p>Dados do Jivos baseados na análise de <strong className="text-zinc-400">14.405 mensagens reais</strong> (V4 — Inteligência Operacional). 79,8% eram triagem e ruído. 0 leads capturados. 0 cards criados. Com Fagner IA: <strong className="text-zinc-400">87% de autonomia</strong>, leads armazenados, cards no CRM em tempo real.</p>
+      {/* ── Rodapé com estatísticas ao vivo ── */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-xl border border-zinc-100 bg-gradient-to-br from-zinc-50 to-white p-5 shadow-sm">
+          <div className="text-xs font-bold text-zinc-400 uppercase tracking-wide mb-3">📊 Volume Analisado — Jivos (Histórico)</div>
+          <div className="space-y-2">
+            {[
+              { label: "Total de mensagens",      val: "14.405",  pct: "", color: "#a855f7" },
+              { label: "Triagem & Ruído",         val: "11.508",  pct: "79,8%", color: "#a855f7" },
+              { label: "Interesse Real de Compra",val: "2.237",   pct: "15,5%", color: "#f59e0b" },
+              { label: "Comercial / Venda",       val: "668",     pct: "4,6%",  color: "#3b82f6" },
+              { label: "Suporte Pós-Venda",       val: "454",     pct: "3,1%",  color: "#ef4444" },
+            ].map((r) => (
+              <div key={r.label} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: r.color }} />
+                  <span className="text-zinc-600">{r.label}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {r.pct && <span className="text-zinc-400">{r.pct}</span>}
+                  <span className="font-bold text-zinc-700 tabular-nums">{r.val}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl border border-red-100 bg-gradient-to-br from-red-50/50 to-white p-5 shadow-sm">
+          <div className="text-xs font-bold text-red-400 uppercase tracking-wide mb-3">🤖 Dados Reais — Fagner IA (Produção)</div>
+          <div className="space-y-2">
+            {[
+              { label: "Visitantes únicos rastreados", val: totalSess > 0 ? totalSess.toLocaleString("pt-BR") : "—",    color: "#2563eb" },
+              { label: "Chats qualificados ativados",  val: totalActiv > 0 ? totalActiv.toLocaleString("pt-BR") : "—",  color: "#dc2626" },
+              { label: "Resolvidos pela IA (autônomo)",val: aiResolved > 0 ? aiResolved.toLocaleString("pt-BR") : "—",  color: "#16a34a" },
+              { label: "Escalados para humano",        val: humanEsc > 0 ? humanEsc.toLocaleString("pt-BR") : "—",      color: "#d97706" },
+              { label: "Containment rate",             val: `${containRate}%`,                                           color: "#2563eb" },
+            ].map((r) => (
+              <div key={r.label} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: r.color }} />
+                  <span className="text-zinc-600">{r.label}</span>
+                </div>
+                <span className="font-bold tabular-nums" style={{ color: r.color }}>{r.val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Nota fonte ── */}
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-5 py-4 flex items-start gap-3">
+        <span className="text-base flex-shrink-0 mt-0.5">📌</span>
+        <p className="text-xs text-zinc-500 leading-relaxed">
+          Dados do Jivos extraídos da <strong className="text-zinc-600">Análise de Inteligência Operacional V4</strong> — 14.405 mensagens B2B consolidadas.
+          Dados do Fagner IA coletados em <strong className="text-zinc-600">tempo real da produção</strong> via API do sistema.
+          Containment rate e sessões atualizados automaticamente conforme novos atendimentos são realizados.
+        </p>
       </div>
     </div>
   );
