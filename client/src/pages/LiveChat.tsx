@@ -1732,12 +1732,12 @@ function LiveChat() {
         {/* Row 1: Title + Stats + Refresh */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg"
-              style={{ background: "linear-gradient(135deg, #7f1d1d, #dc2626)" }}
-            >
-              <MessageCircle className="w-[18px] h-[18px] text-white" />
-            </div>
+            <img
+              src="/fagnerfil.jfif"
+              alt="Fagner"
+              className="w-9 h-9 rounded-xl object-cover shadow-lg"
+            />
+
             <div>
               <h1 className="text-lg font-bold text-zinc-900 leading-tight">Fagner Site</h1>
               <p className="text-[11px] text-zinc-500 leading-tight">Monitoramento em tempo real</p>
