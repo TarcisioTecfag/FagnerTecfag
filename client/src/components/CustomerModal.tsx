@@ -1,4 +1,4 @@
-/**
+﻿/**
  * client/src/components/CustomerModal.tsx
  *
  * Novo modal de visitante — baseado no repositório client-glance
@@ -146,12 +146,20 @@ function timeAgo(iso: string): string {
 }
 
 function fmtTime(seconds: number): string {
-  if (seconds >= 60) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return s > 0 ? `${m}min ${s}s` : `${m}min`;
+  if (seconds < 60) return `${seconds}s`;
+  const totalMin = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (totalMin < 60) {
+    return secs > 0 ? `${totalMin}min ${secs}s` : `${totalMin}min`;
   }
-  return `${seconds}s`;
+  const hours = Math.floor(totalMin / 60);
+  const mins  = totalMin % 60;
+  if (hours < 24) {
+    return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
+  }
+  const days  = Math.floor(hours / 24);
+  const remH  = hours % 24;
+  return remH > 0 ? `${days}d ${remH}h` : `${days}d`;
 }
 
 function sourceLabel(source?: string | null): string {
