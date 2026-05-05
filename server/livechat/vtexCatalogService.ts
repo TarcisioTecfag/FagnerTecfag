@@ -243,6 +243,7 @@ export function formatProductContextForAI(info: VtexProductInfo): string {
   if (info.brand)        lines.push(`Marca/Fabricante: ${info.brand}`);
   if (info.categoryPath) lines.push(`Categoria: ${info.categoryPath}`);
   lines.push(`Preço: ${info.priceFormatted}`);
+  if (info.skuId)        lines.push(`SKU ID: ${info.skuId}`);
   lines.push(`Disponibilidade: ${info.available ? "Em estoque" : "Consultar disponibilidade"}`);
   lines.push(`URL: ${info.productUrl}`);
 
