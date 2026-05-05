@@ -1739,7 +1739,7 @@ function LiveChat() {
               <MessageCircle className="w-[18px] h-[18px] text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-zinc-900 leading-tight">Live Chat</h1>
+              <h1 className="text-lg font-bold text-zinc-900 leading-tight">Fagner Site</h1>
               <p className="text-[11px] text-zinc-500 leading-tight">Monitoramento em tempo real</p>
             </div>
           </div>
