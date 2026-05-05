@@ -1,4 +1,4 @@
-﻿/**
+/**
  * client/src/pages/LiveChat.tsx
  *
  * Painel de monitoramento do Live Chat â€” REFATORADO
@@ -65,6 +65,7 @@ import FunnelCard            from "../components/dashboard/FunnelCard";
 import LeadScoringCard       from "../components/dashboard/LeadScoringCard";
 import PreChatPagesCard      from "../components/dashboard/PreChatPagesCard";
 import ReportExportModal     from "../components/dashboard/ReportExportModal";
+import { useStatsData }      from "../components/dashboard/useStatsData";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
