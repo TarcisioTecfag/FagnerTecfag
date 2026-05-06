@@ -2924,7 +2924,14 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     let orderData: VtexOrderData | null = null;
                     try {
                       orderData = JSON.parse(vtexOrderMatch[1].trim()) as VtexOrderData;
-                      // O couponCode agora vem direto do JSON, não precisa mais injetar aqui
+                      
+                      // 100% BULLETPROOF COUPON LOGIC: Read history for the coupon tag
+                      const messages = await lcStorage.listMessagesByChat(chat.id);
+                      const hasCouponInHistory = messages.some(m => m.content.includes('[VTEX_CUPOM:true]'));
+                      if (hasCouponInHistory) {
+                        (orderData as any).couponCode = 'FAGNER5';
+                        console.log(`[VTEX Order] 🎫 Encontrado [VTEX_CUPOM:true] no histórico! Injetando cupom FAGNER5 no carrinho.`);
+                      }
                     } catch (parseErr: any) {
                       console.warn('[VTEX Order] Falha ao parsear VTEX_ORDER_DADOS:', parseErr.message);
                       return;
