@@ -2896,7 +2896,11 @@ function LiveChat() {
                 <div className="w-2 h-2 rounded-full bg-zinc-300" />
                 Visitantes Offline
                 <span className="text-zinc-400 font-normal text-[11px]">
-                  ({filteredVisitors.filter(v => v.isOnline !== "true").length} recentes)
+                  {/* Usa total real do banco (stats) quando não há filtro de data ativo */}
+                  ({dateFilterActive
+                    ? filteredVisitors.filter(v => v.isOnline !== "true").length + " recentes"
+                    : (stats?.totalOfflineAll ?? filteredVisitors.filter(v => v.isOnline !== "true").length).toLocaleString("pt-BR") + " no total"
+                  })
                 </span>
                 {!offlineExpanded && (
                   <span className="text-[10px] text-zinc-400 italic font-normal">— clique para carregar</span>
@@ -3022,7 +3026,13 @@ function LiveChat() {
                     <h3 className="text-xs font-semibold text-blue-700 flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full bg-blue-400" />
                       Visitantes Identificados
-                      <span className="text-blue-500 font-normal text-[11px]">({identifiedVisitors.length} com nome)</span>
+                      <span className="text-blue-500 font-normal text-[11px]">
+                        {/* Usa total real do banco (stats) quando não há filtro de data ativo */}
+                        ({dateFilterActive
+                          ? identifiedVisitors.length + " com nome"
+                          : (stats?.totalIdentifiedAll ?? identifiedVisitors.length).toLocaleString("pt-BR") + " com nome"
+                        })
+                      </span>
                       {!identifiedExpanded && (
                         <span className="text-[10px] text-blue-400 italic font-normal">— clique para carregar</span>
                       )}

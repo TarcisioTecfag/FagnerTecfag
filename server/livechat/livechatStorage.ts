@@ -792,7 +792,8 @@ export const lcStorage = {
     const [chatsToday] = await db.select({ c: sql<number>`count(*)` }).from(lcChats).where(sql`"startedAt"::date = ${today}::date`);
     const [visitorsToday] = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors).where(sql`"firstSeenAt"::date = ${today}::date`);
     const [visitorsAll]   = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors);
-    const [identifiedAll] = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors).where(sql`"name" IS NOT NULL AND "name" != ''`);
+    // Conta identificados: visitantes com "name" OU "posVendaNome" preenchido (igual ao filtro do frontend)
+    const [identifiedAll] = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors).where(sql`("name" IS NOT NULL AND "name" != '') OR ("posVendaNome" IS NOT NULL AND "posVendaNome" != '')`);
     const [offlineAll]    = await db.select({ c: sql<number>`count(*)` }).from(lcVisitors).where(eq(lcVisitors.isOnline, "false"));
 
     return {
