@@ -2998,14 +2998,20 @@ function LiveChat() {
 
             {/* ── Identified Visitors Section ── */}
             {(() => {
-              const identifiedVisitors = allVisitors.filter(v =>
-                passesDateFilter(v.lastSeenAt) &&
-                v.name && v.name.trim() !== "" && (
-                  !sq ||
-                  (v.name ?? "").toLowerCase().includes(sq) ||
-                  (v.city ?? "").toLowerCase().includes(sq)
-                )
-              );
+              const identifiedVisitors = allVisitors.filter(v => {
+                // Considera identificado se tem nome em QUALQUER campo:
+                // "name" (pré-chat) OU "posVendaNome" (coletado pelo Fagner IA)
+                const displayName = (v.posVendaNome || v.name || "").trim();
+                if (!displayName) return false;
+                if (!passesDateFilter(v.lastSeenAt)) return false;
+                if (!sq) return true;
+                return (
+                  displayName.toLowerCase().includes(sq) ||
+                  (v.city ?? "").toLowerCase().includes(sq) ||
+                  ((v as any).posVendaTelefone ?? "").includes(sq) ||
+                  ((v as any).posVendaEmail ?? "").toLowerCase().includes(sq)
+                );
+              });
               return (
                 <>
                   <div
@@ -3038,6 +3044,7 @@ function LiveChat() {
                           {identifiedVisitors.map((v, idx) => {
                             const cat = categoryLabel(v.category);
                             const src = sourceLabel(v.source);
+                            const displayName = ((v as any).posVendaNome || v.name || "?").trim();
                             return (
                               <div
                                 key={v.id}
@@ -3050,13 +3057,13 @@ function LiveChat() {
                                     <div className="relative">
                                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
                                         <span className="text-sm font-bold text-blue-600">
-                                          {(v.name || "?")[0].toUpperCase()}
+                                          {displayName[0].toUpperCase()}
                                         </span>
                                       </div>
                                       <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${v.isOnline === "true" ? "bg-emerald-400" : "bg-zinc-300"}`} />
                                     </div>
                                     <div>
-                                      <p className="text-sm font-semibold text-zinc-800">{v.name}</p>
+                                      <p className="text-sm font-semibold text-zinc-800">{displayName}</p>
                                       <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
                                         <span className="flex items-center gap-0.5">
                                           <MapPin className="w-3 h-3" />
