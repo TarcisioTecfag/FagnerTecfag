@@ -4348,15 +4348,15 @@ function VSComparisonPanel() {
   }>("/api/livechat/stats/containment?dateFrom=2000-01-01&dateTo=2099-01-01");
 
   const { data: activData } = useStatsData<{
-    activationRate: number; totalActivated: number; totalSessions: number;
+    activationRate: number; chatActivated: number; totalSessions: number;
   }>("/api/livechat/stats/activation-rate?dateFrom=2000-01-01&dateTo=2099-01-01");
 
   const containRate  = containData?.containmentRate  ?? 0;
   const totalChats   = containData?.totalChats        ?? 0;
   const aiResolved   = containData?.aiResolved        ?? 0;
   const humanEsc     = containData?.humanEscalated    ?? 0;
-  const totalSess    = activData?.totalSessions       ?? 0;
-  const totalActiv   = activData?.totalActivated      ?? 0;
+  const totalSess    = activData?.totalSessions  ?? 0;
+  const totalActiv   = activData?.chatActivated  ?? 0;
 
   // Itens de comparação enriquecidos
   const metrics = [
