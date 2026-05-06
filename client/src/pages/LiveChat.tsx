@@ -4349,7 +4349,7 @@ function VSComparisonPanel() {
 
   const { data: activData } = useStatsData<{
     activationRate: number; totalActivated: number; totalSessions: number;
-  }>("/api/livechat/stats/activation?dateFrom=2000-01-01&dateTo=2099-01-01");
+  }>("/api/livechat/stats/activation-rate?dateFrom=2000-01-01&dateTo=2099-01-01");
 
   const containRate  = containData?.containmentRate  ?? 0;
   const totalChats   = containData?.totalChats        ?? 0;
