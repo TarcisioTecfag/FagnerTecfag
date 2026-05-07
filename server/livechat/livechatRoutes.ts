@@ -174,6 +174,25 @@ export function registerLiveChatRoutes(app: any): void {
     return res.json({ ok: true });
   });
 
+  // -- Reabrir chat arquivado (operador pode enviar mensagens proativas) --------
+  router.post("/chats/:id/reopen", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const chatId = p(req.params.id);
+      const chat = await lcStorage.getChatById(chatId);
+      if (!chat) return res.status(404).json({ message: "Chat não encontrado" });
+      if (chat.status !== "closed") return res.status(400).json({ message: "Chat não está fechado" });
+      await lcStorage.updateChat(chatId, {
+        status: "human_active",
+        endedAt: undefined,
+      } as any);
+      console.log(`[LiveChat] Chat ${chatId} reaberto pelo operador.`);
+      return res.json({ ok: true });
+    } catch (err: any) {
+      console.error("[LiveChat] POST /chats/:id/reopen error:", err?.message);
+      return res.status(500).json({ message: err?.message ?? "Erro interno" });
+    }
+  });
+
   router.post("/chats/:id/take-over", requireAuth, async (req: Request, res: Response) => {
     const { userId } = req.body;
     await lcStorage.updateChat(p(req.params.id), {

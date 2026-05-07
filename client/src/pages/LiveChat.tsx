@@ -2216,6 +2216,33 @@ function LiveChat() {
                           Ver Perfil
                         </Button>
 
+                        {/* Reativar chat — somente em Arquivados */}
+                        {activeTab === "arquivados" && selectedChat.status === "closed" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/livechat/chats/${selectedChat.id}/reopen`, {
+                                  method: "POST",
+                                  credentials: "include",
+                                });
+                                if (!res.ok) throw new Error("Falha ao reativar");
+                                setChats(prev => prev.map(c => c.id === selectedChat.id ? { ...c, status: "human_active", endedAt: undefined } as any : c));
+                                setSelectedChat(prev => prev ? { ...prev, status: "human_active", endedAt: undefined } as any : prev);
+                                toast({ description: "💬 Chat reativado! Você pode enviar mensagens ao cliente." });
+                              } catch {
+                                toast({ description: "Erro ao reativar o chat.", variant: "destructive" });
+                              }
+                            }}
+                            className="h-8 text-xs text-zinc-600 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 border-zinc-200 transition-colors"
+                            title="Reativar este chat para enviar uma mensagem proativa ao cliente"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 mr-1.5 text-zinc-400" />
+                            Reativar
+                          </Button>
+                        )}
+
                         <Button
                           size="sm"
                           variant="outline"
@@ -2604,7 +2631,7 @@ function LiveChat() {
 
                   {/* Input area */}
                   <div className="px-4 py-3 border-t border-zinc-100 bg-white">
-                    {activeTab === "arquivados" || selectedChat.status === "closed" ? (
+                    {selectedChat.status === "closed" ? (
                       <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-zinc-50 border border-zinc-100">
                         <Layers className="w-4 h-4 text-zinc-400" />
                         <p className="text-[11px] text-zinc-500 font-medium">
