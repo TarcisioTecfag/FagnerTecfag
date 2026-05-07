@@ -850,66 +850,29 @@ async function upsertContact(posVenda: PosVendaData, organizationId?: string | n
 
 // ─── Negociações ─────────────────────────────────────────────────────────────
 
-// Cache de IDs do funil PÓS VENDA (buscados dinamicamente pelo nome)
+// Cache de IDs do funil PÓS VENDA (hardcoded para evitar queries extras)
 let _posVendaPipelineId: string | null = null;
 let _posVendaFirstStageId: string | null = null;
 
 /**
- * Busca dinamicamente os IDs do funil "PÓS VENDA" no RD CRM.
- * Usa env vars como override, e recorre à busca por nome como fallback.
+ * Retorna os IDs do novo funil "PÓS VENDA".
+ * Utiliza as variáveis de ambiente caso existam (para flexibilidade futura),
+ * ou os IDs exatos validados em produção.
  */
 async function getPosVendaPipelineIds(): Promise<{ pipelineId: string; stageId: string }> {
-  // Cache em memória
-  if (_posVendaPipelineId && _posVendaFirstStageId) {
-    return { pipelineId: _posVendaPipelineId, stageId: _posVendaFirstStageId };
+  // Override via env vars (preferido) se não for o ID do antigo O.S
+  const envPipeline = process.env.RD_CRM_PIPELINE_OS_ID;
+  const envStage    = process.env.RD_CRM_PIPELINE_OS_STAGE_ID;
+  
+  if (envPipeline && envStage && envPipeline !== "67c9f944c7fe880018b30ab1") {
+    return { pipelineId: envPipeline, stageId: envStage };
   }
 
-  // Busca dinâmica pelo nome do funil
-  try {
-    const pipelines = await rdRequest<any>('GET', '/pipelines?page[size]=50');
-    const list: any[] = Array.isArray(pipelines) ? pipelines : (Array.isArray(pipelines?.data) ? pipelines.data : []);
-    
-    // Procura por funil que contenha "pós venda" ou "pos venda" no nome (case-insensitive)
-    const found = list.find((p: any) => p.name && p.name.toLowerCase().replace('ó', 'o').includes('pos venda'));
+  // IDs exatos do novo funil PÓS VENDA e sua primeira etapa (TRIAGEM)
+  _posVendaPipelineId = "69d50ba5bc3cd0001dfe507a";
+  _posVendaFirstStageId = "69d50ba5bc3cd0001dfe507c";
 
-    if (found) {
-      _posVendaPipelineId = found.id;
-      // Pega o primeiro stage do pipeline
-      try {
-        const stages = await rdRequest<any>(`GET`, `/pipelines/${found.id}/stages?page[size]=50`);
-        const stageList: any[] = Array.isArray(stages) ? stages : (Array.isArray(stages?.data) ? stages.data : []);
-        if (stageList.length > 0) {
-          _posVendaFirstStageId = stageList[0].id;
-          console.log(`[RD CRM] PÓS VENDA: pipeline="${found.name}" id=${found.id}, primeira stage="${stageList[0].name}" id=${stageList[0].id}`);
-        }
-      } catch (stageErr: any) {
-        console.warn('[RD CRM] PÓS VENDA: falha ao buscar stages do pipeline:', stageErr.message);
-      }
-    } else {
-      console.warn(`[RD CRM] PÓS VENDA: funil contendo "PÓS VENDA" não encontrado. Configure RD_CRM_PIPELINE_OS_ID.`);
-    }
-  } catch (e: any) {
-    console.warn('[RD CRM] PÓS VENDA: falha ao buscar pipelines:', e.message);
-  }
-
-  if (!_posVendaPipelineId || !_posVendaFirstStageId) {
-    // Fallback 1: usar env vars caso o funil PÓS VENDA não seja encontrado
-    const envPipeline = process.env.RD_CRM_PIPELINE_OS_ID;
-    const envStage    = process.env.RD_CRM_PIPELINE_OS_STAGE_ID;
-    
-    if (envPipeline && envStage) {
-      _posVendaPipelineId = envPipeline;
-      _posVendaFirstStageId = envStage;
-      console.log(`[RD CRM] PÓS VENDA: usando IDs de env vars como fallback (pipeline=${envPipeline}, stage=${envStage})`);
-    } else {
-      // Fallback 2: hardcoded original
-      _posVendaPipelineId = "67c9f944c7fe880018b30ab1";
-      _posVendaFirstStageId = ""; 
-      console.warn(`[RD CRM] PÓS VENDA: usando fallback fixo O.S`);
-    }
-  }
-
-  return { pipelineId: _posVendaPipelineId!, stageId: _posVendaFirstStageId! };
+  return { pipelineId: _posVendaPipelineId, stageId: _posVendaFirstStageId };
 }
 
 
