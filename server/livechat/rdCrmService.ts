@@ -850,6 +850,69 @@ async function upsertContact(posVenda: PosVendaData, organizationId?: string | n
 
 // ─── Negociações ─────────────────────────────────────────────────────────────
 
+// Cache de IDs do funil PÓS VENDA (buscados dinamicamente pelo nome)
+let _posVendaPipelineId: string | null = null;
+let _posVendaFirstStageId: string | null = null;
+
+/**
+ * Busca dinamicamente os IDs do funil "PÓS VENDA" no RD CRM.
+ * Usa env vars como override, e recorre à busca por nome como fallback.
+ */
+async function getPosVendaPipelineIds(): Promise<{ pipelineId: string; stageId: string }> {
+  // Cache em memória
+  if (_posVendaPipelineId && _posVendaFirstStageId) {
+    return { pipelineId: _posVendaPipelineId, stageId: _posVendaFirstStageId };
+  }
+
+  // Busca dinâmica pelo nome do funil
+  try {
+    const pipelines = await rdRequest<any>('GET', '/pipelines?page[size]=50');
+    const list: any[] = Array.isArray(pipelines) ? pipelines : (Array.isArray(pipelines?.data) ? pipelines.data : []);
+    
+    // Procura por funil que contenha "pós venda" ou "pos venda" no nome (case-insensitive)
+    const found = list.find((p: any) => p.name && p.name.toLowerCase().replace('ó', 'o').includes('pos venda'));
+
+    if (found) {
+      _posVendaPipelineId = found.id;
+      // Pega o primeiro stage do pipeline
+      try {
+        const stages = await rdRequest<any>(`GET`, `/pipelines/${found.id}/stages?page[size]=50`);
+        const stageList: any[] = Array.isArray(stages) ? stages : (Array.isArray(stages?.data) ? stages.data : []);
+        if (stageList.length > 0) {
+          _posVendaFirstStageId = stageList[0].id;
+          console.log(`[RD CRM] PÓS VENDA: pipeline="${found.name}" id=${found.id}, primeira stage="${stageList[0].name}" id=${stageList[0].id}`);
+        }
+      } catch (stageErr: any) {
+        console.warn('[RD CRM] PÓS VENDA: falha ao buscar stages do pipeline:', stageErr.message);
+      }
+    } else {
+      console.warn(`[RD CRM] PÓS VENDA: funil contendo "PÓS VENDA" não encontrado. Configure RD_CRM_PIPELINE_OS_ID.`);
+    }
+  } catch (e: any) {
+    console.warn('[RD CRM] PÓS VENDA: falha ao buscar pipelines:', e.message);
+  }
+
+  if (!_posVendaPipelineId || !_posVendaFirstStageId) {
+    // Fallback 1: usar env vars caso o funil PÓS VENDA não seja encontrado
+    const envPipeline = process.env.RD_CRM_PIPELINE_OS_ID;
+    const envStage    = process.env.RD_CRM_PIPELINE_OS_STAGE_ID;
+    
+    if (envPipeline && envStage) {
+      _posVendaPipelineId = envPipeline;
+      _posVendaFirstStageId = envStage;
+      console.log(`[RD CRM] PÓS VENDA: usando IDs de env vars como fallback (pipeline=${envPipeline}, stage=${envStage})`);
+    } else {
+      // Fallback 2: hardcoded original
+      _posVendaPipelineId = "67c9f944c7fe880018b30ab1";
+      _posVendaFirstStageId = ""; 
+      console.warn(`[RD CRM] PÓS VENDA: usando fallback fixo O.S`);
+    }
+  }
+
+  return { pipelineId: _posVendaPipelineId!, stageId: _posVendaFirstStageId! };
+}
+
+
 /**
  * Cria a negociação no RD CRM.
  *
@@ -880,8 +943,7 @@ async function createDeal(
     infoCompl = partes.join(" | ");
   }
 
-  const pipelineId = (process.env.RD_CRM_PIPELINE_OS_ID ?? "67c9f944c7fe880018b30ab1").trim();
-  const stageId    = (process.env.RD_CRM_PIPELINE_OS_STAGE_ID ?? "").trim();
+  const { pipelineId, stageId } = await getPosVendaPipelineIds();
   // Prioridade: ownerId passado pelo chamador (rodízio do painel) > env var (fallback hardcoded)
   const rawOwner   = ((posVenda as any).ownerId || process.env.RD_CRM_OWNER_POS_VENDA_ID || "").trim();
 
@@ -896,7 +958,7 @@ async function createDeal(
     throw new Error(`owner_id inválido: "${rawOwner}" — deve ser um BSON ObjectId de 24 caracteres hexadecimais. Reconfigure o operador no painel de Configurações.`);
   }
 
-  if (!stageId) throw new Error("[RD CRM] RD_CRM_PIPELINE_OS_STAGE_ID não configurado");
+  if (!stageId) throw new Error("[RD CRM] Stage ID de Pós Venda não encontrado e RD_CRM_PIPELINE_OS_STAGE_ID não configurado");
   if (!ownerId) throw new Error("[RD CRM] Nenhum owner configurado para Pós Venda — configure operadores no painel ou defina RD_CRM_OWNER_POS_VENDA_ID");
 
   console.log(`[RD CRM] Owner Pós Venda: ${ownerId} (fonte: ${(posVenda as any).ownerId ? 'rodízio do painel' : 'env var fallback'})`);
@@ -1018,7 +1080,7 @@ export async function createPosVendaOS(
   posVendaData: Omit<PosVendaData, 'conversationSnippet'> & { conversationSummary?: string; ownerId?: string },
   relatorio: string
 ): Promise<string> {
-  if (!process.env.RD_CRM_CLIENT_ID || !process.env.RD_CRM_PIPELINE_OS_STAGE_ID) {
+  if (!process.env.RD_CRM_CLIENT_ID) {
     throw new Error("[RD CRM] Variáveis de ambiente RD CRM não configuradas.");
   }
 
