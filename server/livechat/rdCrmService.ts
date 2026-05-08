@@ -640,32 +640,66 @@ async function findOrCreateOrganization(
 
   console.log(`[RD CRM] findOrCreateOrganization: nome="${nomeEmpresa}" doc="${doc}"`);
 
-  // ── 1. Busca empresa existente — SOMENTE por nome (query por CNPJ causa falsos positivos) ──
+  // ── Helpers internos de busca — reutilizados em pré-criação e fallback pós-422 ──
 
-  // Estratégia A: busca pelo nome exato via query textual
-  try {
-    const byQuery = await rdRequest<any>('GET', `/organizations?query=${encodeURIComponent(nomeEmpresa)}&page[size]=10`);
-    const qList: any[] = Array.isArray(byQuery) ? byQuery : (Array.isArray(byQuery?.data) ? byQuery.data : []);
-    const qMatch = qList.find((o: any) => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
-    if (qMatch) {
-      console.log(`[RD CRM] \u2705 Empresa existente (busca por nome): ${qMatch.id} "${qMatch.name}"`);
-      // Atualiza nome correto e CNPJ na empresa encontrada (corrige dados errados)
-      await updateOrgWithData(qMatch.id, nomeEmpresa, doc, posVenda.cnpjData ?? null);
-      return qMatch.id;
-    }
-  } catch { /* ignora — vai tentar criar */ }
+  /** Busca empresa por texto (query) ou por varredura paginada multi-página */
+  const searchOrgByName = async (): Promise<any | null> => {
+    // A: busca textual pela API
+    try {
+      const byQuery = await rdRequest<any>('GET', `/organizations?query=${encodeURIComponent(nomeEmpresa)}&page[size]=20`);
+      const qList: any[] = Array.isArray(byQuery) ? byQuery : (Array.isArray(byQuery?.data) ? byQuery.data : []);
+      const qMatch = qList.find((o: any) => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
+      if (qMatch) return qMatch;
+    } catch { /* continua */ }
 
-  // Estratégia B: varredura ampla (page[size]=200) para lista completa
+    // B: varredura paginada — percorre até 5 páginas (500 empresas) para garantir cobertura
+    try {
+      for (let page = 1; page <= 5; page++) {
+        const pageRes = await rdRequest<any>('GET', `/organizations?page[number]=${page}&page[size]=100`);
+        const pageList: any[] = Array.isArray(pageRes) ? pageRes : (Array.isArray(pageRes?.data) ? pageRes.data : []);
+        if (pageList.length === 0) break; // sem mais páginas
+        const pageMatch = pageList.find((o: any) => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
+        if (pageMatch) return pageMatch;
+      }
+    } catch { /* continua */ }
+
+    return null;
+  };
+
+  /** Busca empresa pelo CNPJ/CPF no custom_field (fallback mais confiável quando nome não bate) */
+  const searchOrgByCnpj = async (): Promise<any | null> => {
+    if (!doc) return null;
+    try {
+      // Tenta filtro direto por custom_field slug "cpf"
+      const byCnpj = await rdRequest<any>('GET', `/organizations?filter=cpf:${encodeURIComponent(doc)}&page[size]=10`);
+      const cnpjList: any[] = Array.isArray(byCnpj) ? byCnpj : (Array.isArray(byCnpj?.data) ? byCnpj.data : []);
+      if (cnpjList.length > 0) {
+        console.log(`[RD CRM] \u2705 Empresa encontrada por CNPJ (filter): ${cnpjList[0].id} "${cnpjList[0].name}"`);
+        return cnpjList[0];
+      }
+    } catch { /* continua */ }
+    return null;
+  };
+
+  // ── 1. Busca empresa existente antes de tentar criar ──────────────────────
+  // Estratégia A + B: por nome (query + varredura paginada)
   try {
-    const allRes = await rdRequest<any>('GET', `/organizations?page[size]=200`);
-    const allList: any[] = Array.isArray(allRes) ? allRes : (Array.isArray(allRes?.data) ? allRes.data : []);
-    const allMatch = allList.find((o: any) => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
-    if (allMatch) {
-      console.log(`[RD CRM] \u2705 Empresa existente (varredura): ${allMatch.id} "${allMatch.name}"`);
-      await updateOrgWithData(allMatch.id, nomeEmpresa, doc, posVenda.cnpjData ?? null);
-      return allMatch.id;
+    const found = await searchOrgByName();
+    if (found) {
+      console.log(`[RD CRM] \u2705 Empresa existente (pré-criação, por nome): ${found.id} "${found.name}"`);
+      await updateOrgWithData(found.id, nomeEmpresa, doc, posVenda.cnpjData ?? null);
+      return found.id;
     }
-  } catch { /* ignora — vai criar */ }
+  } catch { /* ignora */ }
+
+  // Estratégia C: por CNPJ/CPF (custom_field)
+  try {
+    const foundByCnpj = await searchOrgByCnpj();
+    if (foundByCnpj) {
+      await updateOrgWithData(foundByCnpj.id, nomeEmpresa, doc, posVenda.cnpjData ?? null);
+      return foundByCnpj.id;
+    }
+  } catch { /* ignora */ }
 
   // ── 2. Cria empresa passando owner e custom_fields obrigatórios ─────────
   let orgId: string | null = null;
@@ -696,28 +730,25 @@ async function findOrCreateOrganization(
     console.log(`[RD CRM] \u2705 Empresa criada: ${orgId} — "${nomeEmpresa}"`);
   } catch (createErr: any) {
     console.error(`[RD CRM] ❌ FALHA CRIAR EMPRESA "${nomeEmpresa}": ${createErr.message}`);
-    // Fallback: empresa já existe com esse nome — busca para vincular e atualizar
+    // Fallback: empresa já existe com esse nome — usa helpers robustos para localizar e vincular
     if (createErr.message.includes("Nome Empresa já cadastrada")) {
       try {
-        console.log(`[RD CRM] Fallback: buscando empresa já cadastrada por nome...`);
-        const qRes = await rdRequest<any>('GET', `/organizations?query=${encodeURIComponent(nomeEmpresa)}&page[size]=10`);
-        const qList: any[] = Array.isArray(qRes) ? qRes : (Array.isArray(qRes?.data) ? qRes.data : []);
-        const qMatch = qList.find((o: any) => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
-        if (qMatch) {
-          console.log(`[RD CRM] \u2705 Empresa resgatada (fallback query): ${qMatch.id} "${qMatch.name}"`);
-          await updateOrgWithData(qMatch.id, nomeEmpresa, doc, posVenda.cnpjData ?? null);
-          return qMatch.id;
+        console.log(`[RD CRM] Fallback pós-422: buscando empresa por nome (paginado) + CNPJ...`);
+        // Tenta por nome (query + varredura multi-página)
+        const byName = await searchOrgByName();
+        if (byName) {
+          console.log(`[RD CRM] \u2705 Empresa resgatada (fallback por nome): ${byName.id} "${byName.name}"`);
+          await updateOrgWithData(byName.id, nomeEmpresa, doc, posVenda.cnpjData ?? null);
+          return byName.id;
         }
-        // Varredura ampla
-        const allRes = await rdRequest<any>('GET', `/organizations?page[size]=200`);
-        const allList: any[] = Array.isArray(allRes) ? allRes : (Array.isArray(allRes?.data) ? allRes.data : []);
-        const orgMatch = allList.find((o: any) => o.name.toLowerCase() === nomeEmpresa.toLowerCase());
-        if (orgMatch) {
-          console.log(`[RD CRM] \u2705 Empresa resgatada (fallback varredura): ${orgMatch.id} "${orgMatch.name}"`);
-          await updateOrgWithData(orgMatch.id, nomeEmpresa, doc, posVenda.cnpjData ?? null);
-          return orgMatch.id;
+        // Tenta por CNPJ como último recurso (mais confiável que nome quando a busca textual falha)
+        const byCnpj = await searchOrgByCnpj();
+        if (byCnpj) {
+          console.log(`[RD CRM] \u2705 Empresa resgatada (fallback por CNPJ): ${byCnpj.id} "${byCnpj.name}"`);
+          await updateOrgWithData(byCnpj.id, nomeEmpresa, doc, posVenda.cnpjData ?? null);
+          return byCnpj.id;
         }
-        console.warn(`[RD CRM] \u26a0\ufe0f Empresa não localizada nos fallbacks.`);
+        console.warn(`[RD CRM] \u26a0\ufe0f Empresa não localizada nos fallbacks (nome + CNPJ). Negociação prosseguirá sem empresa.`);
       } catch (e: any) { console.error(`[RD CRM] Fallback org falhou: ${e.message}`); }
     }
     return null;
