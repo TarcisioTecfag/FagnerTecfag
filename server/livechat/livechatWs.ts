@@ -2911,11 +2911,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                   }
                 }
 
-                // ── Detectar [VTEX_CUPOM:true] — cliente aceitou o cupom de 5% ────────────
-                const hasCupomTag = rawReply.includes('[VTEX_CUPOM:true]');
-                if (hasCupomTag) {
-                  console.log(`[VTEX Order] 🎫 Tag [VTEX_CUPOM:true] detectada — cupom FAGNER5 será aplicado no carrinho`);
-                }
+
 
                 // ── Detectar [VTEX_ORDER_DADOS:{...}] — todos os dados coletados ───────
                 const vtexOrderMatch = rawReply.match(/\[VTEX_ORDER_DADOS:([\s\S]*?)\]/);
@@ -2924,14 +2920,6 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                     let orderData: VtexOrderData | null = null;
                     try {
                       orderData = JSON.parse(vtexOrderMatch[1].trim()) as VtexOrderData;
-                      
-                      // 100% BULLETPROOF COUPON LOGIC: Read history for the coupon tag
-                      const messages = await lcStorage.listMessagesByChat(chat.id);
-                      const hasCouponInHistory = messages.some(m => m.content.includes('[VTEX_CUPOM:true]'));
-                      if (hasCouponInHistory) {
-                        (orderData as any).couponCode = 'FAGNER5';
-                        console.log(`[VTEX Order] 🎫 Encontrado [VTEX_CUPOM:true] no histórico! Injetando cupom FAGNER5 no carrinho.`);
-                      }
                     } catch (parseErr: any) {
                       console.warn('[VTEX Order] Falha ao parsear VTEX_ORDER_DADOS:', parseErr.message);
                       return;
@@ -2986,7 +2974,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                       const cupomCodigo = (orderData as any).couponCode;
                       const checkoutBubbles = [
                         `🛒 Pedido pronto para finalizar!`,
-                        `📦 Produto: ${nomeProduto}\n💰 Total: ${total}\n🚚 Frete: ${freteTexto}${couponApplied && cupomCodigo ? `\n🎫 Cupom aplicado: ${cupomCodigo} (5% de desconto já incluído!)` : ''}`,
+                        `📦 Produto: ${nomeProduto}\n💰 Total: ${total}\n🚚 Frete: ${freteTexto}`,
                         `Para finalizar, basta clicar no link abaixo e escolher sua forma de pagamento (PIX, Boleto ou Cartão) — todos os seus dados já estão preenchidos!`,
                         checkoutLink,
                         `_O link fica ativo por 1 hora. Se precisar de um novo é só pedir!_`,
