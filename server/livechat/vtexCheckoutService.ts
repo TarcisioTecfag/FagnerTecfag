@@ -246,6 +246,27 @@ async function setShippingAddress(
   console.log(`[VTEX Checkout] ✅ Endereço definido: CEP ${data.cep}, nº ${data.addressNumber}`);
 }
 
+/** Insere dados de marketing (UTM) no orderForm */
+async function setMarketingData(orderFormId: string): Promise<void> {
+  const url = `${VTEX_API_BASE}/api/checkout/pub/orderForm/${orderFormId}/attachments/marketingData`;
+  const payload = {
+    utmSource: "fagner5"
+  };
+
+  const res = await fetch(url, {
+    method:  "POST",
+    headers: vtexPublicHeaders(),
+    body:    JSON.stringify(payload),
+    signal:  AbortSignal.timeout(8000),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    console.warn(`[VTEX Checkout] ⚠️ Falha ao definir marketingData (HTTP ${res.status}): ${body.slice(0, 200)}`);
+    return;
+  }
+  console.log(`[VTEX Checkout] ✅ Marketing data definido: UTM Source = fagner5`);
+}
+
 /** Simula frete e seleciona a melhor opção (mais barata com prazo ≤ 15 dias) */
 async function selectBestShipping(
   skuId: string,
@@ -366,17 +387,22 @@ export async function buildCart(orderData: VtexOrderData): Promise<BuildCartResu
   await new Promise(r => setTimeout(r, 300));
   const freteInfo = await selectBestShipping(skuId, orderData.cep, quantidade);
 
-  // 7. Aplica cupom se fornecido (não-bloqueante — falha não impede o checkout)
+  // 7. Aplica UTM e Cupom se fornecido (não-bloqueante)
   let couponApplied = false;
   const couponCode = (orderData as any).couponCode as string | undefined;
   if (couponCode) {
+    await new Promise(r => setTimeout(r, 300));
+    await setMarketingData(orderFormId); // Injeta UTM requerida pela promoção
+    
     await new Promise(r => setTimeout(r, 300));
     couponApplied = await applyCoupon(orderFormId, couponCode);
   }
 
   // 8. Monta result
-  const checkoutLink = `${VTEX_STORE_URL}/checkout/?orderFormId=${orderFormId}#/cart`;
-  const total = formatPrice(preco * quantidade);
+  const checkoutLink = `${VTEX_STORE_URL}/checkout/?orderFormId=${orderFormId}&utm_source=fagner5#/cart`;
+  const totalCents = preco * quantidade;
+  const finalCents = couponApplied ? Math.round(totalCents * 0.95) : totalCents;
+  const total = formatPrice(finalCents);
 
   console.log(`[VTEX Checkout] 🎉 Cart completo! Link: ${checkoutLink}`);
 

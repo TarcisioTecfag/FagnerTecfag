@@ -23,6 +23,7 @@ import CostsDashboard from "./pages/CostsDashboard";
 import VTEXConfig from "./pages/VTEXConfig";
 import ConversasConfig from "./pages/ConversasConfig";
 import LiveChat from "./pages/LiveChat";
+import CarrinhoManual from "./pages/CarrinhoManual";
 
 function Router() {
   const { user, isLoading } = useAuth();
@@ -67,6 +68,7 @@ function Router() {
             <Route path="/vtex" component={VTEXConfig}/>
             <Route path="/conversas" component={ConversasConfig}/>
             <Route path="/livechat" component={LiveChat}/>
+            <Route path="/carrinho" component={CarrinhoManual}/>
             <Route component={NotFound} />
           </Switch>
         </Layout>

@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   MessageSquare,
   MessageCircle,
+  ShoppingCart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -84,6 +85,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: "Editor de Prompt", href: "/prompt", icon: PenTool },
     { name: "Configuração de CRM", href: "/crm", icon: Database },
     { name: "Configuração VTEX", href: "/vtex", icon: ShoppingBag },
+    { name: "Carrinho Manual (FAGNER5)", href: "/carrinho", icon: ShoppingCart },
     { name: "Configurações de Conversas", href: "/conversas", icon: MessageSquare },
     { section: "Conhecimento & Filtros" },
     { name: "Base de Conhecimento", href: "/knowledge", icon: BookOpen },
@@ -322,13 +324,13 @@ export default function Layout({ children }: LayoutProps) {
         <div
           key={location}
           className={`flex-1 animate-page-enter ${
-            location === "/" || location === "/monitor" || location === "/crm" || location === "/knowledge" || location === "/users" || location === "/costs" || location === "/vtex" || location === "/conversas" || location === "/livechat"
+            location === "/" || location === "/monitor" || location === "/crm" || location === "/knowledge" || location === "/users" || location === "/costs" || location === "/vtex" || location === "/conversas" || location === "/livechat" || location === "/carrinho"
               ? "overflow-hidden flex flex-col"
               : "overflow-y-auto p-8"
           }`}
         >
           <div className={
-            location === "/" || location === "/monitor" || location === "/crm" || location === "/knowledge" || location === "/users" || location === "/costs" || location === "/vtex" || location === "/conversas" || location === "/livechat"
+            location === "/" || location === "/monitor" || location === "/crm" || location === "/knowledge" || location === "/users" || location === "/costs" || location === "/vtex" || location === "/conversas" || location === "/livechat" || location === "/carrinho"
               ? "flex-1 h-full overflow-hidden flex flex-col"
               : "max-w-6xl mx-auto"
           }>

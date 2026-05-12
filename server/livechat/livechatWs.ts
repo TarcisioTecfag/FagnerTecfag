@@ -2948,7 +2948,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                         visitor: await lcStorage.getVisitorById(currentVisitorId) });
 
                       // 3. Monta cart completo na VTEX
-                      const { orderFormId, checkoutLink, total, freteInfo } = await buildCart(orderData!);
+                      const { orderFormId, checkoutLink, total, freteInfo, couponApplied } = await buildCart(orderData!);
 
                       // 4. Salva dados do pedido no visitante (aba "Sobre o cliente")
                       await lcStorage.updateVisitorOrderData(currentVisitorId, {
@@ -2983,10 +2983,10 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                         ? `${freteInfo.carrier} — ${freteInfo.priceFormatted} (${freteInfo.deliveryDays} dias úteis)`
                         : `A combinar com nossa equipe`;
 
-                      const cupomAplicado = (orderData as any).couponCode;
+                      const cupomCodigo = (orderData as any).couponCode;
                       const checkoutBubbles = [
                         `🛒 Pedido pronto para finalizar!`,
-                        `📦 Produto: ${nomeProduto}\n💰 Total: ${total}\n🚚 Frete: ${freteTexto}${cupomAplicado ? `\n🎫 Cupom aplicado: ${cupomAplicado} (5% de desconto já incluído!)` : ''}`,
+                        `📦 Produto: ${nomeProduto}\n💰 Total: ${total}\n🚚 Frete: ${freteTexto}${couponApplied && cupomCodigo ? `\n🎫 Cupom aplicado: ${cupomCodigo} (5% de desconto já incluído!)` : ''}`,
                         `Para finalizar, basta clicar no link abaixo e escolher sua forma de pagamento (PIX, Boleto ou Cartão) — todos os seus dados já estão preenchidos!`,
                         checkoutLink,
                         `_O link fica ativo por 1 hora. Se precisar de um novo é só pedir!_`,

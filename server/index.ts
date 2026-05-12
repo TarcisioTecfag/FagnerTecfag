@@ -71,7 +71,7 @@ import {
   listTemplates,
   isConfigured as rdIsConfigured,
 } from "./fagner/rdConversasService.js";
-import { fetchVtexOrder } from "./livechat/vtexCheckoutService.js";
+import { fetchVtexOrder, buildCart } from "./livechat/vtexCheckoutService.js";
 
 // ─── In-memory log buffer (circular, max 500 entries) ────────────────────────
 const LOG_BUFFER: { message: string; level: string; timestamp: string }[] = [];
@@ -663,6 +663,55 @@ app.get("/api/setup-vtex-hook", async (req, res) => {
   }
 });
 
+
+// ─── Carrinho Manual VTEX — usado quando o Fagner falha ──────────────────────
+// POST /api/vtex/build-cart
+// Gera um carrinho completo com o cupom FAGNER5 injetado, para o operador enviar ao cliente.
+// Requer autenticação no painel.
+app.post("/api/vtex/build-cart", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const body = req.body;
+
+    // Validação básica
+    const required = ["tipo", "skuId", "quantidade", "produto", "preco", "email", "telefone", "cep", "addressNumber"];
+    for (const field of required) {
+      if (!body[field] && body[field] !== 0) {
+        return res.status(400).json({ message: `Campo obrigatório ausente: ${field}` });
+      }
+    }
+
+    if (body.tipo === "cpf") {
+      if (!body.cpf) return res.status(400).json({ message: "CPF obrigatório para pessoa física" });
+      if (!body.firstName || !body.lastName) return res.status(400).json({ message: "Nome e sobrenome obrigatórios" });
+    } else if (body.tipo === "cnpj") {
+      if (!body.cnpj) return res.status(400).json({ message: "CNPJ obrigatório para pessoa jurídica" });
+      if (!body.corporateName) return res.status(400).json({ message: "Razão Social obrigatória" });
+      if (!body.responsavel) return res.status(400).json({ message: "Responsável obrigatório" });
+      if (!body.stateInscription) body.stateInscription = "ISENTO";
+    } else {
+      return res.status(400).json({ message: "tipo deve ser 'cpf' ou 'cnpj'" });
+    }
+
+    // Injeta cupom FAGNER5 automaticamente
+    const orderData = { ...body, couponCode: "FAGNER5" };
+
+    console.log(`[Carrinho Manual] 🛒 Geração solicitada por operador para SKU ${body.skuId} — ${body.produto}`);
+    const result = await buildCart(orderData);
+    console.log(`[Carrinho Manual] ✅ Carrinho gerado: ${result.orderFormId}`);
+
+    return res.json({
+      success: true,
+      orderFormId: result.orderFormId,
+      checkoutLink: result.checkoutLink,
+      total: result.total,
+      couponApplied: result.couponApplied,
+      freteInfo: result.freteInfo,
+    });
+  } catch (err: any) {
+    console.error(`[Carrinho Manual] ❌ Erro ao gerar carrinho:`, err.message);
+    return res.status(500).json({ message: `Erro ao gerar carrinho: ${err.message}` });
+  }
+});
 
 // ─── Auth routes ─────────────────────────────────────────────────────────────
 
