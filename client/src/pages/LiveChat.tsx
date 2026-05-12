@@ -38,6 +38,7 @@ import {
   Hash,
   Layers,
   FileText,
+  ClipboardCopy,
   X,
   Filter,
   Settings,
@@ -1932,9 +1933,30 @@ function LiveChat() {
             {/* Chat list panel */}
             <div className="w-[320px] flex-shrink-0 flex flex-col bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-1.5">
+                <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-1.5 group">
                   <Layers className="w-4 h-4 text-red-500" />
                   {currentTitle}
+                  {activeTab === "arquivados" && (
+                    <button
+                      onClick={async (e) => {
+                         e.stopPropagation();
+                         toast({ description: "Extraindo todas as conversas do sistema, isso pode demorar alguns segundos..." });
+                         try {
+                           const res = await fetch("/api/livechat/chats/export-all-txt", { credentials: "include" });
+                           if (!res.ok) throw new Error("Falha ao buscar as conversas");
+                           const text = await res.text();
+                           await navigator.clipboard.writeText(text);
+                           toast({ description: "Todas as conversas foram copiadas para a área de transferência!" });
+                         } catch (err) {
+                           toast({ description: "Erro ao copiar histórico", variant: "destructive" });
+                         }
+                      }}
+                      className="ml-1 opacity-5 hover:opacity-100 text-zinc-400 hover:text-zinc-600 transition-all cursor-pointer"
+                      title="Copiar todas as conversas e notas em TXT para a área de transferência"
+                    >
+                      <ClipboardCopy className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </h3>
                 <span className="text-[10px] text-zinc-400 font-medium">
                   {activeTab === "arquivados" ? `${pagedList.length} de ${currentList.length}` : `${currentList.length} itens`}

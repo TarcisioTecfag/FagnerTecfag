@@ -683,6 +683,58 @@ export const lcStorage = {
       .limit(limit);
   },
 
+  async exportAllChatsTxt(): Promise<string> {
+    const visitors = await db.select().from(lcVisitors);
+    const chats = await db.select().from(lcChats).orderBy(desc(lcChats.startedAt));
+    const messages = await db.select().from(lcMessages).orderBy(asc(lcMessages.sentAt));
+
+    const visitorMap = new Map(visitors.map((v: any) => [v.id, v]));
+    const chatMessages = new Map();
+    for (const m of messages) {
+       if (!chatMessages.has(m.chatId)) chatMessages.set(m.chatId, []);
+       chatMessages.get(m.chatId).push(m);
+    }
+
+    let text = "=== EXPORTAÇÃO DE TODAS AS CONVERSAS DO SISTEMA ===\n\n";
+
+    for (const chat of chats) {
+       const visitor = visitorMap.get(chat.visitorId);
+       const msgs = chatMessages.get(chat.id) || [];
+       
+       const startedAt = chat.startedAt ? new Date(chat.startedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "";
+       const visitorName = chat.visitorName || visitor?.name || visitor?.posVendaNome || "Visitante";
+       
+       text += `-----------------------------------------------------------\n`;
+       text += `CHAT ID: ${chat.id}\n`;
+       text += `VISITANTE: ${visitorName}\n`;
+       text += `INICIADO EM: ${startedAt}\n`;
+       text += `STATUS: ${chat.status}\n`;
+       
+       if (visitor?.notes && Array.isArray(visitor.notes) && visitor.notes.length > 0) {
+          text += `\nNOTAS DO VISITANTE:\n`;
+          for (const note of visitor.notes as any[]) {
+             const noteDate = note.date ? new Date(note.date).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "";
+             text += `  [${noteDate}] (${note.stage}): ${note.content}\n`;
+          }
+       }
+       
+       text += `\nMENSAGENS:\n`;
+       if (msgs.length === 0) {
+          text += `  Nenhuma mensagem.\n`;
+       } else {
+         for (const m of msgs) {
+            const time = m.sentAt ? new Date(m.sentAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "";
+            const sender = m.sender === "ai" ? "Fagner" : m.sender === "agent" ? "Agente" : "Cliente";
+            const content = m.content || (m.attachments ? `[Arquivo Anexado]` : "");
+            text += `  [${time}] ${sender}: ${content}\n`;
+         }
+       }
+       text += `-----------------------------------------------------------\n\n`;
+    }
+    
+    return text;
+  },
+
   async sweepOrphanedChats(): Promise<void> {
     // Fecha chats ativos há mais de 90 minutos sem resposta ou sem encerramento
     // (Protege contra crash do servidor que mata os timers in-memory de 10 min)
