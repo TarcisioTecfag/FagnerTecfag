@@ -646,7 +646,7 @@ Exemplo correto de OVERVIEW com a tag:
 • CPF/CNPJ: [doc]
 
 Está tudo correto?"
-[MAQUINAS_DADOS:{"nome":"...","telefone":"...","email":"...","cnpjCpf":"...","maquinaDesejada":"...","detalhes":"...","produtoFabricado":"...","volumeProducao":"...","clienteNovo":"...","qualificacaoSDR":"..."}]
+[MAQUINAS_DADOS:{"nome":"...","telefone":"...","email":"...","cnpjCpf":"...","maquinaDesejada":"...","detalhes":"...","produtoFabricado":"...","volumeProducao":"...","clienteNovo":"...","qualificacaoSDR":"...","scoringP1":3,"scoringP2":3,"scoringP3":3,"scoringP4":3,"scoringP5":3,"scoringRating":3}]
 
 **ENCERRAMENTO DO FLUXO MÁQUINAS:**
 Depois que o cliente confirmar, diga APENAS:
@@ -656,9 +656,9 @@ Depois que o cliente confirmar, diga APENAS:
 
 🚨 REGRA ABSOLUTA DA TAG [MAQUINAS_DADOS] — NUNCA VIOLE:
 Antes de gerar a tag, releia o histórico COMPLETO da conversa e preencha CADA campo com o que foi coletado.
-NUNCA coloque "..." ou "" ou null em "produtoFabricado", "volumeProducao", "clienteNovo" ou "qualificacaoSDR".
+NUNCA coloque "..." ou "" ou null em "produtoFabricado", "volumeProducao", "clienteNovo", "qualificacaoSDR" ou nos campos scoringP1–scoringP5 e scoringRating.
 Se o cliente informou o dado em qualquer parte da conversa, você DEVE colocar na tag — mesmo que tenha sido na primeira mensagem.
-Esses 4 campos são OBRIGATÓRIOS. O sistema de CRM depende deles para preencher o card de vendas.
+Esses campos são OBRIGATÓRIOS. O sistema de CRM depende deles para preencher o card de vendas.
 
 ⚠️ CAMPOS DO [MAQUINAS_DADOS] — DESCRIÇÃO E REGRAS:
 - "maquinaDesejada": Modelo/nome da máquina que o cliente quer (ex: "B200", "Envasadora AR35"). OBRIGATÓRIO.
@@ -673,6 +673,58 @@ Esses 4 campos são OBRIGATÓRIOS. O sistema de CRM depende deles para preencher
   "4" = Curioso / Estudante (Não é empresa ou não tem intenção de compra)
   "5" = Fora de Portfólio (Quer algo que a Tecfag não fabrica)
   "6" = Sumiu / Sem contato (Não respondeu mais)
+
+## SCORING COMERCIAL — AVALIAÇÃO INTERNA (NUNCA mencione ao cliente)
+Ao emitir a tag [MAQUINAS_DADOS], você DEVE avaliar internamente os 5 eixos abaixo e calcular o scoringRating.
+Esses campos são 100% invisíveis ao cliente — NUNCA os mencione na conversa.
+
+P1 — NECESSIDADE: O cliente sabe o que quer? Tem aplicação e parâmetros definidos?
+  1 = Vago, sem produto ou necessidade definida
+  2 = Tem uma ideia, mas sem especificações
+  3 = Tem produto definido, mas sem detalhes técnicos
+  4 = Aplicação clara com alguns parâmetros
+  5 = Aplicação e parâmetros totalmente definidos
+
+P2 — URGÊNCIA: Existe prazo real de decisão?
+  1 = Sem prazo / "um dia talvez" / "futuramente"
+  2 = Planejando para mais de 6 meses
+  3 = Planejando para os próximos 3–6 meses
+  4 = Precisa em até 3 meses / tem prazo em vista
+  5 = Precisa urgente / prazo definido e próximo
+
+P3 — DECISOR / INVESTIMENTO: Sabemos quem decide e se há verba disponível?
+  1 = Desconhecido — pode ser um funcionário sem poder de compra
+  2 = Provável responsável, mas sem confirmar autoridade ou budget
+  3 = Provavelmente decide, mas budget não foi confirmado
+  4 = Decisor identificado, budget provável
+  5 = Decisor confirmado com verba disponível e aprovada
+
+P4 — ENGAJAMENTO: O cliente respondeu, avançou, forneceu dados?
+  1 = Monossilábico / evasivo / sumiu durante o atendimento
+  2 = Respondeu pouco, não forneceu dados completos
+  3 = Cooperativo mas superficial — deu dados básicos
+  4 = Engajado — respondeu bem e forneceu a maioria dos dados
+  5 = Muito engajado — forneceu todos os dados, fez perguntas ativas
+
+P5 — AVANÇO CONCRETO: Houve movimento real neste atendimento?
+  1 = Só curiosidade — não avançou nem forneceu dados
+  2 = Demonstrou interesse mas saiu antes de completar
+  3 = Forneceu dados básicos e completou o fluxo
+  4 = Solicitou proposta e confirmou os dados
+  5 = Demonstrou intenção clara de fechar / pediu urgência na proposta
+
+CÁLCULO DO scoringRating (OBRIGATÓRIO):
+1. Calcule a média: (P1 + P2 + P3 + P4 + P5) / 5
+2. Mapeie para rating:
+   média ≥ 4.5 → scoringRating = 5 (Muito alto — FECHAR)
+   média ≥ 3.8 → scoringRating = 4 (Alto — QUENTE)
+   média ≥ 3.0 → scoringRating = 3 (Médio — AQUECIDO)
+   média ≥ 2.0 → scoringRating = 2 (Baixo — EXPLORATÓRIO)
+   média < 2.0 → scoringRating = 1 (Muito baixo — FRIO)
+3. TRAVA 1: Se P3 ≤ 2 → scoringRating máximo = 4 (não pode ser 5)
+4. TRAVA 2: Se P5 ≤ 2 → scoringRating máximo = 3 (não pode ser 4 ou 5)
+Aplique as travas APÓS o mapeamento. Use sempre o menor valor entre o mapeado e o teto da trava.
+Se não souber avaliar um eixo, use 3 (neutro).
 
 ### INTENÇÃO "PEÇAS" — Clientes que querem comprar peças de reposição
 Quando o cliente quiser comprar, cotar ou saber o valor de peças, componentes ou partes de máquinas Tecfag:
@@ -2002,6 +2054,13 @@ export interface MaquinasReportInput {
   volumeProducao?: string | null;
   clienteNovo?: string | null;
   qualificacaoSDR?: string | null;
+  // ─── Scoring Comercial P1–P5 ───────────────────────────────────────────────
+  scoringP1?: number | null;     // Necessidade (1–5)
+  scoringP2?: number | null;     // Urgência (1–5)
+  scoringP3?: number | null;     // Decisor/Investimento (1–5)
+  scoringP4?: number | null;     // Engajamento (1–5)
+  scoringP5?: number | null;     // Avanço Concreto (1–5)
+  scoringRating?: number | null; // Rating final calculado (1–5) → campo nativo RD CRM
   cnpjData?: any;
   conversationSnippet?: string;
   transcricaoCompleta?: string;
@@ -2098,6 +2157,35 @@ export async function generateMaquinasReport(input: MaquinasReportInput): Promis
   lines.push(`NÍVEL DE INTERESSE:`);
   lines.push(`Nível: ${nivelInteresse}`);
   lines.push(`Motivo: ${motivoNivel}`);
+  lines.push(``);
+  lines.push(`──────`);
+  lines.push(``);
+
+  // ─── Scoring Comercial P1–P5 ────────────────────────────────────────────
+  const p1 = input.scoringP1 ?? 3;
+  const p2 = input.scoringP2 ?? 3;
+  const p3 = input.scoringP3 ?? 3;
+  const p4 = input.scoringP4 ?? 3;
+  const p5 = input.scoringP5 ?? 3;
+  const scoringMedia = ((p1 + p2 + p3 + p4 + p5) / 5).toFixed(1);
+  const scoringRatingFinal = input.scoringRating ?? 3;
+  const SCORING_TEMP: Record<number, string> = {
+    1: '❄️ Distante — Manter cadência leve',
+    2: '🔵 Frio — Nutrir e requalificar',
+    3: '🟡 Em Desenvolvimento — Evolução assistida',
+    4: '🟠 Aquecido — Acompanhamento próximo',
+    5: '🔥 Muito Aquecido — Atuação imediata',
+  };
+  lines.push(`SCORING COMERCIAL (P1–P5):`);
+  lines.push(`P1 Necessidade:           ${p1}/5`);
+  lines.push(`P2 Urgência:              ${p2}/5`);
+  lines.push(`P3 Decisor/Investimento:  ${p3}/5`);
+  lines.push(`P4 Engajamento:           ${p4}/5`);
+  lines.push(`P5 Avanço Concreto:       ${p5}/5`);
+  lines.push(`Média:                    ${scoringMedia}`);
+  lines.push(`Rating Final (CRM):       ${scoringRatingFinal}/5 — ${SCORING_TEMP[scoringRatingFinal] ?? SCORING_TEMP[3]}`);
+  if (p3 <= 2) lines.push(`⚠️ TRAVA ATIVA: P3 ≤ 2 — Decisor não confirmado (cap máx. 4)`);
+  if (p5 <= 2) lines.push(`⚠️ TRAVA ATIVA: P5 ≤ 2 — Sem avanço concreto neste atendimento (cap máx. 3)`);
   lines.push(``);
   lines.push(`──────`);
   lines.push(``);

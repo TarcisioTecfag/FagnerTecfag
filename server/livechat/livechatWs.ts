@@ -18,7 +18,7 @@ import { lcStorage } from "./livechatStorage.js";
 import db from "../db.js";
 import { sql } from "drizzle-orm";
 import { processVisitorMessage, generateProactiveMessage, clearAISession, generateConversationNote, generateProgressiveNote, isObviousNoise, detectStageIntent, generatePosVendaReport, generateMaquinasReport, generatePecasReport, setProductContext, cancelGeneration } from "./livechatAI.js";
-import { createPosVendaOS, createMaquinasOS, createPecasOS, isRdCrmConfigured, addNoteToExistingDeal } from "./rdCrmService.js";
+import { createPosVendaOS, createMaquinasOS, createPecasOS, isRdCrmConfigured, addNoteToExistingDeal, updateDealRating } from "./rdCrmService.js";
 import { recalculateVisitorCategory } from "./livechatScoring.js";
 import { buildCart } from "./vtexCheckoutService.js";
 import type { VtexOrderData } from "./vtexCheckoutService.js";
@@ -228,7 +228,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
               maquinaDesejada:  v5m.maquinaDesejada             ?? 'Interesse em equipamento (detalhes na conversa)',
               detalhes:         parseField5m('Detalhes', 'Observação') ?? null,
               produtoFabricado: v5m.maquinaProdutoFabricado     ?? parseField5m('Produto Fabricado', 'Produto') ?? 'Não definido',
-              volumeProducao:   (v5m as any).maquinaVolumeProducao ?? parseField5m('Volume de Produção', 'Volume') ?? 'Médio volume',
+              volumeProducao:   (v5m as any).maquinaVolumeProducao ?? parseField5m('Volume de Produção', 'Volume') ?? null, // null = omitir campo (não inventar valor)
               clienteNovo:      'SIM',
               qualificacaoSDR:  (v5m as any).maquinaQualificacaoSDR ?? '2',
               cnpjData:         v5m.posVendaCnpjData ? (typeof v5m.posVendaCnpjData === 'string' ? JSON.parse(v5m.posVendaCnpjData) : v5m.posVendaCnpjData) : undefined,
@@ -385,7 +385,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                   maquinaDesejada:  visitorForOverview.maquinaDesejada                 ?? 'Não informado',
                   detalhes:         parseOvField('Detalhes', 'Observação')             ?? null,
                   produtoFabricado: visitorForOverview.maquinaProdutoFabricado         ?? parseOvField('Produto Fabricado', 'Produto') ?? 'Não definido',
-                  volumeProducao:   visitorForOverview.maquinaVolumeProducao           ?? parseOvField('Volume de Produção', 'Volume') ?? 'Médio volume',
+                  volumeProducao:   visitorForOverview.maquinaVolumeProducao           ?? parseOvField('Volume de Produção', 'Volume') ?? null, // null = omitir campo (não inventar valor)
                   clienteNovo:      'SIM',
                   qualificacaoSDR:  visitorForOverview.maquinaQualificacaoSDR         ?? '2',
                   cnpjData:         visitorForOverview.posVendaCnpjData
@@ -640,7 +640,7 @@ function startFollowUpTimers(visitorId: string, chatId: string): void {
                     maquinaDesejada: intentInferred,
                     detalhes: `⚠️ Lead parcial (stage: ${stage || 'não detectado'}) — cliente saiu antes de concluir. Detalhes na conversa.`,
                     produtoFabricado: visitorForOverview.maquinaProdutoFabricado ?? 'Não informado',
-                    volumeProducao: (visitorForOverview as any).maquinaVolumeProducao ?? 'Médio volume',
+                    volumeProducao: (visitorForOverview as any).maquinaVolumeProducao ?? null, // null = omitir campo (não inventar valor)
                     clienteNovo: 'SIM',
                     qualificacaoSDR: (visitorForOverview as any).maquinaQualificacaoSDR ?? '2',
                     cnpjData: undefined,
@@ -2439,6 +2439,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                         (async () => {
                           try {
                             await addNoteToExistingDeal(existingDealId, notaAtualizacao);
+                            // — Atualiza o rating do deal existente se o novo scoring for mais preciso
+                            if (maqData.scoringRating) {
+                              await updateDealRating(existingDealId, maqData.scoringRating).catch((rErr: any) =>
+                                console.warn(`[RD CRM] Falha ao atualizar rating do deal ${existingDealId}:`, rErr.message)
+                              );
+                            }
                             const dealUrl = `https://crm.rdstation.com/app/deals/${existingDealId}`;
                             await lcStorage.addVisitorNote(
                               currentVisitorId,
@@ -2521,6 +2527,12 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                               volumeProducao:     maqData.volumeProducao  ?? null,
                               clienteNovo:        maqData.clienteNovo     ?? null,
                               qualificacaoSDR:    maqData.qualificacaoSDR ?? null,
+                              scoringP1:          maqData.scoringP1       ?? null,
+                              scoringP2:          maqData.scoringP2       ?? null,
+                              scoringP3:          maqData.scoringP3       ?? null,
+                              scoringP4:          maqData.scoringP4       ?? null,
+                              scoringP5:          maqData.scoringP5       ?? null,
+                              scoringRating:      maqData.scoringRating   ?? null,
                               cnpjData:           maqData.cnpjData,
                               conversationSnippet: snippet,
                               transcricaoCompleta: transcricaoCompleta,
@@ -2557,6 +2569,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                                 volumeProducao:     maqData.volumeProducao     ?? (updatedMaqVisitor as any)?.maquinaVolumeProducao   ?? undefined,
                                 clienteNovo:        maqData.clienteNovo        ?? undefined,
                                 qualificacaoSDR:    maqData.qualificacaoSDR    ?? (updatedMaqVisitor as any)?.maquinaQualificacaoSDR  ?? undefined,
+                                scoringRating:      maqData.scoringRating      ?? undefined,
                                 conversationSummary: conversationSummary,
                                 ownerId:            ownerId,
                               },
@@ -2636,6 +2649,7 @@ export function initLiveChatWs(server: http.Server, externalWss?: WebSocketServe
                           volumeProducao:   parseOvField('Volume de produção', 'Volume')             ?? null,
                           clienteNovo:      'SIM',
                           qualificacaoSDR:  '2',
+                          scoringRating:    3, // Brecha #3: fallback neutro — IA não emitiu tag completa
                           cnpjData:         visitorForFallback.posVendaCnpjData
                             ? (typeof visitorForFallback.posVendaCnpjData === 'string'
                               ? JSON.parse(visitorForFallback.posVendaCnpjData)

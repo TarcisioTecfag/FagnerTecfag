@@ -80,6 +80,7 @@ export interface MaquinasData {
   volumeProducao?: string | null;
   clienteNovo?: string | null;          // SIM / NAO / PEÇAS
   qualificacaoSDR?: string | null;      // "1" a "6"
+  scoringRating?: number | null;        // Rating P1–P5 calculado (1–5) → campo nativo RD CRM
   conversationSummary?: string | null;
   ownerId?: string | null;              // vem do painel Settings (rodízio)
 }
@@ -1024,6 +1025,39 @@ export async function addNoteToExistingDeal(dealId: string, nota: string): Promi
   console.log(`[RD CRM] ✅ Nota de atualização adicionada ao deal existente ${dealId}`);
 }
 
+/**
+ * Atualiza o campo nativo `rating` (Qualificação) de um deal existente.
+ * Usado em revisitas/follow-ups: quando o visitante retorna e gera novo scoring.
+ *
+ * SEGURANÇA: A API PUT /deals/{id} pode ser destrutiva (substituição total).
+ * Por isso, buscamos o estado atual do deal antes de enviar o payload,
+ * garantindo que nenhum campo existente seja apagado acidentalmente.
+ *
+ * @param dealId  - ID do deal a atualizar
+ * @param rating  - Novo valor (1–5), sanitizado automaticamente
+ */
+export async function updateDealRating(dealId: string, rating: number): Promise<void> {
+  // Brecha #2: garante que o rating é um número inteiro válido mesmo se a IA
+  // enviou uma string (ex: scoringRating = "4" em vez de 4)
+  const parsed = typeof rating === 'string' ? parseInt(rating as any, 10) : rating;
+  const safeRating = Number.isFinite(parsed)
+    ? Math.min(5, Math.max(1, Math.round(parsed)))
+    : 3; // fallback neutro se o valor for NaN ou inválido
+
+  // Brecha #1: busca o estado atual do deal para evitar PUT destrutivo
+  let currentDeal: Record<string, any> = {};
+  try {
+    const res = await rdRequest<any>("GET", `/deals/${dealId}`);
+    currentDeal = res?.data ?? res ?? {};
+  } catch (getErr: any) {
+    console.warn(`[RD CRM] ⚠️ Não foi possível buscar deal ${dealId} antes do PUT — enviando payload mínimo:`, getErr.message);
+  }
+
+  // Mescla o estado atual com o novo rating
+  await rdRequest("PUT", `/deals/${dealId}`, { ...currentDeal, rating: safeRating });
+  console.log(`[RD CRM] ✅ Rating do deal ${dealId} atualizado para ${safeRating}`);
+}
+
 // ─── Tarefa de Ligação Imediata ───────────────────────────────────────────────
 /**
  * Cria uma tarefa do tipo "Ligação" associada ao deal recém-criado,
@@ -1263,13 +1297,22 @@ async function createMaquinasDeal(
 
   console.log(`[RD CRM] Criando deal MÁQUINAS "${titulo}": pipeline=${pipelineId} stage=${stageId} owner=${ownerId}`);
 
+  // Brecha #2: garante inteiro válido mesmo se a IA enviou string (ex: "4")
+  const rawScoringRating = maqData.scoringRating;
+  const parsedScoringRating = typeof rawScoringRating === 'string'
+    ? parseInt(rawScoringRating as any, 10)
+    : rawScoringRating;
+  const safeRatingForDeal = Number.isFinite(parsedScoringRating as number)
+    ? Math.min(5, Math.max(1, Math.round(parsedScoringRating as number)))
+    : 3; // fallback neutro
+
   const dealPayload: Record<string, any> = {
     name:        titulo,
     pipeline_id: pipelineId,
     stage_id:    stageId,
     contact_ids: [contactId],
     status:      'ongoing',
-    rating:      3,
+    rating:      safeRatingForDeal,
   };
 
   if (ownerId)    dealPayload.owner_id       = ownerId;
