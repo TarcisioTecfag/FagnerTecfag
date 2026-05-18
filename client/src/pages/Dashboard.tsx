@@ -17,10 +17,11 @@ import { useBotLogs } from "@/hooks/use-bot-logs";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import FlowMonitor from "@/components/FlowMonitor";
+import { CRMKanban } from "@/components/ConversasCRM";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ActiveTab = "overview" | "logs" | "live" | "flows";
+type ActiveTab = "overview" | "logs" | "live" | "flows" | "crm";
 
 type ChatMessage = {
   id: string;
@@ -1096,6 +1097,7 @@ export default function Dashboard() {
             { id: "logs" as ActiveTab,     label: "Terminal de Logs", icon: null },
             { id: "live" as ActiveTab,     label: "Ao Vivo",          icon: Radio },
             { id: "flows" as ActiveTab,    label: "Monitor de Fluxos",icon: Activity },
+            { id: "crm" as ActiveTab,      label: "CRM Conversas",    icon: null },
           ] as { id: ActiveTab; label: string; icon: React.ElementType | null }[]
         ).map((tab) => (
           <button
@@ -1216,6 +1218,13 @@ export default function Dashboard() {
         {activeTab === "flows" && (
           <div key="flows" className="h-full p-4 animate-tab-enter overflow-hidden">
             <FlowMonitor />
+          </div>
+        )}
+
+        {/* ── TAB 5: CRM CONVERSAS ────────────────────────────────────────── */}
+        {activeTab === "crm" && (
+          <div key="crm" className="h-full animate-tab-enter overflow-hidden">
+            <CRMKanban />
           </div>
         )}
       </div>
