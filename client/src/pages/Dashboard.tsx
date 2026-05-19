@@ -953,7 +953,7 @@ export default function Dashboard() {
   const { logs: liveLogs } = useBotLogs();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("crm");
 
   const { data: sessions } = useQuery<
     { id: string; startTime: string; endTime: string | null; status: string }[]
