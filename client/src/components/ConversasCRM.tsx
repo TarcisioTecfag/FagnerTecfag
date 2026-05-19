@@ -643,117 +643,150 @@ function HistoryTab({card,accent}:{card:Card;accent:string}){
   );
 }
 
-/* ─── Score axes / questions ─────────────────────────────────────── */
-const SCORE_AXES: ScoreAxis[] = [
-  { id:"intencao",   label:"Intenção de Compra",        color:"#E5232A",
-    questions:[
-      {id:"int_1", label:"Demonstrou interesse claro em comprar?",       options:["Sim","Parcial","Não"]},
-      {id:"int_2", label:"Solicitou orçamento, cotação ou catálogo?",    options:["Sim","Não"]},
-      {id:"int_3", label:"Perguntou sobre pagamento ou prazo de entrega?",options:["Sim","Não"]},
+/* ─── Score questions (5 perguntas, opções 1–5) ─────────────────── */
+interface ScoreQuestion { id:string; categoria:string; color:string; pergunta:string; opcoes:string[]; }
+const SCORE_QUESTIONS: ScoreQuestion[] = [
+  { id:"necessidade", categoria:"NECESSIDADE", color:"#E5232A",
+    pergunta:"O cliente já possui aplicação, produto e capacidade desejada definidos para a máquina?",
+    opcoes:[
+      "Quer apenas saber preço ou cotação genérica",
+      "Sabe a máquina de interesse, mas não sabe dimensionar a necessidade",
+      "Tem aplicação definida, mas faltam informações técnicas importantes",
+      "Tem aplicação e parâmetros principais definidos",
+      "Tem escopo completo e pronto para proposta",
     ]},
-  { id:"capacidade", label:"Capacidade de Investimento", color:"#2563eb",
-    questions:[
-      {id:"cap_1", label:"CNPJ verificado e empresa ativa?",             options:["Sim","Não"]},
-      {id:"cap_2", label:"Mencionou budget ou ticket estimado?",          options:["Sim","Não"]},
-      {id:"cap_3", label:"Perfil indica capacidade financeira?",          options:["Alta","Média","Baixa"]},
+  { id:"urgencia", categoria:"URGÊNCIA", color:"#d97706",
+    pergunta:"Existe urgência ou prazo real para decisão?",
+    opcoes:[
+      "Sem prazo e sem urgência",
+      "Interesse futuro, sem previsão",
+      "Previsão aproximada",
+      "Prazo provável de decisão",
+      "Urgência real com prazo definido",
     ]},
-  { id:"perfil",     label:"Perfil da Empresa",          color:"#7c3aed",
-    questions:[
-      {id:"perf_1",label:"Segmento alinhado ao produto Fagner?",         options:["Sim","Parcial","Não"]},
-      {id:"perf_2",label:"Volume de compra potencial?",                  options:["Grande","Médio","Pequeno"]},
-      {id:"perf_3",label:"Histórico de compra anterior?",                options:["Sim","Não"]},
+  { id:"decisor", categoria:"DECISOR / INVESTIMENTO", color:"#2563eb",
+    pergunta:"Sabemos quem participa da decisão de compra e se há capacidade ou previsão de investimento?",
+    opcoes:[
+      "Não sabemos quem decide, nem se há verba",
+      "Existe contato, mas sem clareza sobre decisão e orçamento",
+      "Parte da decisão ou investimento está mapeada",
+      "Decisão bem direcionada, mesmo com contato intermediário",
+      "Decisão, influência, orçamento e próximo passo estão claros",
     ]},
-  { id:"urgencia",   label:"Urgência de Compra",         color:"#d97706",
-    questions:[
-      {id:"urg_1", label:"Demonstrou urgência na compra?",               options:["Alta","Média","Baixa","Nenhuma"]},
-      {id:"urg_2", label:"Informou prazo ou data limite?",               options:["Sim","Não"]},
-      {id:"urg_3", label:"Necessidade imediata identificada?",           options:["Sim","Não"]},
+  { id:"engajamento", categoria:"ENGAJAMENTO", color:"#059669",
+    pergunta:"O cliente está engajado com a tratativa?",
+    opcoes:[
+      "Não responde",
+      "Baixa intenção",
+      "Responde de forma irregular",
+      "Boa interação e abertura",
+      "Responde rápido, envia dados e avança",
     ]},
-  { id:"engajamento",label:"Engajamento",             color:"#059669",
-    questions:[
-      {id:"eng_1", label:"Respondeu ativamente ao Fagner?",         options:["Sim","Parcial","Não"]},
-      {id:"eng_2", label:"Retornou ao site ou chat mais de uma vez?",    options:["Sim","Não"]},
-      {id:"eng_3", label:"Forneceu dados de contato completos?",         options:["Completo","Parcial","Não"]},
+  { id:"avanco", categoria:"AVANÇO CONCRETO", color:"#7c3aed",
+    pergunta:"A oportunidade teve avanço concreto recente?",
+    opcoes:[
+      "Parada, sem próxima ação",
+      "Pouco avanço",
+      "Algum movimento",
+      "Avanço recente com próxima etapa definida",
+      "Avanço claro, com próxima ação, data e objetivo registrados",
     ]},
 ];
-const TEMP_CFG: Record<string,{label:string;emoji:string;color:string;bg:string;border:string;desc:string}> = {
-  lead_hot: {label:"Lead Quente", emoji:"🔥",color:"#dc2626",bg:"#fef2f2",border:"#fecaca",desc:"Alta probabilidade de conversão. Prioridade máxima."},
-  lead_warm:{label:"Lead Morno",  emoji:"🌡️",color:"#d97706",bg:"#fffbeb",border:"#fde68a",desc:"Interesse moderado. Requer acompanhamento ativo."},
-  customer: {label:"Cliente",     emoji:"⭐",color:"#059669",bg:"#f0fdf4",border:"#bbf7d0",desc:"Já interagiu com Fagner. Potencial de recompra."},
-  returning:{label:"Retorno",     emoji:"🔄",color:"#2563eb",bg:"#eff6ff",border:"#bfdbfe",desc:"Visitante recorrente. Nutrir com conteúdo."},
-  visitor:  {label:"Visitante",   emoji:"❄️",color:"#64748b",bg:"#f8fafc",border:"#e2e8f0",desc:"Primeira interação. Potencial ainda não definido."},
-  pending:  {label:"Aguardando",  emoji:"⏳",color:"#94a3b8",bg:"#f8fafc",border:"#e2e8f0",desc:"Score ainda não calculado pelo Fagner."},
+
+function calcScoreRating(resps:Record<string,string>):{rating:number;total:number;answered:number}{
+  let total=0,answered=0;
+  SCORE_QUESTIONS.forEach(q=>{const v=parseInt(resps[q.id]??"0");if(v>=1&&v<=5){total+=v;answered++;}});
+  const rating=total<=9?1:total<=14?2:total<=18?3:total<=22?4:5;
+  return {rating,total,answered};
+}
+
+const RATING_CFG:{[k:number]:{label:string;emoji:string;color:string;bg:string;border:string;desc:string}} = {
+  0:{label:"Sem avaliação",emoji:"⏳",color:"#94a3b8",bg:"#f8fafc",border:"#e2e8f0",desc:"Responda as perguntas para calcular o score."},
+  1:{label:"P1 — Frio",   emoji:"❄️",color:"#64748b",bg:"#f8fafc",border:"#e2e8f0",desc:"Lead sem qualificação. Acompanhamento baixo."},
+  2:{label:"P2 — Morno",  emoji:"🌡️",color:"#d97706",bg:"#fffbeb",border:"#fde68a",desc:"Potencial baixo. Nutrir com informações."},
+  3:{label:"P3 — Ativo",  emoji:"🟠",color:"#ea580c",bg:"#fff7ed",border:"#fed7aa",desc:"Potencial médio. Requer acompanhamento ativo."},
+  4:{label:"P4 — Quente", emoji:"🔥",color:"#dc2626",bg:"#fef2f2",border:"#fecaca",desc:"Alta probabilidade. Priorizar contato comercial."},
+  5:{label:"P5 — Urgente",emoji:"🚀",color:"#7c3aed",bg:"#f5f3ff",border:"#ddd6fe",desc:"Decisão iminente. Ação imediata necessária."},
 };
 
 /* ─── Score Tab ──────────────────────────────────────────────────── */
 function ScoreTab({card,accent,scoreRespostas,onEdit}:{card:Card;accent:string;scoreRespostas:Record<string,string>;onEdit:(qId:string,val:string)=>void}){
-  const temp = card.scoreData?.temperatura??"pending";
-  const tcfg = TEMP_CFG[temp]??TEMP_CFG.pending;
-  const pts  = card.scoreData?.pontoTotal??0;
-  const eng  = card.scoreData?.engagementScore??0;
-  const int_ = card.scoreData?.intentScore??0;
+  const merged={...(card.scoreData?.respostas??{}),...scoreRespostas};
+  const {rating,total,answered}=calcScoreRating(merged);
+  const rcfg=RATING_CFG[answered===5?rating:0];
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#f8fafc"}}>
-      {/* header */}
       <div style={{padding:"14px 20px",borderBottom:"1.5px solid #f1f5f9",background:"#fff",flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:30,height:30,borderRadius:9,background:`${accent}12`,border:`1.5px solid ${accent}30`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:32,height:32,borderRadius:10,background:`${accent}12`,border:`1.5px solid ${accent}30`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             </div>
             <div>
-              <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>Score de Qualificação — Fagner</div>
-              <div style={{fontSize:10,color:"#94a3b8"}}>{card.aiStatus==="done"?`Avaliado ${card.scoreData?.avaliadoEm??"agora"}`:"Triagem em andamento..."}</div>
+              <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>Score de Qualificação Comercial</div>
+              <div style={{fontSize:10,color:"#94a3b8"}}>{answered}/5 respondidas · Escala P1–P5</div>
             </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:20,background:tcfg.bg,border:`1.5px solid ${tcfg.border}`}}>
-            <span style={{fontSize:14}}>{tcfg.emoji}</span>
-            <span style={{fontSize:11,fontWeight:800,color:tcfg.color}}>{tcfg.label}</span>
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 14px",borderRadius:20,background:rcfg.bg,border:`1.5px solid ${rcfg.border}`}}>
+            <span style={{fontSize:15}}>{rcfg.emoji}</span>
+            <div>
+              <div style={{fontSize:11,fontWeight:800,color:rcfg.color,lineHeight:1}}>{rcfg.label}</div>
+              {answered===5&&<div style={{fontSize:9,color:rcfg.color,opacity:0.7,marginTop:1}}>{total} pts</div>}
+            </div>
           </div>
         </div>
-        <div style={{display:"flex",gap:8}}>
-          {[{label:"Score Total",value:pts,max:75,color:accent},{label:"Engajamento",value:eng,max:100,color:"#2563eb"},{label:"Intenção",value:int_,max:100,color:"#059669"}].map(m=>(
-            <div key={m.label} style={{flex:1,background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:9,padding:"8px 10px"}}>
-              <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>{m.label}</div>
-              <div style={{fontSize:17,fontWeight:800,color:m.color,lineHeight:1}}>{m.value}<span style={{fontSize:10,fontWeight:400,color:"#94a3b8"}}>/{m.max}</span></div>
-              <div style={{height:4,borderRadius:99,background:"#e2e8f0",overflow:"hidden",marginTop:5}}><div style={{height:"100%",width:`${Math.min(100,(m.value/m.max)*100)}%`,background:m.color,borderRadius:99,transition:"width 1s ease"}}/></div>
-            </div>
-          ))}
+        <div style={{display:"flex",gap:4}}>
+          {SCORE_QUESTIONS.map(q=>{const v=parseInt(merged[q.id]??"0");const done=v>=1&&v<=5;return(<div key={q.id} style={{flex:1,height:4,borderRadius:99,background:done?q.color:"#e2e8f0",transition:"background 0.3s"}}/>);})}
         </div>
+        {answered===5&&(
+          <div style={{marginTop:10,display:"flex",gap:6}}>
+            {SCORE_QUESTIONS.map(q=>{const v=parseInt(merged[q.id]??"0");return(
+              <div key={q.id} style={{flex:1,background:"#f8fafc",border:"1.5px solid #e2e8f0",borderTop:`3px solid ${q.color}`,borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
+                <div style={{fontSize:8,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>{q.categoria.split(" ")[0]}</div>
+                <div style={{fontSize:18,fontWeight:800,color:q.color,lineHeight:1}}>{v}</div>
+                <div style={{fontSize:8,color:"#94a3b8"}}>/5</div>
+              </div>
+            );})}
+          </div>
+        )}
       </div>
-      {!card.scoreData&&<div style={{padding:"7px 20px",background:"#fffbeb",borderBottom:"1px solid #fde68a",display:"flex",alignItems:"center",gap:7,flexShrink:0}}><svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span style={{fontSize:10,color:"#92400e"}}>O <strong style={{color:RED}}>Fagner</strong> ainda está analisando — respostas serão preenchidas automaticamente.</span></div>}
-      <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:12}}>
-        {SCORE_AXES.map(axis=>(
-          <div key={axis.id} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderLeft:`3px solid ${axis.color}`,borderRadius:10,overflow:"hidden",flexShrink:0}}>
-            <div style={{padding:"8px 14px",borderBottom:"1px solid #f1f5f9",background:`${axis.color}06`,display:"flex",alignItems:"center",gap:7}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:axis.color}}/>
-              <span style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{axis.label}</span>
-            </div>
-            {axis.questions.map((q,qi)=>{
-              const ans=(scoreRespostas[q.id]??"") || (card.scoreData?.respostas?.[q.id]??"");
-              return(
-                <div key={q.id} style={{padding:"9px 14px",borderBottom:qi<axis.questions.length-1?"1px solid #f8fafc":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-                  <span style={{fontSize:11,color:"#475569",flex:1,lineHeight:1.4}}>{q.label}</span>
-                  <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                    {q.options.map(opt=>{
-                      const sel=ans===opt;
-                      return(<button key={opt} onClick={()=>onEdit(q.id,sel?"":opt)} style={{padding:"3px 9px",borderRadius:20,fontSize:10,fontWeight:sel?700:500,cursor:"pointer",border:`1.5px solid ${sel?axis.color+"60":"#e2e8f0"}`,background:sel?`${axis.color}12`:"transparent",color:sel?axis.color:"#64748b",transition:"all 0.18s"}}>{opt}</button>);
-                    })}
-                    {!ans&&<span style={{fontSize:10,color:"#cbd5e1",fontStyle:"italic"}}>Pendente</span>}
+      <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:14}}>
+        {SCORE_QUESTIONS.map((q,qi)=>{
+          const selNum=parseInt(merged[q.id]??"0");
+          return(
+            <div key={q.id} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderLeft:`3px solid ${q.color}`,borderRadius:10,overflow:"hidden",flexShrink:0}}>
+              <div style={{padding:"7px 14px",background:`${q.color}08`,borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span style={{fontSize:10,fontWeight:800,color:q.color,textTransform:"uppercase",letterSpacing:"0.1em"}}>{q.categoria}</span>
+                <span style={{fontSize:9,color:"#94a3b8"}}>Pergunta {qi+1} de 5</span>
+              </div>
+              <div style={{padding:"10px 14px 8px",borderBottom:"1px solid #f8fafc"}}>
+                <p style={{margin:0,fontSize:12,fontWeight:600,color:"#0f172a",lineHeight:1.5}}>{q.pergunta}</p>
+              </div>
+              {q.opcoes.map((opt,oi)=>{
+                const num=oi+1;const isSel=selNum===num;
+                return(
+                  <div key={oi} onClick={()=>onEdit(q.id,isSel?"":String(num))}
+                    style={{display:"flex",alignItems:"center",gap:12,padding:"9px 14px",borderBottom:oi<4?"1px solid #f8fafc":"none",cursor:"pointer",background:isSel?`${q.color}08`:"transparent",transition:"background 0.15s"}}
+                    onMouseEnter={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.background="#f8fafc";}}
+                    onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=isSel?`${q.color}08`:"transparent";}}>
+                    <div style={{width:22,height:22,borderRadius:7,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,background:isSel?q.color:"#f1f5f9",color:isSel?"#fff":"#94a3b8",border:`1.5px solid ${isSel?q.color:"#e2e8f0"}`,transition:"all 0.18s"}}>{num}</div>
+                    <span style={{fontSize:11,color:isSel?"#0f172a":"#475569",fontWeight:isSel?600:400,lineHeight:1.4,flex:1}}>{opt}</span>
+                    {isSel&&<svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={q.color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
       <div style={{padding:"10px 20px",borderTop:"1.5px solid #f1f5f9",background:"#fff",flexShrink:0,display:"flex",alignItems:"center",gap:8}}>
-        <div style={{width:6,height:6,borderRadius:"50%",background:tcfg.color,flexShrink:0}}/>
-        <span style={{fontSize:10,color:"#64748b"}}>{tcfg.desc}</span>
+        <div style={{width:6,height:6,borderRadius:"50%",background:rcfg.color,flexShrink:0}}/>
+        <span style={{fontSize:10,color:"#64748b"}}>{rcfg.desc}</span>
       </div>
     </div>
   );
 }
+
 
 /* ─── Client Modal (with tabs) ───────────────────────────────────── */
 type ModalTab = "conversa"|"funil"|"historico"|"score";
