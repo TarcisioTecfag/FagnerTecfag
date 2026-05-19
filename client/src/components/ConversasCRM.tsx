@@ -79,11 +79,16 @@ interface HistoryEvent {
   time:string; label:string; detail:string;
   type:"entry"|"ai"|"stage"|"action"|"done"|"pending";
 }
+interface FagnerNote { id:string; text:string; ts:string; msgRange:string; }
+interface CompanyData { nome?:string; cnpj?:string; cidade?:string; bairro?:string; estado?:string; emailEmpresa?:string; tipo?:"Semi"|"Personalitté"|""; credito?:"Sim"|"Não"|""; }
 interface ScoreAxis { id:string; label:string; color:string; questions:{id:string;label:string;options:string[]}[]; }
 interface Card {
   id:string; name:string; company?:string; channel:Channel;
   aiStatus:AIStatus; progress:number; timeAgo:string; note:string; columnId:string;
   phone?:string; email?:string; cnpjCpf?:string; tipoEmpresa?:string; city?:string; segment?:string;
+  aiPausedCard?:boolean;
+  companyData?:CompanyData;
+  fagnerNotes?:FagnerNote[];
   conversation:WaMsg[];
   funnel: Record<string,string>;
   history: HistoryEvent[];
@@ -92,6 +97,22 @@ interface Card {
 interface FeedEvent { id:string; ts:string; icon:string; color:string; text:string; sub:string; }
 interface Toast { id:string; name:string; company?:string; funnel:string; accent:string; ts:string; }
 interface Filters { channels:string[]; statuses:string[]; segments:string[]; }
+
+/* ─── Fagner Notes Seed ──────────────────────────────────────────── */
+const SEED_NOTES:Record<string,FagnerNote[]>={
+"c1":[{id:"n1",text:"Cliente confirma pedido #4821 não entregue. Tom frustrado mas cooperativo. Ticket aberto, prazo de 2h aceito.",ts:"09:14",msgRange:"msgs 1–6"}],
+"c2":[{id:"n1",text:"Insatisfação com atraso de 2 dias. Cupom SANDRA10 aceito com positividade. NPS enviado — aguarda resposta.",ts:"09:21",msgRange:"msgs 1–6"}],
+"c3":[{id:"n1",text:"Interesse real em pastor industrial PI-Series 400 para linha 80m. Alta urgência. Consultor Marcos notificado.",ts:"08:59",msgRange:"msgs 1–4"}],
+"c4":[{id:"n1",text:"Cotação de 15 bancas BD-90 para feiras ao ar livre. Orçamento R$4.305 gerado. Aguardando frete Campinas.",ts:"09:21",msgRange:"msgs 1–6"}],
+"c5":[{id:"n1",text:"Hugo quer 2x NEC-5000 380V trifásico. Urgência alta. Estoque verificado, preço em análise.",ts:"09:19",msgRange:"msgs 1–4"}],
+"c6":[{id:"n1",text:"Catálogo combo digital+A5 para doçaria. Estilo colorido. Briefing enviado. Designer notificado para retorno em 24h.",ts:"09:11",msgRange:"msgs 1–6"}],
+"c7":[{id:"n1",text:"Rebranding completo: luxury minimal preto e dourado. Briefing parcial coletado. Reunião com diretora de arte agendada.",ts:"09:20",msgRange:"msgs 1–4"}],
+"c8":[{id:"n1",text:"Boleto R$3.420 venc. 05/05 renegociado. 3x sem juros aceito. 3 boletos gerados, inadimplência regularizada.",ts:"09:07",msgRange:"msgs 1–6"}],
+"c9":[{id:"n1",text:"Dívida R$8.700 em aberto. Parcelamento 6x solicitado. Proposta enviada para aprovação gerencial até amanhã 18h.",ts:"09:21",msgRange:"msgs 1–5"}],
+"c10":[{id:"n1",text:"Reposição urg. faca rasadora FR-500. Estoque ok. Pedido #7291 gerado, boleto enviado, entrega 14/05 Mauá-SP.",ts:"09:05",msgRange:"msgs 1–4"}],
+"c11":[{id:"n1",text:"Confirmação do orç. #3301: 4x SB-22, 2x cabo 6mm, 1x manete Johnson. Frete expresso até 16/05 Curitiba.",ts:"09:06",msgRange:"msgs 1–6"}],
+"c12":[{id:"n1",text:"Interesse genérico pela plataforma. Material institucional enviado. Encaminhada para equipe comercial — retorno 1 dia útil.",ts:"09:22",msgRange:"msgs 1–4"}],
+};
 
 /* ─── Seed data ──────────────────────────────────────────────────── */
 const SEED: Card[] = [
@@ -524,14 +545,29 @@ function FunnelTab({card,accent,funnelData,onEdit,onAIFill}:{card:Card;accent:st
 }
 
 /* ─── WhatsApp window ────────────────────────────────────────────── */
-function WAWindow({card,accent}:{card:Card;accent:string}){
+function WAWindow({card,accent,onPauseCard}:{card:Card;accent:string;onPauseCard:()=>void}){
   const endRef=useRef<HTMLDivElement>(null);
+  const paused=!!card.aiPausedCard;
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[card.id]);
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#f0f2f5"}}>
-      <div style={{background:"#075E54",padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+      <div style={{background:paused?"#374151":"#075E54",padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexShrink:0,transition:"background 0.3s"}}>
         <div style={{width:36,height:36,borderRadius:"50%",background:`${accent}40`,border:"2px solid rgba(255,255,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#fff"}}>{initials(card.name)}</div>
-        <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#fff",lineHeight:1.2}}>{card.name}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.7)",display:"flex",alignItems:"center",gap:4}}><div style={{width:6,height:6,borderRadius:"50%",background:"#25d366"}}/>online · via Fagner</div></div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#fff",lineHeight:1.2}}>{card.name}</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",display:"flex",alignItems:"center",gap:4}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:paused?"#f59e0b":"#25d366",animation:paused?"none":"pulse 1.5s ease-in-out infinite"}}/>
+            {paused?"Fagner pausado neste atendimento":"online · via Fagner"}
+          </div>
+        </div>
+        <button onClick={onPauseCard} title={paused?"Retomar Fagner":"Parar Fagner neste atendimento"}
+          style={{display:"flex",alignItems:"center",gap:5,padding:"5px 11px",borderRadius:8,border:paused?"1.5px solid #fbbf24":"1.5px solid rgba(255,255,255,0.25)",background:paused?"#fef3c7":"rgba(255,255,255,0.12)",cursor:"pointer",fontSize:11,fontWeight:700,color:paused?"#92400e":"#fff",transition:"all 0.2s"}}>
+          {paused?(
+            <><svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>Retomar</>
+          ):(
+            <><svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><rect x={6} y={4} width={4} height={16}/><rect x={14} y={4} width={4} height={16}/></svg>Parar</>
+          )}
+        </button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:6}}>
         <div style={{textAlign:"center",marginBottom:4}}><span style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"2px 10px",fontSize:10,color:"#64748b"}}>Hoje</span></div>
@@ -790,16 +826,72 @@ function ScoreTab({card,accent,scoreRespostas,onEdit}:{card:Card;accent:string;s
 }
 
 
+/* ─── Company Panel ──────────────────────────────────────────────── */
+function CompanyPanel({company,onClose,accent}:{company?:CompanyData;onClose:()=>void;accent:string}){
+  const [data,setData]=useState<CompanyData>(company??{});
+  const update=(k:keyof CompanyData,v:string)=>setData(p=>({...p,[k]:v}));
+  const fields:Array<{key:keyof CompanyData;label:string;type:"text"|"toggle";opts?:string[]}>= [
+    {key:"nome",label:"Nome da empresa",type:"text"},
+    {key:"cnpj",label:"CNPJ",type:"text"},
+    {key:"cidade",label:"Cidade",type:"text"},
+    {key:"bairro",label:"Bairro",type:"text"},
+    {key:"estado",label:"Estado",type:"text"},
+    {key:"emailEmpresa",label:"E-mail",type:"text"},
+    {key:"tipo",label:"Tipo",type:"toggle",opts:["Semi","Personalitté"]},
+    {key:"credito",label:"Crédito",type:"toggle",opts:["Sim","Não"]},
+  ];
+  return(
+    <div style={{position:"absolute",top:0,right:0,bottom:0,width:290,background:"#fff",boxShadow:"-6px 0 32px rgba(0,0,0,0.14)",borderLeft:"1.5px solid #e2e8f0",zIndex:10,display:"flex",flexDirection:"column",animation:"slideRight 0.24s cubic-bezier(0.4,0,0.2,1)"}}>
+      <div style={{padding:"13px 16px",borderBottom:"1.5px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,background:"linear-gradient(135deg,#1e293b,#0f172a)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:28,height:28,borderRadius:8,background:`${accent}20`,border:`1.5px solid ${accent}40`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <div><div style={{fontSize:12,fontWeight:700,color:"#f1f5f9"}}>Dados da Empresa</div><div style={{fontSize:10,color:"#64748b"}}>Preenchido pelo Fagner</div></div>
+        </div>
+        <button onClick={onClose} style={{width:26,height:26,borderRadius:7,border:"1px solid #334155",background:"#1e293b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b"}}>
+          <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1={18} y1={6} x2={6} y2={18}/><line x1={6} y1={6} x2={18} y2={18}/></svg>
+        </button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px",display:"flex",flexDirection:"column",gap:10}}>
+        {fields.map(f=>(
+          <div key={f.key}>
+            <label style={{display:"block",fontSize:9.5,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{f.label}</label>
+            {f.type==="toggle"&&f.opts?(
+              <div style={{display:"flex",gap:5}}>
+                {f.opts.map(opt=>(
+                  <button key={opt} onClick={()=>update(f.key,data[f.key]===opt?"":opt as any)}
+                    style={{flex:1,padding:"5px 0",borderRadius:8,border:`1.5px solid ${data[f.key]===opt?accent:"#e2e8f0"}`,background:data[f.key]===opt?`${accent}12`:"#f8fafc",fontSize:11,fontWeight:data[f.key]===opt?700:400,color:data[f.key]===opt?accent:"#64748b",cursor:"pointer",transition:"all 0.15s"}}>
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            ):(
+              <input value={(data[f.key] as string)??""}  onChange={e=>update(f.key,e.target.value)} placeholder={f.label}
+                style={{width:"100%",fontSize:12,color:"#1e293b",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",background:"#f8fafc",boxSizing:"border-box",transition:"border 0.15s"}}
+                onFocus={e=>(e.target.style.borderColor=accent)} onBlur={e=>(e.target.style.borderColor="#e2e8f0")}/>
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{padding:"10px 16px",borderTop:"1.5px solid #f1f5f9",flexShrink:0}}>
+        <button onClick={onClose} style={{width:"100%",padding:"8px",borderRadius:9,border:"none",background:accent,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Salvar dados</button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Client Modal (with tabs) ───────────────────────────────────── */
 type ModalTab = "conversa"|"funil"|"historico"|"score";
 
-function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onContactEdit,onScoreSave}:{
+function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onContactEdit,onScoreSave,onPauseCard}:{
   card:Card; accent:string; onClose:()=>void;
   funnelData:Record<string,string>;
   onFunnelEdit:(fieldId:string,val:string)=>void;
   onAIFill:()=>void;
   onContactEdit:(field:string,val:string)=>void;
   onScoreSave:(respostas:Record<string,string>)=>void;
+  onPauseCard:()=>void;
 }){
   const [tab, setTab] = useState<ModalTab>("conversa");
   const [scoreRespostas, setScoreRespostas] = useState<Record<string,string>>({});
@@ -820,6 +912,7 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
   // Inline edit state for sidebar contact fields
   const [editingField,setEditingField]=useState<string|null>(null);
   const [editDraft,setEditDraft]=useState("");
+  const [companyOpen,setCompanyOpen]=useState(false);
   const startFieldEdit=(field:string,cur:string)=>{setEditingField(field);setEditDraft(cur);};
   const commitFieldEdit=()=>{if(editingField){onContactEdit(editingField,editDraft);setEditingField(null);}};
 
@@ -831,7 +924,12 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
   return(
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
       style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px 20px",animation:"fadeIn 0.18s ease"}}>
-      <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:1080,height:"96vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(0,0,0,0.24)",animation:"slideUp 0.24s cubic-bezier(0.4,0,0.2,1)"}}>
+      <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:1080,height:"96vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(0,0,0,0.24)",animation:"slideUp 0.24s cubic-bezier(0.4,0,0.2,1)",position:"relative"}}>
+
+        {/* CompanyPanel overlay */}
+        {companyOpen&&(
+          <CompanyPanel company={card.companyData} onClose={()=>setCompanyOpen(false)} accent={accent}/>
+        )}
 
         {/* ── Modal header ── */}
         <div style={{padding:"14px 20px",borderBottom:"1.5px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
@@ -841,6 +939,10 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
               <div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{card.name}</div>
               {card.company&&<div style={{fontSize:11,color:"#64748b"}}>{card.company}</div>}
             </div>
+            <button onClick={()=>setCompanyOpen(o=>!o)} title="Dados da empresa"
+              style={{width:28,height:28,borderRadius:8,border:`1.5px solid ${companyOpen?accent+"60":"#e2e8f0"}`,background:companyOpen?`${accent}10`:"#f8fafc",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:companyOpen?accent:"#94a3b8",transition:"all 0.18s"}}>
+              <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </button>
             <ChannelTag channel={card.channel}/>
             <span style={{display:"inline-flex",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700,background:seg.bg,color:seg.text}}>{card.segment}</span>
             <div style={{display:"flex",alignItems:"center",gap:6,padding:"3px 10px",borderRadius:20,background:`${accent}10`,border:`1px solid ${accent}25`}}>
@@ -921,10 +1023,30 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
               </div>
             </div>
 
-            {/* AI note */}
-            <div>
-              <p style={{margin:"0 0 7px",fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>Observação da IA</p>
-              <div style={{background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:9,padding:"9px 11px",fontSize:11,color:"#78350f",lineHeight:1.5}}>{card.note}</div>
+            {/* Fagner Notes */}
+            <div style={{flex:1,display:"flex",flexDirection:"column",gap:6,minHeight:0}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{width:18,height:18,borderRadius:5,background:"linear-gradient(135deg,#1e293b,#334155)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke="#e2e8f0" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </div>
+                  <p style={{margin:0,fontSize:10,fontWeight:700,color:"#1e293b",letterSpacing:"0.05em"}}>FAGNER NOTES</p>
+                </div>
+                {card.fagnerNotes&&card.fagnerNotes.length>0&&<span style={{fontSize:9,color:"#94a3b8",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:20,padding:"1px 7px"}}>{card.fagnerNotes.length} {card.fagnerNotes.length===1?"nota":"notas"}</span>}
+              </div>
+              {(!card.fagnerNotes||card.fagnerNotes.length===0)&&(
+                <div style={{background:"#f8fafc",border:"1.5px dashed #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:10.5,color:"#94a3b8",lineHeight:1.5,fontStyle:"italic"}}>Fagner anotará resumos a cada 6 mensagens trocadas.</div>
+              )}
+              {card.fagnerNotes?.map((n,i)=>(
+                <div key={n.id} style={{background:"linear-gradient(135deg,#1e293b 0%,#0f172a 100%)",borderRadius:10,padding:"9px 12px",animation:`fieldIn 0.25s ease ${i*0.06}s both`,position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",top:0,left:0,width:3,height:"100%",background:`linear-gradient(to bottom,${accent},${accent}80)`,borderRadius:"10px 0 0 10px"}}/>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5,paddingLeft:8}}>
+                    <span style={{fontSize:9,fontWeight:700,color:accent,background:`${accent}18`,border:`1px solid ${accent}30`,borderRadius:20,padding:"1px 7px"}}>{n.msgRange}</span>
+                    <span style={{fontSize:9,color:"#64748b"}}>{n.ts}</span>
+                  </div>
+                  <p style={{margin:0,paddingLeft:8,fontSize:11,color:"#e2e8f0",lineHeight:1.55}}>{n.text}</p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -954,7 +1076,7 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
             <div style={{flex:1,overflow:"hidden",position:"relative"}}>
               {/* Conversa */}
               <div style={{position:"absolute",inset:0,transition:"opacity 0.22s ease,transform 0.22s ease",opacity:tab==="conversa"?1:0,transform:tab==="conversa"?"translateX(0)":"translateX(-12px)",pointerEvents:tab==="conversa"?"auto":"none"}}>
-                <WAWindow card={card} accent={accent}/>
+                <WAWindow card={card} accent={accent} onPauseCard={onPauseCard}/>
               </div>
               {/* Funil */}
               <div style={{position:"absolute",inset:0,transition:"opacity 0.22s ease,transform 0.22s ease",opacity:tab==="funil"?1:0,transform:tab==="funil"?"translateX(0)":tab==="conversa"?"translateX(12px)":"translateX(-12px)",pointerEvents:tab==="funil"?"auto":"none"}}>
@@ -1219,6 +1341,11 @@ export function CRMKanban(){
       .catch(()=>{});
   },[]);
 
+  const handlePauseCard=useCallback((cardId:string)=>{
+    setCards(prev=>prev.map(c=>c.id===cardId?{...c,aiPausedCard:!c.aiPausedCard}:c));
+    setSelected(prev=>prev?.id===cardId?{...prev,aiPausedCard:!prev.aiPausedCard}:prev);
+  },[]);
+
   const afc = filters.channels.length+filters.statuses.length+filters.segments.length;
   const isFiltered = query.trim()!=""||afc>0;
 
@@ -1245,6 +1372,7 @@ export function CRMKanban(){
         @keyframes pulse     { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.45;transform:scale(0.8)} }
         @keyframes fadein    { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
+        @keyframes slideRight { from{opacity:0;transform:translateX(100%)} to{opacity:1;transform:translateX(0)} }
         @keyframes slideUp   { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
         @keyframes panelDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes skShimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
@@ -1385,6 +1513,7 @@ export function CRMKanban(){
           onAIFill={()=>handleAIFill(selected.id)}
           onContactEdit={(field,val)=>handleCardFieldEdit(selected.id,field,val)}
           onScoreSave={(respostas)=>handleScoreSave(selected.id,respostas)}
+          onPauseCard={()=>handlePauseCard(selected.id)}
         />
       )}
     </div>
