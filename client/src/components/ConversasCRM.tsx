@@ -99,7 +99,7 @@ const SEED: Card[] = [
     funnel:{motivo:"Pedido não entregue",pedido:"#4821",satisfacao:"2",resolucao:"Acionamento da transportadora",prazo:"2 horas",escalacao:"Não"},
     history:[
       {time:"09:12",type:"entry",   label:"Lead capturado via WhatsApp",     detail:"Mensagem recebida e roteada automaticamente para Pós Venda"},
-      {time:"09:12",type:"ai",      label:"Fagner I.A. iniciou triagem",      detail:"Análise semântica da mensagem iniciada"},
+      {time:"09:12",type:"ai",      label:"Fagner iniciou triagem",      detail:"Análise semântica da mensagem iniciada"},
       {time:"09:12",type:"stage",   label:"Entrou em Pós Venda",              detail:"Funil identificado: reclamação pós-compra"},
       {time:"09:13",type:"action",  label:"Pedido #4821 identificado",        detail:"IA cruzou dados com histórico de compras do cliente"},
       {time:"09:13",type:"action",  label:"Ticket #8834 aberto",              detail:"Transportadora acionada automaticamente pela IA"},
@@ -110,7 +110,7 @@ const SEED: Card[] = [
     funnel:{motivo:"Reclamação de prazo",pedido:"—",satisfacao:"3",resolucao:"Cupom de desconto 10%",prazo:"Imediato",escalacao:"Não"},
     history:[
       {time:"08:51",type:"entry",   label:"Lead capturado via Instagram",     detail:"DM recebida e classificada como Pós Venda"},
-      {time:"08:51",type:"ai",      label:"Fagner I.A. iniciou triagem",      detail:"Sentimento negativo detectado · prioridade média"},
+      {time:"08:51",type:"ai",      label:"Fagner iniciou triagem",      detail:"Sentimento negativo detectado · prioridade média"},
       {time:"08:51",type:"stage",   label:"Entrou em Pós Venda",              detail:"Funil: insatisfação com prazo de entrega"},
       {time:"09:02",type:"action",  label:"Pesquisa de satisfação enviada",   detail:"NPS automático disparado pela IA"},
       {time:"09:09",type:"action",  label:"Cupom SANDRA10 gerado e enviado", detail:"Desconto 10% · validade 30 dias"},
@@ -121,7 +121,7 @@ const SEED: Card[] = [
     funnel:{tipo:"Pastor industrial",modelo:"PI-Series 400",voltagem:"380V",quantidade:"1",aplicacao:"Linha de produção 80m",urgencia:"Alta"},
     history:[
       {time:"08:58",type:"entry",   label:"Lead capturado via WhatsApp",     detail:"Mensagem roteada para funil Máquinas"},
-      {time:"08:58",type:"ai",      label:"Fagner I.A. iniciou triagem",     detail:"Intenção de compra detectada · urgência alta"},
+      {time:"08:58",type:"ai",      label:"Fagner iniciou triagem",     detail:"Intenção de compra detectada · urgência alta"},
       {time:"08:58",type:"stage",   label:"Entrou em Máquinas",              detail:"Produto identificado: pastor industrial"},
       {time:"08:58",type:"action",  label:"Ficha técnica PI-Series 400 enviada", detail:"PDF enviado automaticamente via WhatsApp"},
       {time:"08:59",type:"action",  label:"Consultor Marcos notificado",     detail:"Alerta enviado para equipe comercial"},
@@ -132,7 +132,7 @@ const SEED: Card[] = [
     funnel:{tipo:"Banca dobrável",modelo:"BD-90",voltagem:"—",quantidade:"15",aplicacao:"Feiras ao ar livre",urgencia:"Média"},
     history:[
       {time:"09:18",type:"entry",   label:"Lead capturado via Site",         detail:"Chat ao vivo iniciado · roteado para Máquinas"},
-      {time:"09:18",type:"ai",      label:"Fagner I.A. iniciou triagem",     detail:"Necessidade de cotação em lote identificada"},
+      {time:"09:18",type:"ai",      label:"Fagner iniciou triagem",     detail:"Necessidade de cotação em lote identificada"},
       {time:"09:18",type:"stage",   label:"Entrou em Máquinas",              detail:"Produto: bancas dobráveis para feiras"},
       {time:"09:20",type:"action",  label:"Orçamento BD-90 (15 un.) gerado", detail:"R$ 4.305,00 com frete · PDF enviado"},
       {time:"09:21",type:"pending", label:"IA processando frete regional",   detail:"Cotando transportadoras para Campinas"},
@@ -142,7 +142,7 @@ const SEED: Card[] = [
     funnel:{tipo:"NEC industrial",modelo:"NEC-5000",voltagem:"380V",quantidade:"2",aplicacao:"Uso industrial geral",urgencia:"Alta"},
     history:[
       {time:"09:17",type:"entry",   label:"Lead capturado via WhatsApp",     detail:"Mensagem roteada para Máquinas · empresa identificada"},
-      {time:"09:17",type:"ai",      label:"Fagner I.A. iniciou triagem",     detail:"Histórico do cliente carregado: 3 compras anteriores"},
+      {time:"09:17",type:"ai",      label:"Fagner iniciou triagem",     detail:"Histórico do cliente carregado: 3 compras anteriores"},
       {time:"09:17",type:"stage",   label:"Entrou em Máquinas",              detail:"Interesse: NEC industrial trifásico"},
       {time:"09:19",type:"pending", label:"IA verificando disponibilidade",  detail:"Consultando estoque NEC-5000 380V · 2 unidades"},
     ],
@@ -151,7 +151,7 @@ const SEED: Card[] = [
     funnel:{produto:"Catálogo para doçaria",estilo:"Colorido e aconchegante",orcamento:"R$ 890,00",prazo:"15 dias",briefing:"Sim",responsavel:"—"},
     history:[
       {time:"09:01",type:"entry",   label:"Lead capturado via Instagram",    detail:"Mensagem identificada como interesse em Personalite"},
-      {time:"09:01",type:"ai",      label:"Fagner I.A. iniciou triagem",     detail:"Segmento alimentação · necessidade criativa"},
+      {time:"09:01",type:"ai",      label:"Fagner iniciou triagem",     detail:"Segmento alimentação · necessidade criativa"},
       {time:"09:01",type:"stage",   label:"Entrou em Personalite",           detail:"Produto: catálogo personalizado para doçaria"},
       {time:"09:03",type:"action",  label:"Combo Digital + A5 cotado",       detail:"R$ 890,00 (100 unidades) apresentado à cliente"},
       {time:"09:11",type:"action",  label:"Briefing enviado por e-mail",     detail:"Formulário criativo enviado automaticamente"},
@@ -162,7 +162,7 @@ const SEED: Card[] = [
     funnel:{produto:"Rebranding completo",estilo:"Luxury minimal — preto e dourado",orcamento:"A definir",prazo:"30 dias",briefing:"Parcial",responsavel:"Diretora de arte"},
     history:[
       {time:"09:18",type:"entry",   label:"Lead capturado via Site",         detail:"Formulário de contato preenchido · interesse em branding"},
-      {time:"09:18",type:"ai",      label:"Fagner I.A. iniciou triagem",     detail:"Empresa de design · ticket de alto valor detectado"},
+      {time:"09:18",type:"ai",      label:"Fagner iniciou triagem",     detail:"Empresa de design · ticket de alto valor detectado"},
       {time:"09:18",type:"stage",   label:"Entrou em Personalite",           detail:"Demanda: rebranding completo"},
       {time:"09:19",type:"action",  label:"Briefing parcial coletado",       detail:"Estilo: luxury minimal, preto e dourado"},
       {time:"09:20",type:"pending", label:"Agendando reunião com diretora",  detail:"IA buscando disponibilidade na agenda criativa"},
@@ -172,7 +172,7 @@ const SEED: Card[] = [
     funnel:{valor:"R$ 3.420,00",vencimento:"05/05/2026",modalidade:"3x",aceite:"Sim",desconto:"—",novo_venc:"15/05 · 15/06 · 15/07"},
     history:[
       {time:"09:04",type:"entry",   label:"Contato recebido via Ligação",    detail:"Chamada transcrita e roteada para Financeiro"},
-      {time:"09:04",type:"ai",      label:"Fagner I.A. iniciou triagem",     detail:"Boleto em atraso detectado no ERP · R$ 3.420,00"},
+      {time:"09:04",type:"ai",      label:"Fagner iniciou triagem",     detail:"Boleto em atraso detectado no ERP · R$ 3.420,00"},
       {time:"09:04",type:"stage",   label:"Entrou em Financeiro",            detail:"Negociação de inadimplência em curso"},
       {time:"09:06",type:"action",  label:"Proposta de parcelamento gerada", detail:"3x sem juros apresentado automaticamente"},
       {time:"09:07",type:"action",  label:"3 boletos gerados e enviados",    detail:"Vencimentos: 15/05 · 15/06 · 15/07"},
@@ -183,7 +183,7 @@ const SEED: Card[] = [
     funnel:{valor:"R$ 8.700,00",vencimento:"Em aberto",modalidade:"6x",aceite:"Em análise",desconto:"—",novo_venc:"Aguardando aprovação"},
     history:[
       {time:"08:58",type:"entry",   label:"Contato recebido via Ligação",    detail:"Chamada identificada: inadimplência R$ 8.700,00"},
-      {time:"08:58",type:"ai",      label:"Fagner I.A. iniciou triagem",     detail:"Score de crédito consultado · análise de risco"},
+      {time:"08:58",type:"ai",      label:"Fagner iniciou triagem",     detail:"Score de crédito consultado · análise de risco"},
       {time:"08:58",type:"stage",   label:"Entrou em Financeiro",            detail:"Negociação de alto valor em andamento"},
       {time:"09:04",type:"action",  label:"Proposta 6x enviada para aprovação", detail:"R$ 1.560,00/mês · 1,2% a.m. · total R$ 9.364,44"},
       {time:"09:21",type:"pending", label:"Aguardando aprovação gerencial",  detail:"Proposta em análise · prazo: amanhã 18h"},
@@ -193,7 +193,7 @@ const SEED: Card[] = [
     funnel:{referencia:"FR-500",quantidade:"1",urgencia:"Alta",compatibilidade:"Sim",estoque:"Disponível",prazo:"2 dias úteis"},
     history:[
       {time:"09:03",type:"entry",   label:"Lead capturado via Site",         detail:"Solicitação de reposição urgente recebida"},
-      {time:"09:03",type:"ai",      label:"Fagner I.A. iniciou triagem",     detail:"Peça identificada: faca rasadora 50cm · urgência alta"},
+      {time:"09:03",type:"ai",      label:"Fagner iniciou triagem",     detail:"Peça identificada: faca rasadora 50cm · urgência alta"},
       {time:"09:03",type:"stage",   label:"Entrou em Peças",                 detail:"Estoque FR-500 verificado: disponível"},
       {time:"09:05",type:"action",  label:"Pedido #7291 gerado",             detail:"1x FR-500 · R$ 368,00 · boleto enviado"},
       {time:"09:05",type:"done",    label:"Triagem concluída",               detail:"Entrega programada para 14/05 · Mauá-SP"},
@@ -203,7 +203,7 @@ const SEED: Card[] = [
     funnel:{referencia:"SB-22, cabo 6mm, manete Johnson",quantidade:"4 · 2 · 1",urgencia:"Crítica",compatibilidade:"Sim",estoque:"Verificado",prazo:"Expresso até 16/05"},
     history:[
       {time:"08:56",type:"entry",   label:"Lead capturado via WhatsApp",     detail:"Confirmação de orçamento #3301 recebida"},
-      {time:"08:56",type:"ai",      label:"Fagner I.A. iniciou triagem",     detail:"Orçamento anterior carregado · urgência crítica"},
+      {time:"08:56",type:"ai",      label:"Fagner iniciou triagem",     detail:"Orçamento anterior carregado · urgência crítica"},
       {time:"08:56",type:"stage",   label:"Entrou em Peças",                 detail:"3 itens náuticos · total R$ 1.870,00"},
       {time:"09:00",type:"action",  label:"Compatibilidade verificada",      detail:"SB-22, cabo 6mm e manete Johnson — todos compatíveis"},
       {time:"09:06",type:"action",  label:"Frete expresso cotado",           detail:"+R$ 87,00 · entrega até 16/05 em Curitiba"},
@@ -214,7 +214,7 @@ const SEED: Card[] = [
     funnel:{categoria:"Interesse comercial",encaminham:"Equipe comercial",depto:"Comercial",prioridade:"Média",proxima:"Contato em 1 dia útil",obs:"Kit institucional enviado"},
     history:[
       {time:"09:21",type:"entry",   label:"Lead capturado via WhatsApp",     detail:"Contato institucional recebido · não classificado"},
-      {time:"09:21",type:"ai",      label:"Fagner I.A. iniciou triagem",     detail:"Interesse comercial detectado · segmento jurídico"},
+      {time:"09:21",type:"ai",      label:"Fagner iniciou triagem",     detail:"Interesse comercial detectado · segmento jurídico"},
       {time:"09:21",type:"stage",   label:"Entrou em Outros",                detail:"Funil: contato genérico sem produto definido"},
       {time:"09:22",type:"action",  label:"Kit institucional enviado",       detail:"Material PDF + apresentação enviados por e-mail"},
       {time:"09:22",type:"action",  label:"Lead encaminhado ao Comercial",   detail:"Alerta enviado para equipe · prioridade média"},
@@ -407,7 +407,7 @@ function KCard({card,accent,onClick,paused,visible}:{card:Card;accent:string;onC
 
       <div style={{marginTop:8,paddingTop:7,borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:4,fontSize:9.5,color:"#94a3b8"}}>
         <svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke={paused?"#cbd5e1":RED} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{transition:"stroke 0.3s"}}><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-        <span style={{color:paused?"#cbd5e1":RED,fontWeight:600,transition:"color 0.3s"}}>Fagner I.A.</span>&nbsp;·&nbsp;triagem automática
+        <span style={{color:paused?"#cbd5e1":RED,fontWeight:600,transition:"color 0.3s"}}>Fagner</span>&nbsp;·&nbsp;triagem automática
       </div>
     </div>
   );
@@ -465,7 +465,7 @@ function FunnelTab({card,accent,funnelData,onEdit,onAIFill}:{card:Card;accent:st
       {/* ai note */}
       <div style={{padding:"8px 20px",background:"#fffbeb",borderBottom:"1px solid #fde68a",display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
         <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-        <span style={{fontSize:10,color:"#92400e"}}>Preenchido automaticamente pelo <strong style={{color:RED}}>Fagner I.A.</strong> — clique em qualquer campo para editar</span>
+        <span style={{fontSize:10,color:"#92400e"}}>Preenchido automaticamente pelo <strong style={{color:RED}}>Fagner</strong> — clique em qualquer campo para editar</span>
       </div>
 
       {/* fields grid */}
@@ -510,7 +510,7 @@ function FunnelTab({card,accent,funnelData,onEdit,onAIFill}:{card:Card;accent:st
 
       {/* footer */}
       <div style={{padding:"10px 20px",borderTop:"1.5px solid #f1f5f9",background:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-        <span style={{fontSize:10,color:"#94a3b8"}}>Última atualização pelo Fagner I.A. · agora</span>
+        <span style={{fontSize:10,color:"#94a3b8"}}>Última atualização pelo Fagner · agora</span>
         <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#64748b"}}>
           <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",animation:"pulse 1.5s ease-in-out infinite"}}/>
           Sincronizado
@@ -528,7 +528,7 @@ function WAWindow({card,accent}:{card:Card;accent:string}){
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#f0f2f5"}}>
       <div style={{background:"#075E54",padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
         <div style={{width:36,height:36,borderRadius:"50%",background:`${accent}40`,border:"2px solid rgba(255,255,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#fff"}}>{initials(card.name)}</div>
-        <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#fff",lineHeight:1.2}}>{card.name}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.7)",display:"flex",alignItems:"center",gap:4}}><div style={{width:6,height:6,borderRadius:"50%",background:"#25d366"}}/>online · via Fagner I.A.</div></div>
+        <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#fff",lineHeight:1.2}}>{card.name}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.7)",display:"flex",alignItems:"center",gap:4}}><div style={{width:6,height:6,borderRadius:"50%",background:"#25d366"}}/>online · via Fagner</div></div>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:6}}>
         <div style={{textAlign:"center",marginBottom:4}}><span style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"2px 10px",fontSize:10,color:"#64748b"}}>Hoje</span></div>
@@ -538,7 +538,7 @@ function WAWindow({card,accent}:{card:Card;accent:string}){
             <div key={i} style={{display:"flex",justifyContent:ai?"flex-end":"flex-start",animation:`msgIn 0.25s ease ${i*0.04}s both`}}>
               {!ai&&<div style={{width:24,height:24,borderRadius:"50%",background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:"#475569",flexShrink:0,marginRight:6,alignSelf:"flex-end"}}>{initials(card.name)[0]}</div>}
               <div style={{maxWidth:"72%",padding:"7px 10px 4px",borderRadius:ai?"12px 2px 12px 12px":"2px 12px 12px 12px",background:ai?"#dcf8c6":"#fff",boxShadow:"0 1px 3px rgba(0,0,0,0.1)",border:ai?"1px solid #c3f2a6":"1px solid #e8ecf0"}}>
-                {ai&&<div style={{display:"flex",alignItems:"center",gap:4,marginBottom:3}}><svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span style={{fontSize:9,fontWeight:700,color:RED}}>Fagner I.A.</span></div>}
+                {ai&&<div style={{display:"flex",alignItems:"center",gap:4,marginBottom:3}}><svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span style={{fontSize:9,fontWeight:700,color:RED}}>Fagner</span></div>}
                 <p style={{margin:0,fontSize:11.5,color:"#111827",lineHeight:1.45}} dangerouslySetInnerHTML={{__html:msg.text.replace(/\*(.*?)\*/g,"<strong>$1</strong>")}}/>
                 <div style={{textAlign:"right",marginTop:3,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3}}>
                   <span style={{fontSize:9,color:"#8696a0"}}>{msg.time}</span>
@@ -551,7 +551,7 @@ function WAWindow({card,accent}:{card:Card;accent:string}){
         <div ref={endRef}/>
       </div>
       <div style={{background:"#f0f2f5",padding:"8px 12px",display:"flex",alignItems:"center",gap:8,borderTop:"1px solid #e2e8f0",flexShrink:0}}>
-        <div style={{flex:1,background:"#fff",borderRadius:24,padding:"8px 14px",fontSize:12,color:"#8696a0",border:"1px solid #e2e8f0"}}>Fagner I.A. respondendo automaticamente...</div>
+        <div style={{flex:1,background:"#fff",borderRadius:24,padding:"8px 14px",fontSize:12,color:"#8696a0",border:"1px solid #e2e8f0"}}>Fagner respondendo automaticamente...</div>
         <div style={{width:36,height:36,borderRadius:"50%",background:"#075E54",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1={22} y1={2} x2={11} y2={13}/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
       </div>
     </div>
@@ -581,7 +581,7 @@ function HistoryTab({card,accent}:{card:Card;accent:string}){
           </div>
           <div>
             <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>Histórico de Interações</div>
-            <div style={{fontSize:10,color:"#94a3b8"}}>{events.length} eventos · registrados pelo Fagner I.A.</div>
+            <div style={{fontSize:10,color:"#94a3b8"}}>{events.length} eventos · registrados pelo Fagner</div>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,fontWeight:600,padding:"3px 10px",borderRadius:20,
@@ -622,7 +622,7 @@ function HistoryTab({card,accent}:{card:Card;accent:string}){
                   <p style={{margin:0,fontSize:11,color:"#64748b",lineHeight:1.5}}>{ev.detail}</p>
                   {/* type chip */}
                   <span style={{display:"inline-flex",alignItems:"center",gap:3,marginTop:5,padding:"1px 7px",borderRadius:20,fontSize:9.5,fontWeight:700,background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.color}20`}}>
-                    {{entry:"Entrada",ai:"Fagner I.A.",stage:"Funil",action:"Ação",done:"Concluído",pending:"Pendente"}[ev.type]}
+                    {{entry:"Entrada",ai:"Fagner",stage:"Funil",action:"Ação",done:"Concluído",pending:"Pendente"}[ev.type]}
                   </span>
                 </div>
               </div>
@@ -636,7 +636,7 @@ function HistoryTab({card,accent}:{card:Card;accent:string}){
         <span style={{fontSize:10,color:"#94a3b8"}}>Histórico completo · auditável</span>
         <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#64748b"}}>
           <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-          Rastreado pelo Fagner I.A.
+          Rastreado pelo Fagner
         </div>
       </div>
     </div>
@@ -671,7 +671,7 @@ const SCORE_AXES: ScoreAxis[] = [
     ]},
   { id:"engajamento",label:"Engajamento com a I.A.",     color:"#059669",
     questions:[
-      {id:"eng_1", label:"Respondeu ativamente ao Fagner I.A.?",         options:["Sim","Parcial","Não"]},
+      {id:"eng_1", label:"Respondeu ativamente ao Fagner?",         options:["Sim","Parcial","Não"]},
       {id:"eng_2", label:"Retornou ao site ou chat mais de uma vez?",    options:["Sim","Não"]},
       {id:"eng_3", label:"Forneceu dados de contato completos?",         options:["Completo","Parcial","Não"]},
     ]},
@@ -702,7 +702,7 @@ function ScoreTab({card,accent,scoreRespostas,onEdit}:{card:Card;accent:string;s
               <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             </div>
             <div>
-              <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>Score de Qualificação — Fagner I.A.</div>
+              <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>Score de Qualificação — Fagner</div>
               <div style={{fontSize:10,color:"#94a3b8"}}>{card.aiStatus==="done"?`Avaliado ${card.scoreData?.avaliadoEm??"agora"}`:"Triagem em andamento..."}</div>
             </div>
           </div>
@@ -721,7 +721,7 @@ function ScoreTab({card,accent,scoreRespostas,onEdit}:{card:Card;accent:string;s
           ))}
         </div>
       </div>
-      {!card.scoreData&&<div style={{padding:"7px 20px",background:"#fffbeb",borderBottom:"1px solid #fde68a",display:"flex",alignItems:"center",gap:7,flexShrink:0}}><svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span style={{fontSize:10,color:"#92400e"}}>O <strong style={{color:RED}}>Fagner I.A.</strong> ainda está analisando — respostas serão preenchidas automaticamente.</span></div>}
+      {!card.scoreData&&<div style={{padding:"7px 20px",background:"#fffbeb",borderBottom:"1px solid #fde68a",display:"flex",alignItems:"center",gap:7,flexShrink:0}}><svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span style={{fontSize:10,color:"#92400e"}}>O <strong style={{color:RED}}>Fagner</strong> ainda está analisando — respostas serão preenchidas automaticamente.</span></div>}
       <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:12}}>
         {SCORE_AXES.map(axis=>(
           <div key={axis.id} style={{background:"#fff",border:`1.5px solid ${axis.color}18`,borderLeft:`3px solid ${axis.color}`,borderRadius:10,overflow:"hidden"}}>
@@ -850,7 +850,7 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
               <ProgressBar value={card.progress} color={accent}/>
               <div style={{marginTop:9,display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#64748b"}}>
                 <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-                <span>Por <strong style={{color:RED}}>Fagner I.A.</strong> · {card.timeAgo}</span>
+                <span>Por <strong style={{color:RED}}>Fagner</strong> · {card.timeAgo}</span>
               </div>
             </div>
 
@@ -918,7 +918,7 @@ function ActivityFeed({events,open,onClose}:{events:FeedEvent[];open:boolean;onC
           <div style={{width:28,height:28,borderRadius:8,background:RED_LIGHT,border:`1.5px solid ${RED_BORDER}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           </div>
-          <div><div style={{fontSize:12,fontWeight:700,color:"#0f172a"}}>Feed de Atividade</div><div style={{fontSize:10,color:"#94a3b8"}}>Tempo real · Fagner I.A.</div></div>
+          <div><div style={{fontSize:12,fontWeight:700,color:"#0f172a"}}>Feed de Atividade</div><div style={{fontSize:10,color:"#94a3b8"}}>Tempo real · Fagner</div></div>
         </div>
         <button onClick={onClose} style={{width:28,height:28,borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"background 0.15s"}} onMouseEnter={e=>(e.currentTarget.style.background="#f1f5f9")} onMouseLeave={e=>(e.currentTarget.style.background="#f8fafc")}>
           <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1={18} y1={6} x2={6} y2={18}/><line x1={6} y1={6} x2={18} y2={18}/></svg>
@@ -998,7 +998,7 @@ function NotificationTray({toasts,onDismiss}:{toasts:Toast[];onDismiss:(id:strin
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
               <svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-              <span style={{fontSize:9.5,fontWeight:700,color:RED}}>Fagner I.A.</span>
+              <span style={{fontSize:9.5,fontWeight:700,color:RED}}>Fagner</span>
               <span style={{fontSize:9,color:"#94a3b8",marginLeft:"auto"}}>{t.ts}</span>
             </div>
             <div style={{fontSize:12,fontWeight:700,color:"#0f172a",lineHeight:1.3,marginBottom:2}}>{t.name}{t.company&&<span style={{fontWeight:400,color:"#64748b"}}> · {t.company}</span>}</div>
@@ -1104,8 +1104,8 @@ export function CRMKanban(){
 
   const handlePause=()=>{
     const next=!paused;setPaused(next);pausedRef.current=next;
-    if(next)pushEvent({icon:"⏸",color:"#64748b",text:"Triagem pausada",sub:"Fagner I.A. em standby"});
-    else     pushEvent({icon:"▶️",color:RED,text:"Triagem retomada",sub:"Fagner I.A. operando normalmente"});
+    if(next)pushEvent({icon:"⏸",color:"#64748b",text:"Triagem pausada",sub:"Fagner em standby"});
+    else     pushEvent({icon:"▶️",color:RED,text:"Triagem retomada",sub:"Fagner operando normalmente"});
   };
 
   const handleFunnelEdit=(cardId:string,fieldId:string,val:string)=>{
@@ -1168,7 +1168,7 @@ export function CRMKanban(){
         <div style={{background:"#fef9c3",borderBottom:"2px solid #fde047",padding:"8px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",animation:"bannerIn 0.25s cubic-bezier(0.4,0,0.2,1)"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <span>⏸</span>
-            <span style={{fontSize:12,fontWeight:700,color:"#854d0e"}}>Fagner I.A. pausado</span>
+            <span style={{fontSize:12,fontWeight:700,color:"#854d0e"}}>Fagner pausado</span>
             <span style={{fontSize:11,color:"#a16207"}}>— Triagem automática em standby.</span>
           </div>
           <button onClick={handlePause} style={{display:"flex",alignItems:"center",gap:5,background:"#854d0e",border:"none",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:600}}>▶ Retomar agora</button>
@@ -1185,8 +1185,8 @@ export function CRMKanban(){
             </span>
           </div>
           <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-            <h1 style={{margin:0,fontSize:20,fontWeight:800,letterSpacing:"-0.5px",color:"#0f172a"}}>Kanban de Triagem</h1>
-            <span style={{fontSize:15,fontWeight:700,color:paused?"#94a3b8":RED,transition:"color 0.3s"}}>Fagner I.A.</span>
+            <h1 style={{margin:0,fontSize:20,fontWeight:800,letterSpacing:"-0.5px",color:"#0f172a"}}>Fagner Conversas</h1>
+            <span style={{fontSize:15,fontWeight:700,color:paused?"#94a3b8":RED,transition:"color 0.3s"}}>Fagner</span>
           </div>
           <p style={{margin:"1px 0 0",fontSize:11,color:"#94a3b8"}}>Operado em tempo real pela inteligência. Sem intervenção humana.</p>
         </div>
@@ -1227,7 +1227,7 @@ export function CRMKanban(){
 
           <button style={{display:"flex",alignItems:"center",gap:5,background:RED_LIGHT,border:`1.5px solid ${RED_BORDER}`,borderRadius:9,padding:"7px 12px",cursor:"pointer",fontSize:12,color:RED,fontWeight:600}}>
             <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-            Fagner I.A.
+            Fagner
           </button>
           <button style={{display:"flex",alignItems:"center",gap:5,background:RED,border:"none",borderRadius:9,padding:"7px 14px",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:600,boxShadow:`0 2px 10px ${RED}40`}}>
             <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
