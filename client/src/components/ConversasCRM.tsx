@@ -926,6 +926,201 @@ function CompanyPanel({company,onClose,accent}:{company?:CompanyData;onClose:()=
       <div style={{flex:1,overflowY:"auto",padding:"16px",display:"flex",flexDirection:"column",gap:10}}>
         {fields.map(f=>(
           <div key={f.key}>
+                    </span>
+                    {(ev as any).author&&<span style={{fontSize:9,color:"#94a3b8"}}>por {(ev as any).author}</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>}
+      </div>
+      <div style={{padding:"10px 20px",borderTop:"1.5px solid #f1f5f9",background:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <span style={{fontSize:10,color:"#94a3b8"}}>Histórico completo · auditável</span>
+        <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#64748b"}}>
+          <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          Rastreado pelo Fagner
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Score questions (5 perguntas, opções 1–5) ─────────────────── */
+interface ScoreQuestion { id:string; categoria:string; color:string; pergunta:string; opcoes:string[]; }
+const SCORE_QUESTIONS: ScoreQuestion[] = [
+  { id:"necessidade", categoria:"NECESSIDADE", color:"#E5232A",
+    pergunta:"O cliente já possui aplicação, produto e capacidade desejada definidos para a máquina?",
+    opcoes:[
+      "Quer apenas saber preço ou cotação genérica",
+      "Sabe a máquina de interesse, mas não sabe dimensionar a necessidade",
+      "Tem aplicação definida, mas faltam informações técnicas importantes",
+      "Tem aplicação e parâmetros principais definidos",
+      "Tem escopo completo e pronto para proposta",
+    ]},
+  { id:"urgencia", categoria:"URGÊNCIA", color:"#d97706",
+    pergunta:"Existe urgência ou prazo real para decisão?",
+    opcoes:[
+      "Sem prazo e sem urgência",
+      "Interesse futuro, sem previsão",
+      "Previsão aproximada",
+      "Prazo provável de decisão",
+      "Urgência real com prazo definido",
+    ]},
+  { id:"decisor", categoria:"DECISOR / INVESTIMENTO", color:"#2563eb",
+    pergunta:"Sabemos quem participa da decisão de compra e se há capacidade ou previsão de investimento?",
+    opcoes:[
+      "Não sabemos quem decide, nem se há verba",
+      "Existe contato, mas sem clareza sobre decisão e orçamento",
+      "Parte da decisão ou investimento está mapeada",
+      "Decisão bem direcionada, mesmo com contato intermediário",
+      "Decisão, influência, orçamento e próximo passo estão claros",
+    ]},
+  { id:"engajamento", categoria:"ENGAJAMENTO", color:"#059669",
+    pergunta:"O cliente está engajado com a tratativa?",
+    opcoes:[
+      "Não responde",
+      "Baixa intenção",
+      "Responde de forma irregular",
+      "Boa interação e abertura",
+      "Responde rápido, envia dados e avança",
+    ]},
+  { id:"avanco", categoria:"AVANÇO CONCRETO", color:"#7c3aed",
+    pergunta:"A oportunidade teve avanço concreto recente?",
+    opcoes:[
+      "Parada, sem próxima ação",
+      "Pouco avanço",
+      "Algum movimento",
+      "Avanço recente com próxima etapa definida",
+      "Avanço claro, com próxima ação, data e objetivo registrados",
+    ]},
+];
+
+function calcScoreRating(resps:Record<string,string>):{rating:number;total:number;answered:number}{
+  let total=0,answered=0;
+  SCORE_QUESTIONS.forEach(q=>{const v=parseInt(resps[q.id]??"0");if(v>=1&&v<=5){total+=v;answered++;}});
+  const rating=total<=9?1:total<=14?2:total<=18?3:total<=22?4:5;
+  return {rating,total,answered};
+}
+
+const RATING_CFG:{[k:number]:{label:string;emoji:string;color:string;bg:string;border:string;desc:string}} = {
+  0:{label:"Sem avaliação",emoji:"⏳",color:"#94a3b8",bg:"#f8fafc",border:"#e2e8f0",desc:"Responda as perguntas para calcular o score."},
+  1:{label:"P1 — Frio",   emoji:"❄️",color:"#64748b",bg:"#f8fafc",border:"#e2e8f0",desc:"Lead sem qualificação. Acompanhamento baixo."},
+  2:{label:"P2 — Morno",  emoji:"🌡️",color:"#d97706",bg:"#fffbeb",border:"#fde68a",desc:"Potencial baixo. Nutrir com informações."},
+  3:{label:"P3 — Ativo",  emoji:"🟠",color:"#ea580c",bg:"#fff7ed",border:"#fed7aa",desc:"Potencial médio. Requer acompanhamento ativo."},
+  4:{label:"P4 — Quente", emoji:"🔥",color:"#dc2626",bg:"#fef2f2",border:"#fecaca",desc:"Alta probabilidade. Priorizar contato comercial."},
+  5:{label:"P5 — Urgente",emoji:"🚀",color:"#7c3aed",bg:"#f5f3ff",border:"#ddd6fe",desc:"Decisão iminente. Ação imediata necessária."},
+};
+
+/* ─── Score Tab ──────────────────────────────────────────────────── */
+function ScoreTab({card,accent,scoreRespostas,onEdit}:{card:Card;accent:string;scoreRespostas:Record<string,string>;onEdit:(qId:string,val:string)=>void}){
+  const merged={...(card.scoreData?.respostas??{}),...scoreRespostas};
+  const {rating,total,answered}=calcScoreRating(merged);
+  const rcfg=RATING_CFG[answered===5?rating:0];
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#f8fafc"}}>
+      <div style={{padding:"14px 20px",borderBottom:"1.5px solid #f1f5f9",background:"#fff",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:32,height:32,borderRadius:10,background:`${accent}12`,border:`1.5px solid ${accent}30`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </div>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>Score de Qualificação Comercial</div>
+              <div style={{fontSize:10,color:"#94a3b8"}}>{answered}/5 respondidas · Escala P1–P5</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 14px",borderRadius:20,background:rcfg.bg,border:`1.5px solid ${rcfg.border}`}}>
+            <span style={{fontSize:15}}>{rcfg.emoji}</span>
+            <div>
+              <div style={{fontSize:11,fontWeight:800,color:rcfg.color,lineHeight:1}}>{rcfg.label}</div>
+              {answered===5&&<div style={{fontSize:9,color:rcfg.color,opacity:0.7,marginTop:1}}>{total} pts</div>}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:4}}>
+          {SCORE_QUESTIONS.map(q=>{const v=parseInt(merged[q.id]??"0");const done=v>=1&&v<=5;return(<div key={q.id} style={{flex:1,height:4,borderRadius:99,background:done?q.color:"#e2e8f0",transition:"background 0.3s"}}/>);})}
+        </div>
+        {answered===5&&(
+          <div style={{marginTop:10,display:"flex",gap:6}}>
+            {SCORE_QUESTIONS.map(q=>{const v=parseInt(merged[q.id]??"0");return(
+              <div key={q.id} style={{flex:1,background:"#f8fafc",border:"1.5px solid #e2e8f0",borderTop:`3px solid ${q.color}`,borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
+                <div style={{fontSize:8,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>{q.categoria.split(" ")[0]}</div>
+                <div style={{fontSize:18,fontWeight:800,color:q.color,lineHeight:1}}>{v}</div>
+                <div style={{fontSize:8,color:"#94a3b8"}}>/5</div>
+              </div>
+            );})}
+          </div>
+        )}
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:14}}>
+        {SCORE_QUESTIONS.map((q,qi)=>{
+          const selNum=parseInt(merged[q.id]??"0");
+          return(
+            <div key={q.id} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderLeft:`3px solid ${q.color}`,borderRadius:10,overflow:"hidden",flexShrink:0}}>
+              <div style={{padding:"7px 14px",background:`${q.color}08`,borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span style={{fontSize:10,fontWeight:800,color:q.color,textTransform:"uppercase",letterSpacing:"0.1em"}}>{q.categoria}</span>
+                <span style={{fontSize:9,color:"#94a3b8"}}>Pergunta {qi+1} de 5</span>
+              </div>
+              <div style={{padding:"10px 14px 8px",borderBottom:"1px solid #f8fafc"}}>
+                <p style={{margin:0,fontSize:12,fontWeight:600,color:"#0f172a",lineHeight:1.5}}>{q.pergunta}</p>
+              </div>
+              {q.opcoes.map((opt,oi)=>{
+                const num=oi+1;const isSel=selNum===num;
+                return(
+                  <div key={oi} onClick={()=>onEdit(q.id,isSel?"":String(num))}
+                    style={{display:"flex",alignItems:"center",gap:12,padding:"9px 14px",borderBottom:oi<4?"1px solid #f8fafc":"none",cursor:"pointer",background:isSel?`${q.color}08`:"transparent",transition:"background 0.15s"}}
+                    onMouseEnter={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.background="#f8fafc";}}
+                    onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=isSel?`${q.color}08`:"transparent";}}>
+                    <div style={{width:22,height:22,borderRadius:7,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,background:isSel?q.color:"#f1f5f9",color:isSel?"#fff":"#94a3b8",border:`1.5px solid ${isSel?q.color:"#e2e8f0"}`,transition:"all 0.18s"}}>{num}</div>
+                    <span style={{fontSize:11,color:isSel?"#0f172a":"#475569",fontWeight:isSel?600:400,lineHeight:1.4,flex:1}}>{opt}</span>
+                    {isSel&&<svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={q.color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{padding:"10px 20px",borderTop:"1.5px solid #f1f5f9",background:"#fff",flexShrink:0,display:"flex",alignItems:"center",gap:8}}>
+        <div style={{width:6,height:6,borderRadius:"50%",background:rcfg.color,flexShrink:0}}/>
+        <span style={{fontSize:10,color:"#64748b"}}>{rcfg.desc}</span>
+      </div>
+    </div>
+  );
+}
+
+
+/* ─── Company Panel ──────────────────────────────────────────────── */
+function CompanyPanel({company,onClose,accent}:{company?:CompanyData;onClose:()=>void;accent:string}){
+  const [data,setData]=useState<CompanyData>(company??{});
+  const update=(k:keyof CompanyData,v:string)=>setData(p=>({...p,[k]:v}));
+  const fields:Array<{key:keyof CompanyData;label:string;type:"text"|"toggle";opts?:string[]}>= [
+    {key:"nome",label:"Nome da empresa",type:"text"},
+    {key:"cnpj",label:"CNPJ",type:"text"},
+    {key:"cidade",label:"Cidade",type:"text"},
+    {key:"bairro",label:"Bairro",type:"text"},
+    {key:"estado",label:"Estado",type:"text"},
+    {key:"emailEmpresa",label:"E-mail",type:"text"},
+    {key:"tipo",label:"Tipo",type:"toggle",opts:["Semi","Personalitté"]},
+    {key:"credito",label:"Crédito",type:"toggle",opts:["Sim","Não"]},
+  ];
+  return(
+    <div style={{position:"absolute",top:0,right:0,bottom:0,width:290,background:"#fff",boxShadow:"-6px 0 32px rgba(0,0,0,0.14)",borderLeft:"1.5px solid #e2e8f0",zIndex:10,display:"flex",flexDirection:"column",animation:"slideRight 0.24s cubic-bezier(0.4,0,0.2,1)"}}>
+      <div style={{padding:"13px 16px",borderBottom:"1.5px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,background:"linear-gradient(135deg,#1e293b,#0f172a)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:28,height:28,borderRadius:8,background:`${accent}20`,border:`1.5px solid ${accent}40`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <div><div style={{fontSize:12,fontWeight:700,color:"#f1f5f9"}}>Dados da Empresa</div><div style={{fontSize:10,color:"#64748b"}}>Preenchido pelo Fagner</div></div>
+        </div>
+        <button onClick={onClose} style={{width:26,height:26,borderRadius:7,border:"1px solid #334155",background:"#1e293b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b"}}>
+          <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1={18} y1={6} x2={6} y2={18}/><line x1={6} y1={6} x2={18} y2={18}/></svg>
+        </button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px",display:"flex",flexDirection:"column",gap:10}}>
+        {fields.map(f=>(
+          <div key={f.key}>
             <label style={{display:"block",fontSize:9.5,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{f.label}</label>
             {f.type==="toggle"&&f.opts?(
               <div style={{display:"flex",gap:5}}>
@@ -995,9 +1190,15 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
       style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px 20px",animation:"fadeIn 0.18s ease"}}>
       
-      {/* CompanyPanel — fora do modal, à ESQUERDA */}
+      {/* Botão aba: colado na parede esquerda do modal, sobrepondo-a */}
+      <button onClick={()=>setCompanyOpen(o=>!o)} title="Dados da empresa"
+        style={{position:"fixed",top:"50%",left:"calc(50% - min(540px, 50vw - 20px))",transform:"translate(-50%,-50%)",zIndex:10001,width:32,height:80,borderRadius:"8px 0 0 8px",border:`1.5px solid ${companyOpen?accent+"60":"rgba(255,255,255,0.25)"}`,background:companyOpen?accent:"rgba(255,255,255,0.15)",backdropFilter:"blur(8px)",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5,color:companyOpen?"#fff":"rgba(255,255,255,0.8)",transition:"all 0.22s",boxShadow:companyOpen?`0 4px 20px ${accent}50`:"0 4px 16px rgba(0,0,0,0.2)"}}>
+        <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span style={{fontSize:8,fontWeight:700,letterSpacing:"0.04em",writingMode:"vertical-lr",transform:"rotate(180deg)",textTransform:"uppercase",opacity:0.85}}>Empresa</span>
+      </button>
+
       {companyOpen&&(
-        <div style={{position:"fixed",top:"2vh",height:"96vh",width:290,right:"calc(50% + 552px)",zIndex:10000,animation:"slideLeft 0.24s cubic-bezier(0.4,0,0.2,1)",display:"flex",flexDirection:"column",borderRadius:16,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{position:"fixed",top:"2vh",height:"96vh",width:290,right:"calc(50% + 552px)",zIndex:10000,animation:"panelRise 0.28s cubic-bezier(0.4,0,0.2,1)",display:"flex",flexDirection:"column",borderRadius:16,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
           <CompanyPanel company={card.companyData} onClose={()=>setCompanyOpen(false)} accent={accent}/>
         </div>
       )}
@@ -1062,12 +1263,6 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
                     <div style={{width:26,height:26,borderRadius:7,background:"#f8fafc",border:"1.5px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                       <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d={item.path}/></svg>
                     </div>
-                    {item.isCompany&&(
-                      <button onClick={()=>setCompanyOpen(o=>!o)} title="Ver dados da empresa"
-                        style={{width:20,height:20,borderRadius:6,border:`1.5px solid ${companyOpen?accent+"40":"#e2e8f0"}`,background:companyOpen?`${accent}15`:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:companyOpen?accent:"#94a3b8",transition:"all 0.18s",flexShrink:0,padding:0}}>
-                        <svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                      </button>
-                    )}
                     {isEd?(
                       <input autoFocus value={editDraft} onChange={e=>setEditDraft(e.target.value)}
                         onBlur={commitFieldEdit} onKeyDown={e=>{if(e.key==="Enter")commitFieldEdit();if(e.key==="Escape")setEditingField(null);}}
@@ -1459,12 +1654,13 @@ export function CRMKanban(){
         @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
         @keyframes slideRight { from{opacity:0;transform:translateX(100%)} to{opacity:1;transform:translateX(0)} }
         @keyframes slideLeft  { from{opacity:0;transform:translateX(-100%)} to{opacity:1;transform:translateX(0)} }
-        @keyframes slideUp   { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes panelDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes skShimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-        @keyframes feedSlide { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:translateX(0)} }
-        @keyframes chipIn    { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
-        @keyframes msgIn     { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes slideUp    { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes panelRise  { from{opacity:0;transform:translateY(40px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+        @keyframes panelDown  { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes skShimmer  { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+        @keyframes feedSlide  { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes chipIn     { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
+        @keyframes msgIn      { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
         @keyframes bannerIn  { from{opacity:0;transform:translateY(-100%)} to{opacity:1;transform:translateY(0)} }
         @keyframes fieldIn   { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
         @keyframes toastIn   { from{opacity:0;transform:translateY(12px) scale(0.95)} to{opacity:1;transform:translateY(0) scale(1)} }
