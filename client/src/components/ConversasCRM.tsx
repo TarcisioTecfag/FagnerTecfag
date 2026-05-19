@@ -994,12 +994,15 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
   return(
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
       style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px 20px",animation:"fadeIn 0.18s ease"}}>
-      <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:1080,height:"96vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(0,0,0,0.24)",animation:"slideUp 0.24s cubic-bezier(0.4,0,0.2,1)",position:"relative"}}>
-
-        {/* CompanyPanel overlay */}
-        {companyOpen&&(
+      
+      {/* CompanyPanel — fora do modal, à ESQUERDA */}
+      {companyOpen&&(
+        <div style={{position:"fixed",top:"2vh",height:"96vh",width:290,right:"calc(50% + 552px)",zIndex:10000,animation:"slideLeft 0.24s cubic-bezier(0.4,0,0.2,1)",display:"flex",flexDirection:"column",borderRadius:16,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
           <CompanyPanel company={card.companyData} onClose={()=>setCompanyOpen(false)} accent={accent}/>
-        )}
+        </div>
+      )}
+
+      <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:1080,height:"96vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(0,0,0,0.24)",animation:"slideUp 0.24s cubic-bezier(0.4,0,0.2,1)",position:"relative"}}>
 
         {/* ── Modal header ── */}
         <div style={{padding:"14px 20px",borderBottom:"1.5px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
@@ -1009,10 +1012,6 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
               <div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{card.name}</div>
               {card.company&&<div style={{fontSize:11,color:"#64748b"}}>{card.company}</div>}
             </div>
-            <button onClick={()=>setCompanyOpen(o=>!o)} title="Dados da empresa"
-              style={{width:28,height:28,borderRadius:8,border:`1.5px solid ${companyOpen?accent+"60":"#e2e8f0"}`,background:companyOpen?`${accent}10`:"#f8fafc",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:companyOpen?accent:"#94a3b8",transition:"all 0.18s"}}>
-              <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            </button>
             <ChannelTag channel={card.channel}/>
             <span style={{display:"inline-flex",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700,background:seg.bg,color:seg.text}}>{card.segment}</span>
             <div style={{display:"flex",alignItems:"center",gap:6,padding:"3px 10px",borderRadius:20,background:`${accent}10`,border:`1px solid ${accent}25`}}>
@@ -1054,15 +1053,21 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
                 {field:"phone",  path:"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.58 4.44 2 2 0 0 1 3.55 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6.29 6.29l.61-.61a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z", label:card.phone??"—",placeholder:"Telefone"},
                 {field:"email",  path:"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z", label:card.email??"—",placeholder:"E-mail"},
                 {field:"cnpjCpf",path:"M9 11l3 3L22 4", label:card.cnpjCpf??"CPF/CNPJ —",placeholder:"CPF ou CNPJ"},
-                {field:"tipoEmpresa",path:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z", label:card.tipoEmpresa??"Tipo —",placeholder:"Tipo de empresa"},
+                {field:"tipoEmpresa",path:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z", label:card.tipoEmpresa??"Tipo —",placeholder:"Tipo de empresa",isCompany:true},
                 {field:"city",   path:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z", label:card.city??"—",placeholder:"Cidade – Estado"},
-              ] as {field:string;path:string;label:string;placeholder:string}[]).map((item)=>{
+              ] as {field:string;path:string;label:string;placeholder:string;isCompany?:boolean}[]).map((item)=>{
                 const isEd=editingField===item.field;
                 return(
                   <div key={item.field} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
                     <div style={{width:26,height:26,borderRadius:7,background:"#f8fafc",border:"1.5px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                       <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d={item.path}/></svg>
                     </div>
+                    {item.isCompany&&(
+                      <button onClick={()=>setCompanyOpen(o=>!o)} title="Ver dados da empresa"
+                        style={{width:20,height:20,borderRadius:6,border:`1.5px solid ${companyOpen?accent+"40":"#e2e8f0"}`,background:companyOpen?`${accent}15`:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:companyOpen?accent:"#94a3b8",transition:"all 0.18s",flexShrink:0,padding:0}}>
+                        <svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                      </button>
+                    )}
                     {isEd?(
                       <input autoFocus value={editDraft} onChange={e=>setEditDraft(e.target.value)}
                         onBlur={commitFieldEdit} onKeyDown={e=>{if(e.key==="Enter")commitFieldEdit();if(e.key==="Escape")setEditingField(null);}}
@@ -1339,7 +1344,17 @@ export function CRMKanban(){
         return data;
       });
     loadCards()
-      .then((data:any[])=>{setCards(Array.isArray(data)&&data.length>0?data.map(apiCardToCard):SEED);setLoading(false);})
+      .then((data:any[])=>{
+        if(Array.isArray(data)&&data.length>0){
+          const apiCards=data.map(apiCardToCard);
+          const hasTriagem=apiCards.some(c=>c.columnId==="triagem");
+          const merged=hasTriagem?apiCards:[...apiCards,...SEED.filter(c=>c.columnId==="triagem")];
+          setCards(merged);
+        } else {
+          setCards(SEED);
+        }
+        setLoading(false);
+      })
       .catch(()=>{const t=setTimeout(()=>{setCards(SEED);setLoading(false);},SK_MS);return()=>clearTimeout(t);});
   },[]);
 
@@ -1443,6 +1458,7 @@ export function CRMKanban(){
         @keyframes fadein    { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
         @keyframes slideRight { from{opacity:0;transform:translateX(100%)} to{opacity:1;transform:translateX(0)} }
+        @keyframes slideLeft  { from{opacity:0;transform:translateX(-100%)} to{opacity:1;transform:translateX(0)} }
         @keyframes slideUp   { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
         @keyframes panelDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes skShimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
