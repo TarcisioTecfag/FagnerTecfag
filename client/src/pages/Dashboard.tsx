@@ -3,7 +3,7 @@ import {
   Power, PowerOff, TrendingUp, Users, MessageCircle,
   TerminalSquare, Loader2, Copy, History, Clock, CheckSquare,
   Send, RotateCcw, Radio, Mic, Image as ImageIcon, Activity,
-  Info, ExternalLink,
+  Info, ExternalLink, KanbanSquare,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -1090,14 +1090,14 @@ export default function Dashboard() {
       </div>
 
       {/* ── 2. TAB BAR ────────────────────────────────────────────────────── */}
-      <div className="shrink-0 flex items-center gap-1 px-6 bg-white border-b border-red-100">
+      <div className="shrink-0 flex items-center gap-1 px-6 bg-white border-b border-red-100 overflow-x-auto [&::-webkit-scrollbar]:hidden">
         {(
           [
             { id: "overview" as ActiveTab, label: "Visão Geral",      icon: null },
             { id: "logs" as ActiveTab,     label: "Terminal de Logs", icon: null },
             { id: "live" as ActiveTab,     label: "Ao Vivo",          icon: Radio },
-            { id: "flows" as ActiveTab,    label: "Monitor de Fluxos",icon: Activity },
-            { id: "crm" as ActiveTab,      label: "CRM Conversas",    icon: null },
+            { id: "flows" as ActiveTab,    label: "Monitor de Fluxos", icon: Activity },
+            { id: "crm"   as ActiveTab,    label: "CRM Conversas",     icon: KanbanSquare },
           ] as { id: ActiveTab; label: string; icon: React.ElementType | null }[]
         ).map((tab) => (
           <button
