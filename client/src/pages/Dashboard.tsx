@@ -1024,73 +1024,9 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col h-full bg-zinc-50/60">
 
-      {/* ── 1. HEADER ─────────────────────────────────────────────────────── */}
-      <div className="shrink-0 flex items-center justify-between px-6 py-4 bg-white border-b border-red-100 shadow-sm">
-        {/* Left: Title */}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-800">Painel de Controle</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">
-            Monitore o desempenho do robô e o status do sistema.
-          </p>
-        </div>
 
-        {/* Right: Bot Status Pill */}
-        <div
-          className={`flex items-center gap-4 px-4 py-2.5 rounded-full border-2 transition-colors duration-300 ${
-            isBotActive
-              ? "border-red-200 bg-red-50"
-              : "border-zinc-200 bg-white"
-          }`}
-        >
-          {/* Icon */}
-          <div
-            className={`p-1.5 rounded-full transition-colors`}
-            style={isBotActive
-              ? { background: "rgba(220,38,38,0.10)", color: "#dc2626" }
-              : { background: "#f4f4f5", color: "#71717a" }
-            }
-          >
-            {isPending ? (
-              <Loader2 className="animate-spin" size={18} />
-            ) : isBotActive ? (
-              <Power size={18} />
-            ) : (
-              <PowerOff size={18} />
-            )}
-          </div>
-
-          {/* Status text */}
-          <div>
-            <p className="text-xs font-medium text-zinc-700 leading-none mb-0.5">Status do Robô</p>
-            <p
-              className="text-xs font-bold leading-none"
-              style={{ color: isBotActive ? "#dc2626" : "#71717a" }}
-            >
-              {statusLabel}
-            </p>
-          </div>
-
-          {/* Divider */}
-          <div className="h-8 w-px bg-red-100" />
-
-          {/* Toggle */}
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={isBotActive}
-              disabled={isPending}
-              onCheckedChange={(checked) => toggleMutation.mutate(checked)}
-              id="bot-status"
-              className="data-[state=checked]:bg-red-600"
-            />
-            <Label htmlFor="bot-status" className="cursor-pointer text-xs font-medium text-zinc-700">
-              {isBotActive ? "Desligar" : "Ligar"}
-            </Label>
-          </div>
-        </div>
-      </div>
-
-      {/* ── 2. TAB BAR ────────────────────────────────────────────────────── */}
-      <div className="shrink-0 flex items-center gap-1 px-6 bg-white border-b border-red-100 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+      {/* ── TAB BAR ──────────────────────────────────────────────────────── */}
+      <div className="shrink-0 flex items-center justify-center gap-1 px-6 bg-white border-b border-red-100 overflow-x-auto [&::-webkit-scrollbar]:hidden">
         {(
           [
             { id: "overview" as ActiveTab, label: "Visão Geral",      icon: null },
