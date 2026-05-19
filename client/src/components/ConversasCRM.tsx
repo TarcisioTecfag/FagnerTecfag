@@ -21,46 +21,68 @@ type FType = "text"|"select";
 interface FField { id:string; label:string; type:FType; options?:string[]; }
 
 const FUNNEL_FIELDS: Record<string, FField[]> = {
+
+  /* ── Pós Venda ─────────────────────────────────────────────────── */
   "pos-venda": [
-    {id:"motivo",    label:"Motivo do contato",    type:"text"},
-    {id:"pedido",    label:"Nº do pedido",          type:"text"},
-    {id:"satisfacao",label:"Satisfação (1–5)",      type:"select", options:["1","2","3","4","5"]},
-    {id:"resolucao", label:"Resolução proposta",    type:"text"},
-    {id:"prazo",     label:"Prazo de resolução",    type:"text"},
-    {id:"escalacao", label:"Requer escalação?",     type:"select", options:["Sim","Não"]},
+    {id:"resumo", label:"Resumo da tratativa de pós-venda", type:"text"},
   ],
+
+  /* ── Máquinas ──────────────────────────────────────────────────── */
   "maquinas": [
-    {id:"tipo",       label:"Tipo de máquina",      type:"text"},
-    {id:"modelo",     label:"Modelo / referência",  type:"text"},
-    {id:"voltagem",   label:"Voltagem",             type:"select", options:["110V","220V","380V","—"]},
-    {id:"quantidade", label:"Quantidade",           type:"text"},
-    {id:"aplicacao",  label:"Aplicação / uso",      type:"text"},
-    {id:"urgencia",   label:"Urgência",             type:"select", options:["Baixa","Média","Alta"]},
+    {id:"cliente_novo",    label:"Cliente é novo?",         type:"select",
+      options:["Sim","Não"]},
+    {id:"qualif_sdr",      label:"Qualificado por SDR",     type:"select",
+      options:[
+        "Recompra – Novo Maquinário",
+        "Cliente Novo, Começando a Pesquisar",
+        "Contato Ativo",
+        "Revenda",
+        "Troca de Máquina (Já tem o processo e quer renovar)",
+        "Peças para Reposição",
+        "Curioso / Estudante (Sem intenção de compra)",
+        "Fora de Portfólio (Produto não fabricado pela Tecfag)",
+        "Sumiu / Sem Contato (Não atendeu ou não retornou)",
+      ]},
+    {id:"produto_fabricado", label:"Qual o produto fabricado?", type:"text"},
+    {id:"volume",            label:"Volume de produção",        type:"select",
+      options:["Baixo Volume","Médio Volume","Alto Volume"]},
   ],
+
+  /* ── Personalitté (mesmos campos de Máquinas) ───────────────────── */
   "personalite": [
-    {id:"produto",     label:"Tipo de produto",     type:"text"},
-    {id:"estilo",      label:"Estilo / referência", type:"text"},
-    {id:"orcamento",   label:"Orçamento estimado",  type:"text"},
-    {id:"prazo",       label:"Prazo desejado",      type:"text"},
-    {id:"briefing",    label:"Briefing recebido?",  type:"select", options:["Sim","Não","Parcial"]},
-    {id:"responsavel", label:"Responsável criativo",type:"text"},
+    {id:"cliente_novo",    label:"Cliente é novo?",         type:"select",
+      options:["Sim","Não"]},
+    {id:"qualif_sdr",      label:"Qualificado por SDR",     type:"select",
+      options:[
+        "Recompra – Novo Maquinário",
+        "Cliente Novo, Começando a Pesquisar",
+        "Contato Ativo",
+        "Revenda",
+        "Troca de Máquina (Já tem o processo e quer renovar)",
+        "Peças para Reposição",
+        "Curioso / Estudante (Sem intenção de compra)",
+        "Fora de Portfólio (Produto não fabricado pela Tecfag)",
+        "Sumiu / Sem Contato (Não atendeu ou não retornou)",
+      ]},
+    {id:"produto_fabricado", label:"Qual o produto fabricado?", type:"text"},
+    {id:"volume",            label:"Volume de produção",        type:"select",
+      options:["Baixo Volume","Médio Volume","Alto Volume"]},
   ],
+
+  /* ── Financeiro ────────────────────────────────────────────────── */
   "financeiro": [
-    {id:"valor",      label:"Valor em aberto",      type:"text"},
-    {id:"vencimento", label:"Data de vencimento",   type:"text"},
-    {id:"modalidade", label:"Modalidade",           type:"select", options:["À vista","2x","3x","6x","12x"]},
-    {id:"aceite",     label:"Proposta aceita?",     type:"select", options:["Sim","Não","Em análise"]},
-    {id:"desconto",   label:"Desconto aplicado",    type:"text"},
-    {id:"novo_venc",  label:"Novo vencimento",      type:"text"},
+    {id:"proposito", label:"Qual o propósito?", type:"select",
+      options:["2ª Via Boleto","2ª Via Nota","Outros"]},
   ],
+
+  /* ── Peças ─────────────────────────────────────────────────────── */
   "pecas": [
-    {id:"referencia",      label:"Referência da peça",      type:"text"},
-    {id:"quantidade",      label:"Quantidade",              type:"text"},
-    {id:"urgencia",        label:"Urgência",                type:"select", options:["Baixa","Média","Alta","Crítica"]},
-    {id:"compatibilidade", label:"Compatibilidade verif.?", type:"select", options:["Sim","Não","Pendente"]},
-    {id:"estoque",         label:"Estoque",                 type:"text"},
-    {id:"prazo",           label:"Prazo de entrega",        type:"text"},
+    {id:"cliente_tecfag", label:"Cliente Tecfag?",          type:"select", options:["Sim","Não"]},
+    {id:"maquina",        label:"Peça de qual máquina?",    type:"text"},
+    {id:"peca_especifica",label:"Qual peça em específico?", type:"text"},
   ],
+
+  /* ── Outros ────────────────────────────────────────────────────── */
   "outros": [
     {id:"categoria",  label:"Categoria identificada",    type:"text"},
     {id:"encaminham", label:"Encaminhamento",            type:"text"},
