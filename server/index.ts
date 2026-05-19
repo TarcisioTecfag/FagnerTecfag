@@ -1442,7 +1442,7 @@ app.post("/api/fagner/operators", requireAuth, async (req: Request, res: Respons
 // ─── Fagner Conversas CRM ─────────────────────────────────────────────────────
 import {
   listCards, getCard, createCard, updateCard, deleteCard,
-  upsertFunnelBatch, upsertScore, listHistory,
+  upsertFunnelBatch, upsertScore, listHistory, seedDemoCards,
 } from "./fagner/conversasCrmService.js";
 
 // Extrai username da sessão (para auditoria)
@@ -1531,6 +1531,16 @@ app.put("/api/fc/cards/:id/score", requireAuth, async (req: Request, res: Respon
     const author = await sessionAuthor(req);
     const score = await upsertScore(p(req.params.id), req.body, author);
     return res.json(score);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/fc/seed — insere cards de demo se banco estiver vazio
+app.post("/api/fc/seed", requireAuth, async (_req, res) => {
+  try {
+    const inserted = await seedDemoCards();
+    return res.json({ inserted, message: inserted > 0 ? `${inserted} cards criados` : "Banco já contém dados, seed ignorado" });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
   }

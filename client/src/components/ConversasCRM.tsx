@@ -1135,7 +1135,21 @@ export function CRMKanban(){
     setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),6000);
   },[playChime]);
 
-  useEffect(()=>{fetch("/api/fc/cards",{credentials:"include"}).then(r=>r.ok?r.json():Promise.reject()).then((data:any[])=>{setCards(Array.isArray(data)?data.map(apiCardToCard):SEED);setLoading(false);}).catch(()=>{const t=setTimeout(()=>{setCards(SEED);setLoading(false);},SK_MS);return()=>clearTimeout(t);});},[]);
+  useEffect(()=>{
+    const loadCards=()=>fetch("/api/fc/cards",{credentials:"include"})
+      .then(r=>r.ok?r.json():Promise.reject())
+      .then(async(data:any[])=>{
+        if(Array.isArray(data)&&data.length===0){
+          // banco vazio: faz seed e recarrega
+          await fetch("/api/fc/seed",{method:"POST",credentials:"include"});
+          return fetch("/api/fc/cards",{credentials:"include"}).then(r=>r.ok?r.json():Promise.reject());
+        }
+        return data;
+      });
+    loadCards()
+      .then((data:any[])=>{setCards(Array.isArray(data)&&data.length>0?data.map(apiCardToCard):SEED);setLoading(false);})
+      .catch(()=>{const t=setTimeout(()=>{setCards(SEED);setLoading(false);},SK_MS);return()=>clearTimeout(t);});
+  },[]);
 
   useEffect(()=>{
     if(!filterOpen)return;
