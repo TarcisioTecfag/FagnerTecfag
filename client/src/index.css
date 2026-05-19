@@ -160,12 +160,12 @@
 
 /* ── Tab content transition (internal tab switches) ── */
 @keyframes tab-enter {
-  0%   { opacity: 0; transform: translateX(10px); }
-  100% { opacity: 1; transform: translateX(0);    }
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 .animate-tab-enter {
-  animation: tab-enter 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: tab-enter 0.22s ease both;
 }
 
 /* ── Pop-in (cards, badges, list items with optional stagger) ── */

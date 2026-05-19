@@ -814,7 +814,7 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
 
   return(
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
-      style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.45)",backdropFilter:"blur(5px)",WebkitBackdropFilter:"blur(5px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px 20px",animation:"fadeIn 0.18s ease"}}>
+      style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px 20px",animation:"fadeIn 0.18s ease"}}>
       <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:1080,height:"96vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(0,0,0,0.24)",animation:"slideUp 0.24s cubic-bezier(0.4,0,0.2,1)"}}>
 
         {/* ── Modal header ── */}
