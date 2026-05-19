@@ -242,7 +242,70 @@ export async function bootstrapSchema(): Promise<void> {
     await client.query(`ALTER TABLE folders ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER DEFAULT 0;`);
     await client.query(`ALTER TABLE lc_visitors ADD COLUMN IF NOT EXISTS "posVendaCnpjData" JSONB;`);
     await client.query(`ALTER TABLE lc_chats ADD COLUMN IF NOT EXISTS "closeReason" TEXT;`);
-    console.log("[DB] ✅ Migrações idempotentes aplicadas (folders: color, sortOrder, lc_visitors: posVendaCnpjData, lc_chats: closeReason)");
+    console.log("[DB] ✅ Migrações idempotentes aplicadas (folders, lc_visitors, lc_chats)");
+
+    // ─── Fagner Conversas CRM ────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fc_cards (
+        id              TEXT PRIMARY KEY,
+        name            TEXT NOT NULL,
+        company         TEXT,
+        phone           TEXT,
+        email           TEXT,
+        cnpj_cpf        TEXT,
+        tipo_empresa    TEXT,
+        city            TEXT,
+        segment         TEXT,
+        channel         TEXT NOT NULL DEFAULT 'WhatsApp',
+        column_id       TEXT NOT NULL DEFAULT 'pos-venda',
+        note            TEXT,
+        ai_status       TEXT NOT NULL DEFAULT 'analyzing',
+        progress        INTEGER NOT NULL DEFAULT 0,
+        rd_contact_id   TEXT,
+        rd_deal_id      TEXT,
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE TABLE IF NOT EXISTS fc_funnel_data (
+        id          TEXT PRIMARY KEY,
+        card_id     TEXT NOT NULL REFERENCES fc_cards(id) ON DELETE CASCADE,
+        field_id    TEXT NOT NULL,
+        value       TEXT,
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(card_id, field_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS fc_score (
+        id           TEXT PRIMARY KEY,
+        card_id      TEXT NOT NULL REFERENCES fc_cards(id) ON DELETE CASCADE UNIQUE,
+        necessidade  INTEGER CHECK(necessidade BETWEEN 1 AND 5),
+        urgencia     INTEGER CHECK(urgencia BETWEEN 1 AND 5),
+        decisor      INTEGER CHECK(decisor BETWEEN 1 AND 5),
+        engajamento  INTEGER CHECK(engajamento BETWEEN 1 AND 5),
+        avanco       INTEGER CHECK(avanco BETWEEN 1 AND 5),
+        rating       INTEGER,
+        evaluated_at TIMESTAMPTZ,
+        evaluated_by TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS fc_history (
+        id          TEXT PRIMARY KEY,
+        card_id     TEXT NOT NULL REFERENCES fc_cards(id) ON DELETE CASCADE,
+        type        TEXT NOT NULL DEFAULT 'entry',
+        label       TEXT NOT NULL,
+        detail      TEXT,
+        field_name  TEXT,
+        old_value   TEXT,
+        new_value   TEXT,
+        author      TEXT NOT NULL DEFAULT 'Sistema',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_fc_funnel_card ON fc_funnel_data(card_id);
+      CREATE INDEX IF NOT EXISTS idx_fc_history_card ON fc_history(card_id);
+    `);
+    console.log("[DB] ✅ Tabelas Fagner Conversas CRM criadas/verificadas (fc_cards, fc_funnel_data, fc_score, fc_history)");
   } catch (e) {
     console.error("[DB] ❌ Falha ao criar schema PostgreSQL:", e);
   } finally {

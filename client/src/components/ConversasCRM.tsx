@@ -251,6 +251,9 @@ const ALL_SEGMENTS = ["Varejo","Serviços","Indústria","Comércio","Alimentaç�
 /* ─── Helpers ────────────────────────────────────────────────────── */
 function initials(n:string){return n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();}
 function nowTime(){const d=new Date();return`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;}
+function relativeTime(iso:string):string{const m=Math.floor((Date.now()-new Date(iso).getTime())/60000);if(m<1)return"há instantes";if(m<60)return`há ${m} min`;const h=Math.floor(m/60);if(h<24)return`há ${h}h`;return`há ${Math.floor(h/24)} dias`;}
+function scoreRespostasFromApi(score:any):Record<string,string>{const r:Record<string,string>={};["necessidade","urgencia","decisor","engajamento","avanco"].forEach(k=>{if(score?.[k]!=null)r[k]=String(score[k]);});return r;}
+function apiCardToCard(c:any):Card{const respostas=scoreRespostasFromApi(c.score);return{id:c.id,name:c.name,company:c.company,channel:(c.channel as Channel)||"WhatsApp",aiStatus:(c.aiStatus as AIStatus)||"done",progress:c.progress??100,timeAgo:relativeTime(c.createdAt||new Date().toISOString()),note:c.note??"",columnId:c.columnId||"pos-venda",phone:c.phone,email:c.email,cnpjCpf:c.cnpjCpf,tipoEmpresa:c.tipoEmpresa,city:c.city,segment:c.segment,funnel:c.funnel??{},history:[],conversation:[],scoreData:Object.keys(respostas).length>0?{respostas,temperatura:"",pontoTotal:Object.values(respostas).reduce((s:number,v:string)=>s+parseInt(v||"0"),0),engagementScore:0,intentScore:0}:undefined};}
 
 /* ─── AnimNum ────────────────────────────────────────────────────── */
 function AnimNum({value}:{value:number}){
@@ -568,12 +571,23 @@ const HEV_CFG: Record<HistoryEvent["type"],{color:string;bg:string;icon:React.Re
   pending: {color:"#b45309",bg:"#fef3c7",dot:"#b45309",   icon:<svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={10}/><polyline points="12 6 12 12 16 14"/></svg>},
 };
 
+/* ─── History event type from API ───────────────────────────────── */
+const HEV_TYPE_MAP:Record<string,HistoryEvent["type"]> = {entry:"entry",edit:"edit" as any,stage:"stage",action:"action",done:"done",score:"action",pending:"pending"};
 function HistoryTab({card,accent}:{card:Card;accent:string}){
-  const events = card.history;
-  const lastType = events[events.length-1]?.type;
+  const [events,setEvents]=useState<HistoryEvent[]>(card.history);
+  const [loading,setLoading]=useState(card.history.length===0);
+  useEffect(()=>{
+    setLoading(true);
+    fetch(`/api/fc/cards/${card.id}/history`,{credentials:"include"})
+      .then(r=>r.ok?r.json():Promise.reject())
+      .then((data:any[])=>{
+        setEvents(data.map(e=>({time:new Date(e.createdAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),label:e.label,detail:e.detail??"",type:HEV_TYPE_MAP[e.type]??"action",author:e.author})));
+        setLoading(false);
+      }).catch(()=>{setEvents(card.history);setLoading(false);});
+  },[card.id]);
+  const lastType=events[events.length-1]?.type;
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#f8fafc"}}>
-      {/* header */}
       <div style={{padding:"14px 20px",borderBottom:"1.5px solid #f1f5f9",background:"#fff",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{width:30,height:30,borderRadius:9,background:`${accent}12`,border:`1.5px solid ${accent}30`,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -581,57 +595,45 @@ function HistoryTab({card,accent}:{card:Card;accent:string}){
           </div>
           <div>
             <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>Histórico de Interações</div>
-            <div style={{fontSize:10,color:"#94a3b8"}}>{events.length} eventos · registrados pelo Fagner</div>
+            <div style={{fontSize:10,color:"#94a3b8"}}>{loading?"Carregando...":`${events.length} eventos · auditoria completa`}</div>
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,fontWeight:600,padding:"3px 10px",borderRadius:20,
-          background:lastType==="done"?"#dcfce7":lastType==="pending"?"#fef3c7":"#f1f5f9",
-          color:lastType==="done"?"#059669":lastType==="pending"?"#b45309":"#64748b",
-          border:`1px solid ${lastType==="done"?"#bbf7d0":lastType==="pending"?"#fde68a":"#e2e8f0"}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,fontWeight:600,padding:"3px 10px",borderRadius:20,background:lastType==="done"?"#dcfce7":lastType==="pending"?"#fef3c7":"#f1f5f9",color:lastType==="done"?"#059669":lastType==="pending"?"#b45309":"#64748b",border:`1px solid ${lastType==="done"?"#bbf7d0":lastType==="pending"?"#fde68a":"#e2e8f0"}`}}>
           <div style={{width:6,height:6,borderRadius:"50%",background:lastType==="done"?"#059669":lastType==="pending"?"#f59e0b":"#94a3b8",animation:lastType==="pending"?"pulse 1.5s ease-in-out infinite":"none"}}/>
           {lastType==="done"?"Concluído":lastType==="pending"?"Em andamento":"Em triagem"}
         </div>
       </div>
-
-      {/* timeline */}
       <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
-        <div style={{position:"relative"}}>
-          {/* vertical line */}
+        {loading&&<div style={{textAlign:"center",padding:32,color:"#94a3b8",fontSize:12}}>Carregando histórico...</div>}
+        {!loading&&events.length===0&&<div style={{textAlign:"center",padding:32,color:"#94a3b8",fontSize:12}}>Nenhum evento registrado ainda.</div>}
+        {!loading&&<div style={{position:"relative"}}>
           <div style={{position:"absolute",left:17,top:8,bottom:8,width:1.5,background:"linear-gradient(to bottom,#e2e8f0,#e2e8f0 80%,transparent)",borderRadius:2}}/>
-
           {events.map((ev,i)=>{
-            const cfg=HEV_CFG[ev.type];
+            const cfg=HEV_CFG[ev.type]??HEV_CFG.action;
             const isLast=i===events.length-1;
             return(
               <div key={i} style={{display:"flex",gap:14,marginBottom:isLast?0:20,animation:`fieldIn 0.25s ease ${i*0.05}s both`,position:"relative"}}>
-                {/* dot */}
                 <div style={{flexShrink:0,width:35,display:"flex",justifyContent:"center"}}>
-                  <div style={{width:34,height:34,borderRadius:10,background:cfg.bg,border:`2px solid ${cfg.color}30`,display:"flex",alignItems:"center",justifyContent:"center",color:cfg.color,zIndex:1,position:"relative",boxShadow:isLast?`0 0 0 3px ${cfg.color}15`:"none"}}>
-                    {cfg.icon}
-                    {ev.type==="pending"&&<div style={{position:"absolute",top:-3,right:-3,width:8,height:8,borderRadius:"50%",background:cfg.dot,border:"2px solid #f8fafc",animation:"pulse 1.5s ease-in-out infinite"}}/>}
-                    {ev.type==="done"&&<div style={{position:"absolute",top:-3,right:-3,width:8,height:8,borderRadius:"50%",background:cfg.dot,border:"2px solid #f8fafc"}}/>}
-                  </div>
+                  <div style={{width:34,height:34,borderRadius:10,background:cfg.bg,border:`2px solid ${cfg.color}30`,display:"flex",alignItems:"center",justifyContent:"center",color:cfg.color,zIndex:1,position:"relative"}}>{cfg.icon}</div>
                 </div>
-
-                {/* content */}
                 <div style={{flex:1,paddingTop:5}}>
                   <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:3}}>
                     <span style={{fontSize:12,fontWeight:700,color:"#1e293b",lineHeight:1.3}}>{ev.label}</span>
-                    <span style={{fontSize:10,color:"#94a3b8",flexShrink:0,marginTop:1,fontVariantNumeric:"tabular-nums"}}>{ev.time}</span>
+                    <span style={{fontSize:10,color:"#94a3b8",flexShrink:0,marginTop:1}}>{ev.time}</span>
                   </div>
                   <p style={{margin:0,fontSize:11,color:"#64748b",lineHeight:1.5}}>{ev.detail}</p>
-                  {/* type chip */}
-                  <span style={{display:"inline-flex",alignItems:"center",gap:3,marginTop:5,padding:"1px 7px",borderRadius:20,fontSize:9.5,fontWeight:700,background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.color}20`}}>
-                    {{entry:"Entrada",ai:"Fagner",stage:"Funil",action:"Ação",done:"Concluído",pending:"Pendente"}[ev.type]}
-                  </span>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5}}>
+                    <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"1px 7px",borderRadius:20,fontSize:9.5,fontWeight:700,background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.color}20`}}>
+                      {{entry:"Entrada",ai:"Fagner",stage:"Funil",action:"Ação",done:"Concluído",pending:"Pendente",edit:"Edição",score:"Score"}[ev.type]??ev.type}
+                    </span>
+                    {(ev as any).author&&<span style={{fontSize:9,color:"#94a3b8"}}>por {(ev as any).author}</span>}
+                  </div>
                 </div>
               </div>
             );
           })}
-        </div>
+        </div>}
       </div>
-
-      {/* footer */}
       <div style={{padding:"10px 20px",borderTop:"1.5px solid #f1f5f9",background:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <span style={{fontSize:10,color:"#94a3b8"}}>Histórico completo · auditável</span>
         <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#64748b"}}>
@@ -791,11 +793,13 @@ function ScoreTab({card,accent,scoreRespostas,onEdit}:{card:Card;accent:string;s
 /* ─── Client Modal (with tabs) ───────────────────────────────────── */
 type ModalTab = "conversa"|"funil"|"historico"|"score";
 
-function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
+function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onContactEdit,onScoreSave}:{
   card:Card; accent:string; onClose:()=>void;
   funnelData:Record<string,string>;
   onFunnelEdit:(fieldId:string,val:string)=>void;
   onAIFill:()=>void;
+  onContactEdit:(field:string,val:string)=>void;
+  onScoreSave:(respostas:Record<string,string>)=>void;
 }){
   const [tab, setTab] = useState<ModalTab>("conversa");
   const [scoreRespostas, setScoreRespostas] = useState<Record<string,string>>({});
@@ -803,7 +807,8 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
   const fields=FUNNEL_FIELDS[card.columnId]??[];
   const filled=fields.filter(f=>{const v=funnelData[f.id]??"";return v&&v!=="—";}).length;
 
-  useEffect(()=>{ setTab("conversa"); setScoreRespostas({}); },[card.id]);
+  // Init score respostas from card
+  useEffect(()=>{ setTab("conversa"); setScoreRespostas({...(card.scoreData?.respostas??{})}); },[card.id]);
 
   const onCloseRef = useRef(onClose);
   useEffect(()=>{ onCloseRef.current=onClose; });
@@ -811,6 +816,17 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
     const h=(e:KeyboardEvent)=>{if(e.key==="Escape")onCloseRef.current();};
     window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
   },[]);
+
+  // Inline edit state for sidebar contact fields
+  const [editingField,setEditingField]=useState<string|null>(null);
+  const [editDraft,setEditDraft]=useState("");
+  const startFieldEdit=(field:string,cur:string)=>{setEditingField(field);setEditDraft(cur);};
+  const commitFieldEdit=()=>{if(editingField){onContactEdit(editingField,editDraft);setEditingField(null);}};
+
+  const scoreAnswered=SCORE_QUESTIONS.filter(q=>{const v=parseInt(scoreRespostas[q.id]??"0");return v>=1&&v<=5;}).length;
+  const prevScoreAnswered=useRef(scoreAnswered);
+  useEffect(()=>{if(scoreAnswered===5&&prevScoreAnswered.current<5){onScoreSave(scoreRespostas);}prevScoreAnswered.current=scoreAnswered;},[scoreAnswered]);
+
 
   return(
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
@@ -862,18 +878,36 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
             {/* Contact */}
             <div>
               <p style={{margin:"0 0 9px",fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>Contato</p>
-              {[
-                {path:"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.58 4.44 2 2 0 0 1 3.55 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6.29 6.29l.61-.61a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z",label:card.phone??"—"},
-                {path:"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z",label:card.email??"—"},
-                {path:"M9 11l3 3L22 4",label:card.cnpjCpf??"CPF/CNPJ —"},
-                {path:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",label:card.tipoEmpresa??"Tipo —"},
-                {path:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z",label:card.city??"—"},
-              ].map((item,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
-                  <div style={{width:26,height:26,borderRadius:7,background:"#f8fafc",border:"1.5px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d={item.path}/></svg></div>
-                  <span style={{fontSize:11,color:"#1e293b"}}>{item.label}</span>
-                </div>
-              ))}
+              {([
+                {field:"phone",  path:"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.58 4.44 2 2 0 0 1 3.55 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6.29 6.29l.61-.61a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z", label:card.phone??"—",placeholder:"Telefone"},
+                {field:"email",  path:"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z", label:card.email??"—",placeholder:"E-mail"},
+                {field:"cnpjCpf",path:"M9 11l3 3L22 4", label:card.cnpjCpf??"CPF/CNPJ —",placeholder:"CPF ou CNPJ"},
+                {field:"tipoEmpresa",path:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z", label:card.tipoEmpresa??"Tipo —",placeholder:"Tipo de empresa"},
+                {field:"city",   path:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z", label:card.city??"—",placeholder:"Cidade – Estado"},
+              ] as {field:string;path:string;label:string;placeholder:string}[]).map((item)=>{
+                const isEd=editingField===item.field;
+                return(
+                  <div key={item.field} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                    <div style={{width:26,height:26,borderRadius:7,background:"#f8fafc",border:"1.5px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d={item.path}/></svg>
+                    </div>
+                    {isEd?(
+                      <input autoFocus value={editDraft} onChange={e=>setEditDraft(e.target.value)}
+                        onBlur={commitFieldEdit} onKeyDown={e=>{if(e.key==="Enter")commitFieldEdit();if(e.key==="Escape")setEditingField(null);}}
+                        style={{flex:1,fontSize:11,color:"#1e293b",border:`1.5px solid ${accent}60`,borderRadius:6,padding:"3px 7px",background:"#fff"}}
+                        placeholder={item.placeholder}/>
+                    ):(
+                      <span onClick={()=>startFieldEdit(item.field,item.label==="—"?"":item.label)}
+                        style={{fontSize:11,color:item.label==="—"||item.label.endsWith("—")?"#cbd5e1":"#1e293b",cursor:"pointer",flex:1,borderRadius:5,padding:"2px 4px",transition:"background 0.15s"}}
+                        onMouseEnter={e=>(e.currentTarget.style.background=`${accent}08`)}
+                        onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
+                        {item.label}
+                        <svg style={{marginLeft:4,opacity:0.3,verticalAlign:"middle"}} width={8} height={8} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Triage */}
@@ -1101,7 +1135,7 @@ export function CRMKanban(){
     setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),6000);
   },[playChime]);
 
-  useEffect(()=>{const t=setTimeout(()=>{setCards(SEED);setLoading(false);},SK_MS);return()=>clearTimeout(t);},[]);
+  useEffect(()=>{fetch("/api/fc/cards",{credentials:"include"}).then(r=>r.ok?r.json():Promise.reject()).then((data:any[])=>{setCards(Array.isArray(data)?data.map(apiCardToCard):SEED);setLoading(false);}).catch(()=>{const t=setTimeout(()=>{setCards(SEED);setLoading(false);},SK_MS);return()=>clearTimeout(t);});},[]);
 
   useEffect(()=>{
     if(!filterOpen)return;
@@ -1123,7 +1157,8 @@ export function CRMKanban(){
           const ns:AIStatus=next>=100?"done":c.aiStatus;
           if(Math.round(next)%25===0&&Math.round(c.progress)%25!==0)
             pushEvent({icon:"⚡",color:"#2563eb",text:`Progresso: ${c.name}`,sub:`Triagem em ${Math.round(next)}%`});
-          if(ns==="done"&&c.aiStatus!=="done"){
+          const nsDone = next >= 100;
+          if(nsDone){
             pushEvent({icon:"✅",color:"#059669",text:"Triagem concluída",sub:c.name+(c.company?` · ${c.company}`:"")});
             pushToast({...c,progress:next,aiStatus:ns});
           }
@@ -1146,6 +1181,7 @@ export function CRMKanban(){
     const card=cards.find(c=>c.id===cardId);
     if(card) pushEvent({icon:"✏️",color:"#7c3aed",text:`Funil editado: ${card.name}`,sub:FUNNEL_FIELDS[card.columnId]?.find(f=>f.id===fieldId)?.label??fieldId});
     if(selected?.id===cardId) setSelected(prev=>prev?{...prev,funnel:{...prev.funnel,[fieldId]:val}}:null);
+    fetch(`/api/fc/cards/${cardId}/funnel`,{method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({[fieldId]:val})}).catch(()=>{});
   };
 
   const handleAIFill=(cardId:string)=>{
@@ -1153,6 +1189,21 @@ export function CRMKanban(){
     if(!card)return;
     pushEvent({icon:"🤖",color:RED,text:`IA preencheu funil: ${card.name}`,sub:`Funil ${COLUMNS.find(c=>c.id===card.columnId)?.label}`});
   };
+
+  const handleCardFieldEdit=useCallback((cardId:string,field:string,val:string)=>{
+    setCards(prev=>prev.map(c=>c.id===cardId?{...c,[field]:val}:c));
+    setSelected(prev=>prev?.id===cardId?{...prev,[field]:val}:prev);
+    fetch(`/api/fc/cards/${cardId}`,{method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({[field]:val})}).catch(()=>{});
+  },[]);
+
+  const handleScoreSave=useCallback((cardId:string,respostas:Record<string,string>)=>{
+    const body:Record<string,number|null>={};
+    ["necessidade","urgencia","decisor","engajamento","avanco"].forEach(k=>{body[k]=respostas[k]?parseInt(respostas[k]):null;});
+    fetch(`/api/fc/cards/${cardId}/score`,{method:"PUT",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+      .then(r=>r.ok?r.json():null)
+      .then(score=>{if(!score)return;const r=scoreRespostasFromApi(score);const tot=Object.values(r).reduce((s:number,v:string)=>s+parseInt(v||"0"),0);const sd={respostas:r,temperatura:"",pontoTotal:tot,engagementScore:0,intentScore:0};setCards(prev=>prev.map(c=>c.id===cardId?{...c,scoreData:sd}:c));setSelected(prev=>prev?.id===cardId?{...prev,scoreData:sd}:prev);})
+      .catch(()=>{});
+  },[]);
 
   const afc = filters.channels.length+filters.statuses.length+filters.segments.length;
   const isFiltered = query.trim()!=""||afc>0;
@@ -1318,6 +1369,8 @@ export function CRMKanban(){
           funnelData={selFunnelData}
           onFunnelEdit={(fieldId,val)=>handleFunnelEdit(selected.id,fieldId,val)}
           onAIFill={()=>handleAIFill(selected.id)}
+          onContactEdit={(field,val)=>handleCardFieldEdit(selected.id,field,val)}
+          onScoreSave={(respostas)=>handleScoreSave(selected.id,respostas)}
         />
       )}
     </div>

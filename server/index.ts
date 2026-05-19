@@ -1439,7 +1439,115 @@ app.post("/api/fagner/operators", requireAuth, async (req: Request, res: Respons
   }
 });
 
+// ─── Fagner Conversas CRM ─────────────────────────────────────────────────────
+import {
+  listCards, getCard, createCard, updateCard, deleteCard,
+  upsertFunnelBatch, upsertScore, listHistory,
+} from "./fagner/conversasCrmService.js";
+
+// Extrai username da sessão (para auditoria)
+async function sessionAuthor(req: Request): Promise<string> {
+  const userId = (req.session as any).userId;
+  if (!userId) return "Sistema";
+  try {
+    const user = await storage.getUserSafeById(userId);
+    return user?.username ?? user?.name ?? "Sistema";
+  } catch { return "Sistema"; }
+}
+
+// GET /api/fc/cards — lista todos os cards com funil e score
+app.get("/api/fc/cards", requireAuth, async (_req, res) => {
+  try {
+    const cards = await listCards();
+    return res.json(cards);
+  } catch (err: any) {
+    console.error("[FC] listCards error:", err.message);
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/fc/cards/:id — card individual
+app.get("/api/fc/cards/:id", requireAuth, async (req, res) => {
+  try {
+    const card = await getCard(p(req.params.id));
+    if (!card) return res.status(404).json({ message: "Card não encontrado" });
+    return res.json(card);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/fc/cards — cria card
+app.post("/api/fc/cards", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { name, ...rest } = req.body;
+    if (!name) return res.status(400).json({ message: "name é obrigatório" });
+    const author = await sessionAuthor(req);
+    const card = await createCard({ name, ...rest }, author);
+    return res.status(201).json(card);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/fc/cards/:id — atualiza campos do card
+app.patch("/api/fc/cards/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const author = await sessionAuthor(req);
+    const updated = await updateCard(p(req.params.id), req.body, author);
+    if (!updated) return res.status(404).json({ message: "Card não encontrado" });
+    return res.json(updated);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/fc/cards/:id — remove card
+app.delete("/api/fc/cards/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const ok = await deleteCard(p(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Card não encontrado" });
+    return res.json({ ok: true });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/fc/cards/:id/funnel — atualiza campos do funil (batch)
+app.patch("/api/fc/cards/:id/funnel", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const author = await sessionAuthor(req);
+    await upsertFunnelBatch(p(req.params.id), req.body, author);
+    const card = await getCard(p(req.params.id));
+    return res.json(card);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT /api/fc/cards/:id/score — salva respostas P1-P5
+app.put("/api/fc/cards/:id/score", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const author = await sessionAuthor(req);
+    const score = await upsertScore(p(req.params.id), req.body, author);
+    return res.json(score);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/fc/cards/:id/history — histórico de auditoria
+app.get("/api/fc/cards/:id/history", requireAuth, async (req, res) => {
+  try {
+    const history = await listHistory(p(req.params.id));
+    return res.json(history);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
 // ─── RD Conversas — Endpoints auxiliares ──────────────────────────────────────
+
 
 // GET /api/rd-conversas/status — verifica se o token está configurado
 app.get("/api/rd-conversas/status", requireAuth, async (_req, res) => {
