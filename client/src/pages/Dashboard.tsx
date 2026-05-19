@@ -1029,11 +1029,11 @@ export default function Dashboard() {
       <div className="shrink-0 flex items-center justify-center gap-1 px-6 bg-white border-b border-red-100 overflow-x-auto [&::-webkit-scrollbar]:hidden">
         {(
           [
-            { id: "overview" as ActiveTab, label: "Visão Geral",      icon: null },
-            { id: "logs" as ActiveTab,     label: "Terminal de Logs", icon: null },
-            { id: "live" as ActiveTab,     label: "Ao Vivo",          icon: Radio },
-            { id: "flows" as ActiveTab,    label: "Monitor de Fluxos", icon: Activity },
+            { id: "overview" as ActiveTab, label: "Visão Geral",       icon: null },
             { id: "crm"   as ActiveTab,    label: "CRM Conversas",     icon: KanbanSquare },
+            { id: "logs" as ActiveTab,     label: "Terminal de Logs",  icon: null },
+            { id: "live" as ActiveTab,     label: "Ao Vivo",           icon: Radio },
+            { id: "flows" as ActiveTab,    label: "Monitor de Fluxos", icon: Activity },
           ] as { id: ActiveTab; label: string; icon: React.ElementType | null }[]
         ).map((tab) => (
           <button
