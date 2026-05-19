@@ -8,10 +8,10 @@ const SK_MS     = 1600;
 
 /* ─── Columns ────────────────────────────────────────────────────── */
 const COLUMNS = [
-  { id:"pos-venda",   label:"Pós Venda",   accent:"#E5232A", iconPath:"M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" },
-  { id:"maquinas",    label:"Máquinas",    accent:"#2563eb", iconPath:"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
-  { id:"personalite", label:"Personalite", accent:"#7c3aed", iconPath:"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" },
-  { id:"financeiro",  label:"Financeiro",  accent:"#059669", iconPath:"M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
+  { id:"pos-venda",   label:"Pós Venda",   accent:"#8b5cf6", iconPath:"M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" },
+  { id:"maquinas",    label:"Máquinas",    accent:"#ea580c", iconPath:"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
+  { id:"personalite", label:"Personalite", accent:"#3b82f6", iconPath:"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" },
+  { id:"financeiro",  label:"Financeiro",  accent:"#22c55e", iconPath:"M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
   { id:"pecas",       label:"Peças",       accent:"#d97706", iconPath:"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" },
   { id:"outros",      label:"Outros",      accent:"#64748b", iconPath:"M5 12h14M12 5l7 7-7 7" },
 ];
@@ -669,7 +669,7 @@ const SCORE_AXES: ScoreAxis[] = [
       {id:"urg_2", label:"Informou prazo ou data limite?",               options:["Sim","Não"]},
       {id:"urg_3", label:"Necessidade imediata identificada?",           options:["Sim","Não"]},
     ]},
-  { id:"engajamento",label:"Engajamento com a I.A.",     color:"#059669",
+  { id:"engajamento",label:"Engajamento",             color:"#059669",
     questions:[
       {id:"eng_1", label:"Respondeu ativamente ao Fagner?",         options:["Sim","Parcial","Não"]},
       {id:"eng_2", label:"Retornou ao site ou chat mais de uma vez?",    options:["Sim","Não"]},
@@ -682,7 +682,7 @@ const TEMP_CFG: Record<string,{label:string;emoji:string;color:string;bg:string;
   customer: {label:"Cliente",     emoji:"⭐",color:"#059669",bg:"#f0fdf4",border:"#bbf7d0",desc:"Já interagiu com Fagner. Potencial de recompra."},
   returning:{label:"Retorno",     emoji:"🔄",color:"#2563eb",bg:"#eff6ff",border:"#bfdbfe",desc:"Visitante recorrente. Nutrir com conteúdo."},
   visitor:  {label:"Visitante",   emoji:"❄️",color:"#64748b",bg:"#f8fafc",border:"#e2e8f0",desc:"Primeira interação. Potencial ainda não definido."},
-  pending:  {label:"Aguardando",  emoji:"⏳",color:"#94a3b8",bg:"#f8fafc",border:"#e2e8f0",desc:"Score ainda não calculado pela I.A."},
+  pending:  {label:"Aguardando",  emoji:"⏳",color:"#94a3b8",bg:"#f8fafc",border:"#e2e8f0",desc:"Score ainda não calculado pelo Fagner."},
 };
 
 /* ─── Score Tab ──────────────────────────────────────────────────── */
@@ -724,7 +724,7 @@ function ScoreTab({card,accent,scoreRespostas,onEdit}:{card:Card;accent:string;s
       {!card.scoreData&&<div style={{padding:"7px 20px",background:"#fffbeb",borderBottom:"1px solid #fde68a",display:"flex",alignItems:"center",gap:7,flexShrink:0}}><svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span style={{fontSize:10,color:"#92400e"}}>O <strong style={{color:RED}}>Fagner</strong> ainda está analisando — respostas serão preenchidas automaticamente.</span></div>}
       <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:12}}>
         {SCORE_AXES.map(axis=>(
-          <div key={axis.id} style={{background:"#fff",border:`1.5px solid ${axis.color}18`,borderLeft:`3px solid ${axis.color}`,borderRadius:10,overflow:"hidden"}}>
+          <div key={axis.id} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderLeft:`3px solid ${axis.color}`,borderRadius:10,overflow:"hidden",flexShrink:0}}>
             <div style={{padding:"8px 14px",borderBottom:"1px solid #f1f5f9",background:`${axis.color}06`,display:"flex",alignItems:"center",gap:7}}>
               <div style={{width:8,height:8,borderRadius:"50%",background:axis.color}}/>
               <span style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{axis.label}</span>
@@ -1211,19 +1211,7 @@ export function CRMKanban(){
             Feed{events.length>0&&<span style={{background:feedOpen?"#059669":"#e2e8f0",color:feedOpen?"#fff":"#64748b",fontSize:9,fontWeight:700,borderRadius:20,padding:"0 5px",lineHeight:"15px",transition:"all 0.25s"}}>{events.length}</span>}
           </button>
 
-          <button onClick={handlePause} style={{display:"flex",alignItems:"center",gap:5,background:paused?"#fffbeb":"#f8fafc",border:paused?"1.5px solid #fde047":"1.5px solid #e2e8f0",borderRadius:9,padding:"7px 12px",cursor:"pointer",fontSize:12,color:paused?"#854d0e":"#475569",fontWeight:paused?700:500,transition:"all 0.2s"}}>
-            {paused?<><svg width={12} height={12} viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>Retomar</>:<><svg width={12} height={12} viewBox="0 0 24 24" fill="currentColor"><rect x={6} y={4} width={4} height={16}/><rect x={14} y={4} width={4} height={16}/></svg>Pausar IA</>}
-          </button>
 
-          {/* Sound toggle */}
-          <button onClick={()=>setSoundOn(s=>!s)} title={soundOn?"Silenciar notificações":"Ativar notificações"} style={{position:"relative",display:"flex",alignItems:"center",gap:5,background:soundOn?"#f0fdf4":"#fef2f2",border:soundOn?"1.5px solid #10b981":"1.5px solid #fca5a5",borderRadius:9,padding:"7px 12px",cursor:"pointer",fontSize:12,color:soundOn?"#059669":"#dc2626",fontWeight:soundOn?600:500,transition:"all 0.2s"}}>
-            {soundOn
-              ?<svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-              :<svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1={23} y1={9} x2={17} y2={15}/><line x1={17} y1={9} x2={23} y2={15}/></svg>
-            }
-            {soundOn?"Som On":"Mudo"}
-            {toasts.length>0&&soundOn&&<span style={{position:"absolute",top:-4,right:-4,width:14,height:14,borderRadius:"50%",background:"#10b981",border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:"#fff",animation:"pulse 1.2s ease-in-out infinite"}}>{toasts.length}</span>}
-          </button>
 
           <button style={{display:"flex",alignItems:"center",gap:5,background:RED_LIGHT,border:`1.5px solid ${RED_BORDER}`,borderRadius:9,padding:"7px 12px",cursor:"pointer",fontSize:12,color:RED,fontWeight:600}}>
             <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
