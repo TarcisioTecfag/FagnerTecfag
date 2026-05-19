@@ -1237,13 +1237,8 @@ export function CRMKanban(){
         </div>
       )}
 
-      {/* ── Stats ── */}
-      <div style={{padding:"11px 24px",borderBottom:"1.5px solid #e2e8f0",background:"#fff",display:"flex",gap:10}}>
-        <StatCard label="Conversas Ativas" value={loading?0:cards.length} color={RED} icon={<svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}/>
-        <StatCard label="Sendo Triadas"    value={loading?0:active}       color="#2563eb" icon={<svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}/>
-        <StatCard label="Concluídas"       value={loading?0:done}         color="#059669" icon={<svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}/>
-        <StatCard label="Exibindo"         value={loading?0:isFiltered?filteredCards.length:cards.length} color="#7c3aed" icon={<svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>}/>
-      </div>
+
+
 
       {/* ── Board ── */}
       <div style={{flex:1,display:"flex",gap:10,padding:"16px 24px",overflowX:"auto",overflowY:"auto",alignItems:"flex-start",paddingRight:feedOpen?310:24,transition:"padding-right 0.3s cubic-bezier(0.4,0,0.2,1)"}}>
