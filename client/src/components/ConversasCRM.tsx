@@ -8,6 +8,7 @@ const SK_MS     = 1600;
 
 /* ─── Columns ────────────────────────────────────────────────────── */
 const COLUMNS = [
+  { id:"triagem",    label:"Triagem",     accent:"#f59e0b", iconPath:"M22 3H2l8 9.46V19l4 2v-8.54L22 3z" },
   { id:"pos-venda",   label:"Pós Venda",   accent:"#8b5cf6", iconPath:"M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" },
   { id:"maquinas",    label:"Máquinas",    accent:"#ea580c", iconPath:"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
   { id:"personalite", label:"Personalite", accent:"#3b82f6", iconPath:"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" },
@@ -22,7 +23,22 @@ interface FField { id:string; label:string; type:FType; options?:string[]; }
 
 const FUNNEL_FIELDS: Record<string, FField[]> = {
 
-  /* ── Pós Venda ─────────────────────────────────────────────────── */
+  /* ── Triagem (funil de entrada) ──────────────────────────────────── */
+  "triagem": [
+    {id:"assunto",       label:"O que o cliente busca?",          type:"text"},
+    {id:"funil_provavel",label:"Funil provável",                  type:"select",
+      options:[
+        "Máquinas",
+        "Personalitté",
+        "Peças",
+        "Financeiro",
+        "Pós Venda",
+        "Outros",
+        "Ainda não identificado",
+      ]},
+    {id:"obs_triagem",   label:"Observação para direcionamento",  type:"text"},
+  ],
+
   "pos-venda": [
     {id:"resumo", label:"Resumo da tratativa de pós-venda", type:"text"},
   ],
@@ -134,6 +150,8 @@ const SEED_NOTES:Record<string,FagnerNote[]>={
 "c10":[{id:"n1",text:"Reposição urg. faca rasadora FR-500. Estoque ok. Pedido #7291 gerado, boleto enviado, entrega 14/05 Mauá-SP.",ts:"09:05",msgRange:"msgs 1–4"}],
 "c11":[{id:"n1",text:"Confirmação do orç. #3301: 4x SB-22, 2x cabo 6mm, 1x manete Johnson. Frete expresso até 16/05 Curitiba.",ts:"09:06",msgRange:"msgs 1–6"}],
 "c12":[{id:"n1",text:"Interesse genérico pela plataforma. Material institucional enviado. Encaminhada para equipe comercial — retorno 1 dia útil.",ts:"09:22",msgRange:"msgs 1–4"}],
+"c13":[{id:"n1",text:"Cliente fala em encapsulamento, mas também mencionou 'embalagem personalizada'. Pode ser Máquinas ou Personalitté. Aguardando mais detalhes.",ts:"09:31",msgRange:"msgs 1–4"}],
+"c14":[{id:"n1",text:"Solicitou 'suporte técnico' sem detalhar. Pode ser Peças (componente quebrado) ou Pós Venda (problema com pedido). Triagem em andamento.",ts:"09:38",msgRange:"msgs 1–3"}],
 };
 
 /* ─── Seed data ──────────────────────────────────────────────────── */
@@ -264,6 +282,36 @@ const SEED: Card[] = [
       {time:"09:22",type:"done",    label:"Triagem concluída",               detail:"Retorno comercial previsto em 1 dia útil"},
     ],
     conversation:[{from:"client",text:"Queria entender como funciona o sistema de vocês",time:"09:21"},{from:"ai",text:"Olá Patrícia! Nossa plataforma integra CRM + automação com IA. Demonstração ou material explicativo?",time:"09:21"},{from:"client",text:"Material por e-mail seria ótimo",time:"09:22"},{from:"ai",text:"✅ Kit institucional enviado! Comercial entra em contato em até 1 dia útil. 😊",time:"09:22"}] },
+
+  { id:"c13", name:"Marcos Viana", company:"Cápsulas Prime", channel:"WhatsApp", aiStatus:"analyzing", progress:28, timeAgo:"há 3 min", note:"Possível Máquinas ou Personalitté.", columnId:"triagem", phone:"+55 11 97744-2200", email:"marcos@capsulasprime.com", city:"Campinas – SP", segment:"Indústria",
+    funnel:{assunto:"Encapsulamento de suplementos com embalagem personalizada",funil_provavel:"Ainda não identificado",obs_triagem:"Cliente cita tanto máquina de encapsular quanto design da embalagem. Precisa de mais info para classificar."},
+    history:[
+      {time:"09:28",type:"entry",   label:"Lead capturado via WhatsApp",     detail:"Mensagem recebida, conteúdo ambíguo detectado"},
+      {time:"09:28",type:"ai",      label:"Fagner iniciou triagem",      detail:"Não foi possível classificar no primeiro contato"},
+      {time:"09:29",type:"stage",   label:"Entrou em Triagem",               detail:"Aguardando mais informações para direcionar ao funil correto"},
+      {time:"09:31",type:"pending", label:"Classificação pendente",          detail:"Possível Máquinas ou Personalitté — triagem em andamento"},
+    ],
+    conversation:[
+      {from:"client",text:"Olá, quero produzir cápsulas de whey com embalagem diferenciada",time:"09:28"},
+      {from:"ai",text:"Olá Marcos! 👋 Para cápsulas, posso ajudar tanto com *máquinas encapsuladoras* quanto com o *design da embalagem*. Pode me dizer qual é sua prioridade principal?",time:"09:29"},
+      {from:"client",text:"Os dois, na verdade. Quero uma linha completa",time:"09:30"},
+      {from:"ai",text:"Entendido! Vou coletar mais detalhes para direcionar você ao especialista certo. Qual é o volume mensal de produção que você prevê?",time:"09:31"},
+    ] },
+
+  { id:"c14", name:"Renata Souza", company:"TechPack Ind.", channel:"Site", aiStatus:"analyzing", progress:18, timeAgo:"há 8 min", note:"Possível Peças ou Pós Venda.", columnId:"triagem", phone:"+55 19 98822-0033", email:"renata@techpack.ind", city:"Jundiaí – SP", segment:"Indústria",
+    funnel:{assunto:"Suporte técnico urgente",funil_provavel:"Ainda não identificado",obs_triagem:"Solicitou 'suporte técnico urgente', sem especificar se é peça quebrada ou problema com pedido. Aguardando clareza."},
+    history:[
+      {time:"09:30",type:"entry",   label:"Lead capturado via Site",         detail:"Formulário de suporte recebido — urgência declarada"},
+      {time:"09:30",type:"ai",      label:"Fagner iniciou triagem",      detail:"Contexto insuficiente para classificar automaticamente"},
+      {time:"09:31",type:"stage",   label:"Entrou em Triagem",               detail:"Pode ser Peças ou Pós Venda — coletando informações"},
+      {time:"09:38",type:"pending", label:"Classificação pendente",          detail:"Aguardando retorno do cliente sobre natureza do problema"},
+    ],
+    conversation:[
+      {from:"client",text:"Preciso de suporte técnico urgente com minha máquina",time:"09:30"},
+      {from:"ai",text:"Olá Renata! ⚡ Entendo a urgência. Para te direcionar ao setor certo, pode me informar: o problema é com uma *peça específica* (desgaste/quebra) ou está relacionado a um *pedido anterior* (entrega/instalação)?",time:"09:31"},
+      {from:"client",text:"Não sei ao certo, parou de funcionar ontem",time:"09:37"},
+      {from:"ai",text:"Compreendo! Vou acionar nossa equipe técnica enquanto verifico o histórico. Qual é o modelo da sua máquina?",time:"09:38"},
+    ] },
 ];
 
 /* ─── Style maps ─────────────────────────────────────────────────── */
