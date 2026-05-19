@@ -79,13 +79,15 @@ interface HistoryEvent {
   time:string; label:string; detail:string;
   type:"entry"|"ai"|"stage"|"action"|"done"|"pending";
 }
+interface ScoreAxis { id:string; label:string; color:string; questions:{id:string;label:string;options:string[]}[]; }
 interface Card {
   id:string; name:string; company?:string; channel:Channel;
   aiStatus:AIStatus; progress:number; timeAgo:string; note:string; columnId:string;
-  phone?:string; email?:string; city?:string; segment?:string;
+  phone?:string; email?:string; cnpjCpf?:string; tipoEmpresa?:string; city?:string; segment?:string;
   conversation:WaMsg[];
   funnel: Record<string,string>;
   history: HistoryEvent[];
+  scoreData?:{ respostas:Record<string,string>; temperatura:string; pontoTotal:number; engagementScore:number; intentScore:number; avaliadoEm?:string; };
 }
 interface FeedEvent { id:string; ts:string; icon:string; color:string; text:string; sub:string; }
 interface Toast { id:string; name:string; company?:string; funnel:string; accent:string; ts:string; }
@@ -641,8 +643,120 @@ function HistoryTab({card,accent}:{card:Card;accent:string}){
   );
 }
 
+/* ─── Score axes / questions ─────────────────────────────────────── */
+const SCORE_AXES: ScoreAxis[] = [
+  { id:"intencao",   label:"Intenção de Compra",        color:"#E5232A",
+    questions:[
+      {id:"int_1", label:"Demonstrou interesse claro em comprar?",       options:["Sim","Parcial","Não"]},
+      {id:"int_2", label:"Solicitou orçamento, cotação ou catálogo?",    options:["Sim","Não"]},
+      {id:"int_3", label:"Perguntou sobre pagamento ou prazo de entrega?",options:["Sim","Não"]},
+    ]},
+  { id:"capacidade", label:"Capacidade de Investimento", color:"#2563eb",
+    questions:[
+      {id:"cap_1", label:"CNPJ verificado e empresa ativa?",             options:["Sim","Não"]},
+      {id:"cap_2", label:"Mencionou budget ou ticket estimado?",          options:["Sim","Não"]},
+      {id:"cap_3", label:"Perfil indica capacidade financeira?",          options:["Alta","Média","Baixa"]},
+    ]},
+  { id:"perfil",     label:"Perfil da Empresa",          color:"#7c3aed",
+    questions:[
+      {id:"perf_1",label:"Segmento alinhado ao produto Fagner?",         options:["Sim","Parcial","Não"]},
+      {id:"perf_2",label:"Volume de compra potencial?",                  options:["Grande","Médio","Pequeno"]},
+      {id:"perf_3",label:"Histórico de compra anterior?",                options:["Sim","Não"]},
+    ]},
+  { id:"urgencia",   label:"Urgência de Compra",         color:"#d97706",
+    questions:[
+      {id:"urg_1", label:"Demonstrou urgência na compra?",               options:["Alta","Média","Baixa","Nenhuma"]},
+      {id:"urg_2", label:"Informou prazo ou data limite?",               options:["Sim","Não"]},
+      {id:"urg_3", label:"Necessidade imediata identificada?",           options:["Sim","Não"]},
+    ]},
+  { id:"engajamento",label:"Engajamento com a I.A.",     color:"#059669",
+    questions:[
+      {id:"eng_1", label:"Respondeu ativamente ao Fagner I.A.?",         options:["Sim","Parcial","Não"]},
+      {id:"eng_2", label:"Retornou ao site ou chat mais de uma vez?",    options:["Sim","Não"]},
+      {id:"eng_3", label:"Forneceu dados de contato completos?",         options:["Completo","Parcial","Não"]},
+    ]},
+];
+const TEMP_CFG: Record<string,{label:string;emoji:string;color:string;bg:string;border:string;desc:string}> = {
+  lead_hot: {label:"Lead Quente", emoji:"🔥",color:"#dc2626",bg:"#fef2f2",border:"#fecaca",desc:"Alta probabilidade de conversão. Prioridade máxima."},
+  lead_warm:{label:"Lead Morno",  emoji:"🌡️",color:"#d97706",bg:"#fffbeb",border:"#fde68a",desc:"Interesse moderado. Requer acompanhamento ativo."},
+  customer: {label:"Cliente",     emoji:"⭐",color:"#059669",bg:"#f0fdf4",border:"#bbf7d0",desc:"Já interagiu com Fagner. Potencial de recompra."},
+  returning:{label:"Retorno",     emoji:"🔄",color:"#2563eb",bg:"#eff6ff",border:"#bfdbfe",desc:"Visitante recorrente. Nutrir com conteúdo."},
+  visitor:  {label:"Visitante",   emoji:"❄️",color:"#64748b",bg:"#f8fafc",border:"#e2e8f0",desc:"Primeira interação. Potencial ainda não definido."},
+  pending:  {label:"Aguardando",  emoji:"⏳",color:"#94a3b8",bg:"#f8fafc",border:"#e2e8f0",desc:"Score ainda não calculado pela I.A."},
+};
+
+/* ─── Score Tab ──────────────────────────────────────────────────── */
+function ScoreTab({card,accent,scoreRespostas,onEdit}:{card:Card;accent:string;scoreRespostas:Record<string,string>;onEdit:(qId:string,val:string)=>void}){
+  const temp = card.scoreData?.temperatura??"pending";
+  const tcfg = TEMP_CFG[temp]??TEMP_CFG.pending;
+  const pts  = card.scoreData?.pontoTotal??0;
+  const eng  = card.scoreData?.engagementScore??0;
+  const int_ = card.scoreData?.intentScore??0;
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#f8fafc"}}>
+      {/* header */}
+      <div style={{padding:"14px 20px",borderBottom:"1.5px solid #f1f5f9",background:"#fff",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:30,height:30,borderRadius:9,background:`${accent}12`,border:`1.5px solid ${accent}30`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </div>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>Score de Qualificação — Fagner I.A.</div>
+              <div style={{fontSize:10,color:"#94a3b8"}}>{card.aiStatus==="done"?`Avaliado ${card.scoreData?.avaliadoEm??"agora"}`:"Triagem em andamento..."}</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:20,background:tcfg.bg,border:`1.5px solid ${tcfg.border}`}}>
+            <span style={{fontSize:14}}>{tcfg.emoji}</span>
+            <span style={{fontSize:11,fontWeight:800,color:tcfg.color}}>{tcfg.label}</span>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          {[{label:"Score Total",value:pts,max:75,color:accent},{label:"Engajamento",value:eng,max:100,color:"#2563eb"},{label:"Intenção",value:int_,max:100,color:"#059669"}].map(m=>(
+            <div key={m.label} style={{flex:1,background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:9,padding:"8px 10px"}}>
+              <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>{m.label}</div>
+              <div style={{fontSize:17,fontWeight:800,color:m.color,lineHeight:1}}>{m.value}<span style={{fontSize:10,fontWeight:400,color:"#94a3b8"}}>/{m.max}</span></div>
+              <div style={{height:4,borderRadius:99,background:"#e2e8f0",overflow:"hidden",marginTop:5}}><div style={{height:"100%",width:`${Math.min(100,(m.value/m.max)*100)}%`,background:m.color,borderRadius:99,transition:"width 1s ease"}}/></div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {!card.scoreData&&<div style={{padding:"7px 20px",background:"#fffbeb",borderBottom:"1px solid #fde68a",display:"flex",alignItems:"center",gap:7,flexShrink:0}}><svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span style={{fontSize:10,color:"#92400e"}}>O <strong style={{color:RED}}>Fagner I.A.</strong> ainda está analisando — respostas serão preenchidas automaticamente.</span></div>}
+      <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:12}}>
+        {SCORE_AXES.map(axis=>(
+          <div key={axis.id} style={{background:"#fff",border:`1.5px solid ${axis.color}18`,borderLeft:`3px solid ${axis.color}`,borderRadius:10,overflow:"hidden"}}>
+            <div style={{padding:"8px 14px",borderBottom:"1px solid #f1f5f9",background:`${axis.color}06`,display:"flex",alignItems:"center",gap:7}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:axis.color}}/>
+              <span style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{axis.label}</span>
+            </div>
+            {axis.questions.map((q,qi)=>{
+              const ans=(scoreRespostas[q.id]??"") || (card.scoreData?.respostas?.[q.id]??"");
+              return(
+                <div key={q.id} style={{padding:"9px 14px",borderBottom:qi<axis.questions.length-1?"1px solid #f8fafc":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                  <span style={{fontSize:11,color:"#475569",flex:1,lineHeight:1.4}}>{q.label}</span>
+                  <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                    {q.options.map(opt=>{
+                      const sel=ans===opt;
+                      return(<button key={opt} onClick={()=>onEdit(q.id,sel?"":opt)} style={{padding:"3px 9px",borderRadius:20,fontSize:10,fontWeight:sel?700:500,cursor:"pointer",border:`1.5px solid ${sel?axis.color+"60":"#e2e8f0"}`,background:sel?`${axis.color}12`:"transparent",color:sel?axis.color:"#64748b",transition:"all 0.18s"}}>{opt}</button>);
+                    })}
+                    {!ans&&<span style={{fontSize:10,color:"#cbd5e1",fontStyle:"italic"}}>Pendente</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div style={{padding:"10px 20px",borderTop:"1.5px solid #f1f5f9",background:"#fff",flexShrink:0,display:"flex",alignItems:"center",gap:8}}>
+        <div style={{width:6,height:6,borderRadius:"50%",background:tcfg.color,flexShrink:0}}/>
+        <span style={{fontSize:10,color:"#64748b"}}>{tcfg.desc}</span>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Client Modal (with tabs) ───────────────────────────────────── */
-type ModalTab = "conversa"|"funil"|"historico";
+type ModalTab = "conversa"|"funil"|"historico"|"score";
 
 function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
   card:Card; accent:string; onClose:()=>void;
@@ -651,11 +765,12 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
   onAIFill:()=>void;
 }){
   const [tab, setTab] = useState<ModalTab>("conversa");
+  const [scoreRespostas, setScoreRespostas] = useState<Record<string,string>>({});
   const seg=SEG_COL[card.segment??""]??{bg:"#f1f5f9",text:"#475569"};
   const fields=FUNNEL_FIELDS[card.columnId]??[];
   const filled=fields.filter(f=>{const v=funnelData[f.id]??"";return v&&v!=="—";}).length;
 
-  useEffect(()=>{ setTab("conversa"); },[card.id]);
+  useEffect(()=>{ setTab("conversa"); setScoreRespostas({}); },[card.id]);
 
   const onCloseRef = useRef(onClose);
   useEffect(()=>{ onCloseRef.current=onClose; });
@@ -684,10 +799,26 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
               <span style={{fontSize:10,fontWeight:700,color:accent}}>{COLUMNS.find(c=>c.id===card.columnId)?.label}</span>
             </div>
           </div>
-          <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"background 0.15s"}}
-            onMouseEnter={e=>(e.currentTarget.style.background="#f1f5f9")} onMouseLeave={e=>(e.currentTarget.style.background="#f8fafc")}>
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1={18} y1={6} x2={6} y2={18}/><line x1={6} y1={6} x2={18} y2={18}/></svg>
-          </button>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <a href={`https://app.rdstation.com.br/crm`} target="_blank" rel="noreferrer"
+              style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:9,border:"1.5px solid #e2e8f0",background:"#f8fafc",fontSize:11,fontWeight:600,color:"#475569",textDecoration:"none",cursor:"pointer",transition:"all 0.18s"}}
+              onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#f1f5f9";}}
+              onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8fafc";}}>
+              <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1={10} y1={14} x2={21} y2={3}/></svg>
+              Abrir no CRM
+            </a>
+            <a href={`https://app.rdstation.com.br/marketing`} target="_blank" rel="noreferrer"
+              style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:9,border:`1.5px solid ${RED_BORDER}`,background:RED_LIGHT,fontSize:11,fontWeight:700,color:RED,textDecoration:"none",cursor:"pointer",transition:"all 0.18s"}}
+              onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="rgba(229,35,42,0.14)";}}
+              onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=RED_LIGHT;}}>
+              <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={10}/><line x1={12} y1={8} x2={12} y2={16}/><line x1={8} y1={12} x2={16} y2={12}/></svg>
+              Abrir no RD
+            </a>
+            <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"background 0.15s"}}
+              onMouseEnter={e=>(e.currentTarget.style.background="#f1f5f9")} onMouseLeave={e=>(e.currentTarget.style.background="#f8fafc")}>
+              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1={18} y1={6} x2={6} y2={18}/><line x1={6} y1={6} x2={18} y2={18}/></svg>
+            </button>
+          </div>
         </div>
 
         {/* ── Body ── */}
@@ -698,7 +829,13 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
             {/* Contact */}
             <div>
               <p style={{margin:"0 0 9px",fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>Contato</p>
-              {[{path:"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.58 4.44 2 2 0 0 1 3.55 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6.29 6.29l.61-.61a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z",label:card.phone??"—"},{path:"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z",label:card.email??"—"},{path:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z",label:card.city??"—"}].map((item,i)=>(
+              {[
+                {path:"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.58 4.44 2 2 0 0 1 3.55 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6.29 6.29l.61-.61a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z",label:card.phone??"—"},
+                {path:"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z",label:card.email??"—"},
+                {path:"M9 11l3 3L22 4",label:card.cnpjCpf??"CPF/CNPJ —"},
+                {path:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",label:card.tipoEmpresa??"Tipo —"},
+                {path:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z",label:card.city??"—"},
+              ].map((item,i)=>(
                 <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
                   <div style={{width:26,height:26,borderRadius:7,background:"#f8fafc",border:"1.5px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d={item.path}/></svg></div>
                   <span style={{fontSize:11,color:"#1e293b"}}>{item.label}</span>
@@ -733,6 +870,7 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
                 {id:"conversa" as ModalTab, label:"Conversa", icon:<svg width={12} height={12} viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.062.522 4.004 1.438 5.696L.057 23.999 6.5 22.629A11.946 11.946 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 0 1-5.007-1.37l-.357-.213-3.706.972.988-3.608-.233-.369A9.819 9.819 0 0 1 2.182 12C2.182 6.58 6.58 2.182 12 2.182S21.818 6.58 21.818 12 17.42 21.818 12 21.818z"/></svg>},
                 {id:"funil" as ModalTab, label:"Funil", badge:`${filled}/${fields.length}`, badgeColor:accent, icon:<svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>},
                 {id:"historico" as ModalTab, label:"Histórico", badge:String(card.history.length), badgeColor:"#7c3aed", icon:<svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={10}/><polyline points="12 6 12 12 16 14"/></svg>},
+                {id:"score" as ModalTab, label:"Score", badgeColor:"#d97706", icon:<svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>},
               ] as {id:ModalTab;label:string;icon:React.ReactNode;badge?:string;badgeColor?:string}[]).map(t=>{
                 const active=tab===t.id;
                 return(
@@ -756,8 +894,12 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill}:{
                 <FunnelTab card={card} accent={accent} funnelData={funnelData} onEdit={onFunnelEdit} onAIFill={onAIFill}/>
               </div>
               {/* Histórico */}
-              <div style={{position:"absolute",inset:0,transition:"opacity 0.22s ease,transform 0.22s ease",opacity:tab==="historico"?1:0,transform:tab==="historico"?"translateX(0)":"translateX(12px)",pointerEvents:tab==="historico"?"auto":"none"}}>
+              <div style={{position:"absolute",inset:0,transition:"opacity 0.22s ease,transform 0.22s ease",opacity:tab==="historico"?1:0,transform:tab==="historico"?"translateX(0)":tab==="score"?"translateX(-12px)":"translateX(12px)",pointerEvents:tab==="historico"?"auto":"none"}}>
                 <HistoryTab card={card} accent={accent}/>
+              </div>
+              {/* Score */}
+              <div style={{position:"absolute",inset:0,transition:"opacity 0.22s ease,transform 0.22s ease",opacity:tab==="score"?1:0,transform:tab==="score"?"translateX(0)":"translateX(12px)",pointerEvents:tab==="score"?"auto":"none"}}>
+                <ScoreTab card={card} accent={accent} scoreRespostas={scoreRespostas} onEdit={(qId,val)=>setScoreRespostas(prev=>({...prev,[qId]:val}))}/>
               </div>
             </div>
           </div>
