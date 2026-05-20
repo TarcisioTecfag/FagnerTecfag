@@ -1768,7 +1768,7 @@ export function CRMKanban(){
           const colVis=loading?[]:filteredCards.filter(c=>c.columnId===col.id);
           const skCount=loading?[...Array(i===1?3:i===0?2:1)]:[];
           return(
-            <div key={col.id} style={{flex:"0 0 220px",minWidth:220,animation:`fadein 0.35s ease ${i*0.06}s both`}}>
+            <div key={col.id} style={{flex:"0 0 290px",minWidth:290,animation:`fadein 0.35s ease ${i*0.06}s both`}}>
               <div style={{background:"#fff",border:`1.5px solid ${col.accent}25`,borderTop:`3px solid ${paused?"#cbd5e1":col.accent}`,borderRadius:10,padding:"10px 12px",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between",transition:"border-top-color 0.35s"}}>
                 <div style={{display:"flex",alignItems:"center",gap:7}}>
                   <div style={{width:26,height:26,borderRadius:7,background:`${col.accent}12`,border:`1.5px solid ${col.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",opacity:paused?0.5:1,transition:"opacity 0.3s"}}>
