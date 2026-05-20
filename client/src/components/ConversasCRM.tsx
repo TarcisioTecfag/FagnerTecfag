@@ -1119,13 +1119,23 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:7}}>
-            <a href={`https://app.rdstation.com.br/crm`} target="_blank" rel="noreferrer"
-              style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:9,border:"1.5px solid #e2e8f0",background:"#f8fafc",fontSize:11,fontWeight:600,color:"#475569",textDecoration:"none",cursor:"pointer",transition:"all 0.18s"}}
-              onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#f1f5f9";}}
-              onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8fafc";}}>
-              <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1={10} y1={14} x2={21} y2={3}/></svg>
-              Abrir no CRM
-            </a>
+            {(card.columnId === "triagem" || card.aiStatus !== "done") ? (
+              <div 
+                title="Bloqueado: O card no CRM será criado após a conclusão da triagem!"
+                style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:9,border:"1.5px solid #e2e8f0",background:"#f1f5f9",fontSize:11,fontWeight:600,color:"#94a3b8",cursor:"not-allowed",transition:"all 0.18s"}}
+              >
+                <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><rect x={3} y={11} width={18} height={11} rx={2} ry={2}/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                CRM (Em Triagem)
+              </div>
+            ) : (
+              <a href={`https://app.rdstation.com.br/crm`} target="_blank" rel="noreferrer"
+                style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:9,border:"1.5px solid #e2e8f0",background:"#f8fafc",fontSize:11,fontWeight:600,color:"#475569",textDecoration:"none",cursor:"pointer",transition:"all 0.18s"}}
+                onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#f1f5f9";}}
+                onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8fafc";}}>
+                <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1={10} y1={14} x2={21} y2={3}/></svg>
+                Abrir no CRM
+              </a>
+            )}
             <a href={`https://app.rdstation.com.br/marketing`} target="_blank" rel="noreferrer"
               style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:9,border:`1.5px solid ${RED_BORDER}`,background:RED_LIGHT,fontSize:11,fontWeight:700,color:RED,textDecoration:"none",cursor:"pointer",transition:"all 0.18s"}}
               onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="rgba(229,35,42,0.14)";}}
