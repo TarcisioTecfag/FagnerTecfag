@@ -528,13 +528,13 @@ function KCard({card,accent,onClick,paused,visible}:{card:Card;accent:string;onC
       style={{
         background:"#fff",
         border: slaViolated
-          ? "1.5px solid #ef4444"
+          ? `1.5px solid ${accent}`
           : active&&!paused
           ? `1.5px solid ${accent}35`
           : "1.5px solid #e2e8f0",
         borderRadius:12,padding:"12px 13px",marginBottom:visible?8:0,
         boxShadow: slaViolated
-          ? "0 0 12px rgba(239, 68, 68, 0.2)"
+          ? `0 0 12px ${accent}30`
           : active&&!paused
           ? `0 2px 12px ${accent}12`
           : "0 1px 4px rgba(0,0,0,0.05)",
@@ -544,29 +544,29 @@ function KCard({card,accent,onClick,paused,visible}:{card:Card;accent:string;onC
         transform:visible?"translateY(0) scale(1)":"translateY(-6px) scale(0.97)",
         maxHeight:visible?600:0,
         pointerEvents:visible?"auto":"none",
-        animation: slaViolated ? "slaPulse 2s infinite ease-in-out" : undefined,
+        animation: slaViolated ? `slaPulse-${card.id} 2s infinite ease-in-out` : undefined,
       }}
     >
       <style>{`
-        @keyframes slaPulse {
-          0% { border-color: rgba(239, 68, 68, 0.45); box-shadow: 0 0 4px rgba(239, 68, 68, 0.1); }
-          50% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 14px rgba(239, 68, 68, 0.45); }
-          100% { border-color: rgba(239, 68, 68, 0.45); box-shadow: 0 0 4px rgba(239, 68, 68, 0.1); }
+        @keyframes slaPulse-${card.id} {
+          0% { border-color: ${accent}70; box-shadow: 0 0 4px ${accent}20; }
+          50% { border-color: ${accent}; box-shadow: 0 0 14px ${accent}50; }
+          100% { border-color: ${accent}70; box-shadow: 0 0 4px ${accent}20; }
         }
       `}</style>
       
-      {slaViolated && <div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:"#ef4444",borderRadius:"12px 12px 0 0"}}/>}
+      {slaViolated && <div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:accent,borderRadius:"12px 12px 0 0"}}/>}
       {!slaViolated && active&&!paused&&<div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:accent,borderRadius:"12px 12px 0 0",opacity:0.7}}/>}
       {!slaViolated && paused&&active&&<div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:"#e2e8f0",borderRadius:"12px 12px 0 0"}}/>}
       
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:6}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:slaViolated ? "#fee2e2" : `${accent}15`,border:slaViolated ? "1px solid #fca5a5" : `1px solid ${accent}30`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:slaViolated ? "#ef4444" : (paused?"#94a3b8":accent),flexShrink:0,transition:"color 0.3s"}}>{initials(card.name)}</div>
+          <div style={{width:30,height:30,borderRadius:8,background:`${accent}15`,border:slaViolated ? `1px solid ${accent}60` : `1px solid ${accent}30`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:paused?"#94a3b8":accent,flexShrink:0,transition:"color 0.3s"}}>{initials(card.name)}</div>
           <div>
             <div style={{display:"flex",alignItems:"center",gap:5}}>
               <div style={{fontSize:12,fontWeight:700,color:"#0f172a",lineHeight:1.2}}>{card.name}</div>
               {slaViolated && (
-                <span title="Lead inativo por mais de 4 horas!" style={{fontSize:9,fontWeight:700,background:"#fee2e2",color:"#ef4444",border:"1px solid #fca5a5",borderRadius:4,padding:"1px 4.5px",display:"inline-flex",alignItems:"center",gap:2,animation:"pulse 1.5s infinite"}}>
+                <span title="Lead inativo por mais de 4 horas!" style={{fontSize:9,fontWeight:700,background:`${accent}12`,color:accent,border:`1.5px solid ${accent}40`,borderRadius:4,padding:"1px 4.5px",display:"inline-flex",alignItems:"center",gap:2,animation:"pulse 1.5s infinite"}}>
                   ⚠️ SLA
                 </span>
               )}
@@ -574,18 +574,18 @@ function KCard({card,accent,onClick,paused,visible}:{card:Card;accent:string;onC
             {card.company&&<div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>{card.company}</div>}
           </div>
         </div>
-        {slaViolated ? <div style={{width:7,height:7,borderRadius:"50%",background:"#ef4444",marginTop:3,flexShrink:0,animation:"pulse 1.6s ease-in-out infinite",boxShadow:"0 0 6px #ef4444"}}/>
+        {slaViolated ? <div style={{width:7,height:7,borderRadius:"50%",background:accent,marginTop:3,flexShrink:0,animation:"pulse 1.6s ease-in-out infinite",boxShadow:`0 0 6px ${accent}`}}/>
          : active&&!paused?<div style={{width:7,height:7,borderRadius:"50%",background:accent,marginTop:3,flexShrink:0,animation:"pulse 1.6s ease-in-out infinite",boxShadow:`0 0 6px ${accent}`}}/>
          : paused&&active?<span style={{fontSize:9,color:"#94a3b8",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:20,padding:"1px 6px",marginTop:2}}>⏸ pausado</span>:null}
       </div>
 
       <p style={{margin:"0 0 8px",fontSize:10.5,color:"#64748b",lineHeight:1.45}}>{card.note}</p>
       <div style={{marginBottom:8}}><ChannelTag channel={card.channel}/></div>
-      <div style={{marginBottom:8}}><ProgressBar value={card.progress} color={slaViolated ? "#ef4444" : accent} paused={paused}/></div>
+      <div style={{marginBottom:8}}><ProgressBar value={card.progress} color={accent} paused={paused}/></div>
 
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <StatusBadge status={card.aiStatus}/>
-        <div style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:slaViolated ? "#ef4444" : "#94a3b8",fontWeight:slaViolated ? 600 : 400}}>
+        <div style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:slaViolated ? accent : "#94a3b8",fontWeight:slaViolated ? 700 : 400}}>
           <svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={10}/><polyline points="12 6 12 12 16 14"/></svg>
           {card.timeAgo}
         </div>
@@ -1700,18 +1700,16 @@ export function CRMKanban(){
 
       {/* ── Header ── */}
       <div style={{padding:"12px 24px",borderBottom:"1.5px solid #e2e8f0",background:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,zIndex:10}}>
-        <div>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
-            <span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:700,color:paused?"#64748b":RED,background:paused?"#f1f5f9":RED_LIGHT,border:`1px solid ${paused?"#e2e8f0":RED_BORDER}`,borderRadius:20,padding:"2px 8px",textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.3s"}}>
-              <div style={{width:5,height:5,borderRadius:"50%",background:paused?"#94a3b8":RED,animation:paused?"none":"pulse 1.5s ease-in-out infinite"}}/>
-              CRM · {paused?"IA Pausada":"Triagem Automática"}
-            </span>
-          </div>
-          <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <img 
+            src="/fagnerfil.jfif" 
+            alt="Fagner" 
+            style={{width:42,height:42,borderRadius:10,border:`1.5px solid ${paused ? "#cbd5e1" : RED}`,boxShadow:paused ? "0 2px 8px rgba(0,0,0,0.05)" : `0 2px 8px ${RED}20`,transition:"border-color 0.3s"}}
+          />
+          <div>
             <h1 style={{margin:0,fontSize:20,fontWeight:800,letterSpacing:"-0.5px",color:"#0f172a"}}>Fagner Conversas</h1>
-            <span style={{fontSize:15,fontWeight:700,color:paused?"#94a3b8":RED,transition:"color 0.3s"}}>Fagner</span>
+            <p style={{margin:"1px 0 0",fontSize:11,color:"#94a3b8"}}>Operado em tempo real pela inteligência, sem intervenção humana.</p>
           </div>
-          <p style={{margin:"1px 0 0",fontSize:11,color:"#94a3b8"}}>Operado em tempo real pela inteligência. Sem intervenção humana.</p>
         </div>
 
         <div style={{display:"flex",alignItems:"center",gap:7}}>
