@@ -113,7 +113,7 @@ const FUNNEL_FIELDS: Record<string, FField[]> = {
 /* ─── Types ──────────────────────────────────────────────────────── */
 type AIStatus = "analyzing"|"processing"|"done";
 type Channel  = "WhatsApp"|"Site"|"Instagram"|"Ligação"|"E-mail";
-interface WaMsg { from:"ai"|"client"; text:string; time:string; }
+interface WaMsg { from:"ai"|"client"; text:string; time:string; imageUrl?:string; videoUrl?:string; audioUrl?:string; fileUrl?:string; }
 interface HistoryEvent {
   time:string; label:string; detail:string;
   type:"entry"|"ai"|"stage"|"action"|"done"|"pending";
@@ -710,7 +710,178 @@ function FunnelTab({card,accent,funnelData,onEdit,onAIFill}:{card:Card;accent:st
 function WAWindow({card,accent,onPauseCard}:{card:Card;accent:string;onPauseCard:()=>void}){
   const endRef=useRef<HTMLDivElement>(null);
   const paused=!!card.aiPausedCard;
-  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[card.id]);
+  
+  // Conversation and input states
+  const [messages, setMessages] = useState<WaMsg[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Audio recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordTime, setRecordTime] = useState(0);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<number | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    setMessages(card.conversation || []);
+  }, [card.id, card.conversation]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({behavior:"smooth"});
+  }, [messages]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        if (audioBlob.size > 10 * 1024 * 1024) {
+          alert("O áudio gravado excedeu o limite de 10MB!");
+          cancelRecording();
+          return;
+        }
+        const url = URL.createObjectURL(audioBlob);
+        setRecordedBlob(audioBlob);
+        setAudioPreviewUrl(url);
+        stream.getTracks().forEach(t => t.stop());
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setRecordTime(0);
+      timerRef.current = window.setInterval(() => {
+        setRecordTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      alert("Erro ao acessar microfone. Certifique-se de dar permissão.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsRecording(false);
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordedBlob(null);
+    setAudioPreviewUrl(null);
+    setIsPlayingPreview(false);
+    audioChunksRef.current = [];
+  };
+
+  const togglePlayPreview = () => {
+    if (!previewAudioRef.current) return;
+    if (isPlayingPreview) {
+      previewAudioRef.current.pause();
+      setIsPlayingPreview(false);
+    } else {
+      previewAudioRef.current.play();
+      setIsPlayingPreview(true);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const size = file.size;
+    const isVideo = file.type.startsWith("video/");
+    const isImage = file.type.startsWith("image/");
+    const isAudio = file.type.startsWith("audio/");
+    
+    if (isVideo) {
+      if (size > 15 * 1024 * 1024) {
+        alert(`O vídeo "${file.name}" excedeu o limite máximo de 15MB!`);
+        return;
+      }
+    } else if (isImage || isAudio) {
+      if (size > 10 * 1024 * 1024) {
+        alert(`O arquivo "${file.name}" excedeu o limite máximo de 10MB!`);
+        return;
+      }
+    } else {
+      if (size > 10 * 1024 * 1024) {
+        alert(`O documento "${file.name}" excedeu o limite máximo de 10MB!`);
+        return;
+      }
+    }
+    setPendingFile(file);
+  };
+
+  const handleSend = () => {
+    if (!inputText.trim() && !pendingFile && !audioPreviewUrl) return;
+    
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    
+    let newMsg: WaMsg = {
+      from: "ai",
+      text: inputText,
+      time: timeStr
+    };
+    
+    if (audioPreviewUrl) {
+      newMsg.text = `🎤 Mensagem de voz (${formatRecordingTime(recordTime)})`;
+      newMsg.audioUrl = audioPreviewUrl;
+      setRecordedBlob(null);
+      setAudioPreviewUrl(null);
+      setIsPlayingPreview(false);
+    } else if (pendingFile) {
+      const fileUrl = URL.createObjectURL(pendingFile);
+      if (pendingFile.type.startsWith("image/")) {
+        newMsg.text = `🖼️ Imagem: ${pendingFile.name}`;
+        newMsg.imageUrl = fileUrl;
+      } else if (pendingFile.type.startsWith("video/")) {
+        newMsg.text = `🎥 Vídeo: ${pendingFile.name}`;
+        newMsg.videoUrl = fileUrl;
+      } else {
+        newMsg.text = `📎 Documento: ${pendingFile.name}`;
+        newMsg.fileUrl = fileUrl;
+      }
+      setPendingFile(null);
+    }
+    
+    setMessages(prev => [...prev, newMsg]);
+    setInputText("");
+  };
+
+  const formatRecordingTime = (s: number) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins}:${String(secs).padStart(2, "0")}`;
+  };
+
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#f0f2f5"}}>
       <div style={{background:paused?"#374151":"#075E54",padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexShrink:0,transition:"background 0.3s"}}>
@@ -731,16 +902,54 @@ function WAWindow({card,accent,onPauseCard}:{card:Card;accent:string;onPauseCard
           )}
         </button>
       </div>
+      
+      {/* Message List */}
       <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:6}}>
         <div style={{textAlign:"center",marginBottom:4}}><span style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"2px 10px",fontSize:10,color:"#64748b"}}>Hoje</span></div>
-        {card.conversation.map((msg,i)=>{
+        {messages.map((msg,i)=>{
           const ai=msg.from==="ai";
           return(
             <div key={i} style={{display:"flex",justifyContent:ai?"flex-end":"flex-start",animation:`msgIn 0.25s ease ${i*0.04}s both`}}>
               {!ai&&<div style={{width:24,height:24,borderRadius:"50%",background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:"#475569",flexShrink:0,marginRight:6,alignSelf:"flex-end"}}>{initials(card.name)[0]}</div>}
               <div style={{maxWidth:"72%",padding:"7px 10px 4px",borderRadius:ai?"12px 2px 12px 12px":"2px 12px 12px 12px",background:ai?"#dcf8c6":"#fff",boxShadow:"0 1px 3px rgba(0,0,0,0.1)",border:ai?"1px solid #c3f2a6":"1px solid #e8ecf0"}}>
                 {ai&&<div style={{display:"flex",alignItems:"center",gap:4,marginBottom:3}}><svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={3}/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span style={{fontSize:9,fontWeight:700,color:RED}}>Fagner</span></div>}
-                <p style={{margin:0,fontSize:11.5,color:"#111827",lineHeight:1.45}} dangerouslySetInnerHTML={{__html:msg.text.replace(/\*(.*?)\*/g,"<strong>$1</strong>")}}/>
+                
+                {/* Text render */}
+                {msg.text && <p style={{margin:0,fontSize:11.5,color:"#111827",lineHeight:1.45}} dangerouslySetInnerHTML={{__html:msg.text.replace(/\*(.*?)\*/g,"<strong>$1</strong>")}}/>}
+                
+                {/* Image Attachment */}
+                {msg.imageUrl && (
+                  <div style={{marginTop:5,borderRadius:8,overflow:"hidden",maxHeight:200,background:"#00000008"}}>
+                    <img src={msg.imageUrl} alt="attachment" style={{width:"100%",height:"auto",objectFit:"contain",maxHeight:200}}/>
+                  </div>
+                )}
+
+                {/* Video Attachment */}
+                {msg.videoUrl && (
+                  <div style={{marginTop:5,borderRadius:8,overflow:"hidden",background:"#000"}}>
+                    <video src={msg.videoUrl} controls style={{width:"100%",maxHeight:220}}/>
+                  </div>
+                )}
+
+                {/* Audio Attachment */}
+                {msg.audioUrl && (
+                  <div style={{marginTop:5,display:"flex",alignItems:"center",gap:6,background:"rgba(0,0,0,0.03)",borderRadius:8,padding:"5px 8px",width:200}}>
+                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    <audio src={msg.audioUrl} controls style={{height:30,width:"100%"}}/>
+                  </div>
+                )}
+
+                {/* Document/File Attachment */}
+                {msg.fileUrl && (
+                  <a href={msg.fileUrl} download style={{marginTop:5,display:"flex",alignItems:"center",gap:8,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",textDecoration:"none",color:"#475569"}}>
+                    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:10,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{msg.text.replace("📎 Documento: ","")}</div>
+                      <div style={{fontSize:8,color:"#94a3b8"}}>Clique para baixar</div>
+                    </div>
+                  </a>
+                )}
+
                 <div style={{textAlign:"right",marginTop:3,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3}}>
                   <span style={{fontSize:9,color:"#8696a0"}}>{msg.time}</span>
                   {ai&&<svg width={12} height={8} viewBox="0 0 16 11" fill="none"><path d="M1 5.5l4 4L15 1" stroke="#53bdeb" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/><path d="M5 5.5l4 4" stroke="#53bdeb" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -751,9 +960,127 @@ function WAWindow({card,accent,onPauseCard}:{card:Card;accent:string;onPauseCard
         })}
         <div ref={endRef}/>
       </div>
-      <div style={{background:"#f0f2f5",padding:"8px 12px",display:"flex",alignItems:"center",gap:8,borderTop:"1px solid #e2e8f0",flexShrink:0}}>
-        <div style={{flex:1,background:"#fff",borderRadius:24,padding:"8px 14px",fontSize:12,color:"#8696a0",border:"1px solid #e2e8f0"}}>Fagner respondendo automaticamente...</div>
-        <div style={{width:36,height:36,borderRadius:"50%",background:"#075E54",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1={22} y1={2} x2={11} y2={13}/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+
+      {/* Pending File Attachment bar */}
+      {pendingFile && (
+        <div style={{background:"#fff",padding:"6px 14px",borderTop:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,animation:"slideUp 0.15s ease"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1}}>
+            <span style={{fontSize:14}}>📎</span>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#334155",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pendingFile.name}</div>
+              <div style={{fontSize:9,color:"#94a3b8"}}>{(pendingFile.size / (1024 * 1024)).toFixed(2)} MB</div>
+            </div>
+          </div>
+          <button onClick={() => setPendingFile(null)} style={{background:"transparent",border:"none",color:"#ef4444",cursor:"pointer",fontSize:12,fontWeight:700}}>Remover</button>
+        </div>
+      )}
+
+      {/* Recording Wave/Player Bar */}
+      {isRecording && (
+        <div style={{background:"#fff",padding:"8px 14px",borderTop:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,animation:"slideUp 0.15s ease"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:"#ef4444",animation:"pulse 1s infinite"}}/>
+            <span style={{fontSize:11.5,fontWeight:700,color:"#ef4444"}}>Gravando: {formatRecordingTime(recordTime)}</span>
+            
+            {/* Visualizer wave simulation */}
+            <div style={{display:"flex",alignItems:"center",gap:2,marginLeft:8}}>
+              {[4, 12, 8, 16, 6, 14, 10, 4].map((h, idx) => (
+                <div key={idx} style={{width:2.5,height:h,background:"#ef4444",borderRadius:1,animation:"pulse 0.4s infinite alternate",animationDelay:`${idx * 0.05}s`}}/>
+              ))}
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={cancelRecording} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"4px 8px",fontSize:10.5,fontWeight:700,color:"#64748b",cursor:"pointer"}}>
+              Cancelar
+            </button>
+            <button onClick={stopRecording} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"4px 10px",fontSize:10.5,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+              Parar &amp; Ouvir
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Audio Preview (Listen before send) Bar */}
+      {audioPreviewUrl && !isRecording && (
+        <div style={{background:"#fff",padding:"8px 14px",borderTop:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,animation:"slideUp 0.15s ease"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
+            <button onClick={togglePlayPreview} style={{width:24,height:24,borderRadius:"50%",background:"#075E54",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#fff",padding:0}}>
+              {isPlayingPreview ? (
+                <svg width={10} height={10} viewBox="0 0 24 24" fill="currentColor"><rect x={6} y={4} width={4} height={16}/><rect x={14} y={4} width={4} height={16}/></svg>
+              ) : (
+                <svg width={10} height={10} viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              )}
+            </button>
+            <span style={{fontSize:11.5,fontWeight:700,color:"#475569"}}>Áudio Gravado ({formatRecordingTime(recordTime)})</span>
+            <audio ref={previewAudioRef} src={audioPreviewUrl} onEnded={() => setIsPlayingPreview(false)} style={{display:"none"}}/>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={cancelRecording} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"4px 8px",fontSize:10.5,fontWeight:700,color:"#ef4444",cursor:"pointer"}}>
+              Excluir
+            </button>
+            <button onClick={handleSend} style={{background:"#075E54",border:"none",borderRadius:6,padding:"4px 10px",fontSize:10.5,fontWeight:700,color:"#fff",cursor:"pointer"}}>
+              Enviar Áudio
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Input controls bar */}
+      <div style={{background:"#f0f2f5",padding:"8px 12px",display:"flex",alignItems:"center",gap:6,borderTop:"1px solid #e2e8f0",flexShrink:0}}>
+        {/* Hidden inputs */}
+        <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{display:"none"}} accept="image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"/>
+
+        {/* Upload attachment button */}
+        <button 
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isRecording || !!audioPreviewUrl}
+          title="Adicionar imagem, vídeo ou documento (imagem/áudio até 10MB, vídeo até 15MB)"
+          style={{width:32,height:32,borderRadius:"50%",background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"background 0.2s"}}
+          onMouseEnter={e=>(e.currentTarget.style.background="#f1f5f9")} onMouseLeave={e=>(e.currentTarget.style.background="#fff")}
+        >
+          <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+
+        {/* Main Text Input */}
+        <input 
+          type="text" 
+          value={inputText}
+          onChange={e => setInputText(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") handleSend(); }}
+          disabled={isRecording || !!audioPreviewUrl}
+          placeholder="Digite uma mensagem..."
+          style={{flex:1,background:"#fff",borderRadius:24,padding:"8px 14px",fontSize:12.5,color:"#1e293b",border:"1px solid #e2e8f0",outline:"none"}}
+        />
+
+        {/* Audio Recording Toggle Button */}
+        {!audioPreviewUrl && (
+          <button 
+            onClick={isRecording ? stopRecording : startRecording}
+            title={isRecording ? "Parar Gravação" : "Gravar Mensagem de Voz"}
+            style={{
+              width:32,height:32,borderRadius:"50%",
+              background:isRecording ? "#ef4444" : "#fff",
+              border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",
+              cursor:"pointer",color:isRecording ? "#fff" : "#64748b",transition:"all 0.2s"
+            }}
+          >
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1={12} y1={19} x2={12} y2={23}/>
+              <line x1={8} y1={23} x2={16} y2={23}/>
+            </svg>
+          </button>
+        )}
+
+        {/* Send button */}
+        <button 
+          onClick={handleSend}
+          disabled={isRecording}
+          style={{width:32,height:32,borderRadius:"50%",background:"#075E54",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#fff"}}
+        >
+          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1={22} y1={2} x2={11} y2={13}/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
       </div>
     </div>
   );
