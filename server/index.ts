@@ -1443,7 +1443,18 @@ app.post("/api/fagner/operators", requireAuth, async (req: Request, res: Respons
 import {
   listCards, getCard, createCard, updateCard, deleteCard,
   upsertFunnelBatch, upsertScore, listHistory, seedDemoCards,
+  crmEvents,
 } from "./fagner/conversasCrmService.js";
+
+// Escuta atualizações do CRM e repassa via WebSocket para todos os operadores conectados em wssChat
+crmEvents.on("update", (payload) => {
+  const msg = JSON.stringify(payload);
+  wssChat.clients.forEach((ws) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(msg);
+    }
+  });
+});
 
 // Extrai username da sessão (para auditoria)
 async function sessionAuthor(req: Request): Promise<string> {

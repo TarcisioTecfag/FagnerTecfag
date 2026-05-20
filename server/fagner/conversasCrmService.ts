@@ -1,5 +1,8 @@
 import { pool } from "../db.js";
 import { v4 as uuidv4 } from "uuid";
+import { EventEmitter } from "events";
+
+export const crmEvents = new EventEmitter();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,10 +23,23 @@ export interface FcCard {
   progress: number;
   rdContactId?: string;
   rdDealId?: string;
+  bairro?: string;
+  estado?: string;
+  emailEmpresa?: string;
+  credito?: string;
   createdAt: string;
   updatedAt: string;
   funnel: Record<string, string>;
   score?: FcScore | null;
+  fagnerNotes?: FcNote[];
+}
+
+export interface FcNote {
+  id: string;
+  cardId: string;
+  text: string;
+  msgRange: string;
+  createdAt: string;
 }
 
 export interface FcScore {
@@ -80,6 +96,10 @@ function rowToCard(row: any, funnelRows: any[] = [], scoreRow: any = null): FcCa
     progress: row.progress,
     rdContactId: row.rd_contact_id ?? undefined,
     rdDealId: row.rd_deal_id ?? undefined,
+    bairro: row.bairro ?? undefined,
+    estado: row.estado ?? undefined,
+    emailEmpresa: row.email_empresa ?? undefined,
+    credito: row.credito ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     funnel,
@@ -95,6 +115,7 @@ function rowToCard(row: any, funnelRows: any[] = [], scoreRow: any = null): FcCa
           evaluatedBy: scoreRow.evaluated_by,
         }
       : null,
+    fagnerNotes: [],
   };
 }
 
@@ -142,11 +163,24 @@ export async function listCards(): Promise<FcCard[]> {
     `SELECT * FROM fc_score WHERE card_id = ANY($1)`,
     [ids]
   );
+  const { rows: notes } = await pool.query(
+    `SELECT * FROM fc_fagner_notes WHERE card_id = ANY($1) ORDER BY created_at ASC`,
+    [ids]
+  );
 
   return cards.map((row: any) => {
     const funnelRows = funnels.filter((f: any) => f.card_id === row.id);
     const scoreRow = scores.find((s: any) => s.card_id === row.id) ?? null;
-    return rowToCard(row, funnelRows, scoreRow);
+    const cardNotes = notes.filter((n: any) => n.card_id === row.id).map((n: any) => ({
+      id: n.id,
+      cardId: n.card_id,
+      text: n.text,
+      msgRange: n.msg_range,
+      createdAt: n.created_at,
+    }));
+    const cardObj = rowToCard(row, funnelRows, scoreRow);
+    cardObj.fagnerNotes = cardNotes;
+    return cardObj;
   });
 }
 
@@ -161,7 +195,19 @@ export async function getCard(id: string): Promise<FcCard | null> {
     `SELECT * FROM fc_score WHERE card_id = $1`,
     [id]
   );
-  return rowToCard(rows[0], funnels, scores[0] ?? null);
+  const { rows: notes } = await pool.query(
+    `SELECT * FROM fc_fagner_notes WHERE card_id = $1 ORDER BY created_at ASC`,
+    [id]
+  );
+  const cardObj = rowToCard(rows[0], funnels, scores[0] ?? null);
+  cardObj.fagnerNotes = notes.map((n: any) => ({
+    id: n.id,
+    cardId: n.card_id,
+    text: n.text,
+    msgRange: n.msg_range,
+    createdAt: n.created_at,
+  }));
+  return cardObj;
 }
 
 export async function createCard(
@@ -172,8 +218,9 @@ export async function createCard(
   await pool.query(
     `INSERT INTO fc_cards
       (id, name, company, phone, email, cnpj_cpf, tipo_empresa, city, segment,
-       channel, column_id, note, ai_status, progress, rd_contact_id, rd_deal_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+       channel, column_id, note, ai_status, progress, rd_contact_id, rd_deal_id,
+       bairro, estado, email_empresa, credito)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
     [
       id,
       data.name,
@@ -191,6 +238,10 @@ export async function createCard(
       data.progress ?? 0,
       data.rdContactId ?? null,
       data.rdDealId ?? null,
+      data.bairro ?? null,
+      data.estado ?? null,
+      data.emailEmpresa ?? null,
+      data.credito ?? "Não",
     ]
   );
   await addHistory(id, "entry", "Card criado", `Criado por ${author}`, author);
@@ -202,6 +253,8 @@ const FIELD_LABELS: Record<string, string> = {
   cnpjCpf: "CPF/CNPJ", tipoEmpresa: "Tipo de empresa", city: "Cidade",
   segment: "Segmento", channel: "Canal", note: "Observação",
   columnId: "Funil", aiStatus: "Status", progress: "Progresso",
+  bairro: "Bairro", estado: "Estado", emailEmpresa: "E-mail da Empresa",
+  credito: "Crédito",
 };
 
 export async function updateCard(
@@ -218,6 +271,8 @@ export async function updateCard(
     segment: "segment", channel: "channel", columnId: "column_id",
     note: "note", aiStatus: "ai_status", progress: "progress",
     rdContactId: "rd_contact_id", rdDealId: "rd_deal_id",
+    bairro: "bairro", estado: "estado", emailEmpresa: "email_empresa",
+    credito: "credito",
   };
 
   const sets: string[] = [];
@@ -260,7 +315,55 @@ export async function updateCard(
     );
   }
 
-  return await getCard(id);
+  const updated = await getCard(id);
+  if (updated) {
+    crmEvents.emit("update", { type: "CRM_CARD_UPDATED", cardId: id, card: updated });
+  }
+  return updated;
+}
+
+export async function listNotes(cardId: string): Promise<FcNote[]> {
+  const { rows } = await pool.query(
+    `SELECT * FROM fc_fagner_notes WHERE card_id = $1 ORDER BY created_at ASC`,
+    [cardId]
+  );
+  return rows.map((r: any) => ({
+    id: r.id,
+    cardId: r.card_id,
+    text: r.text,
+    msgRange: r.msg_range,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function createNote(
+  cardId: string,
+  text: string,
+  range: string
+): Promise<FcNote> {
+  const id = uuidv4();
+  await pool.query(
+    `INSERT INTO fc_fagner_notes (id, card_id, text, msg_range) VALUES ($1,$2,$3,$4)`,
+    [id, cardId, text, range]
+  );
+  await addHistory(
+    cardId,
+    "action",
+    "Nota gerada pelo Fagner",
+    `IA adicionou uma nota: "${text.slice(0, 45)}..."`,
+    "Fagner"
+  );
+  const { rows } = await pool.query(`SELECT * FROM fc_fagner_notes WHERE id = $1`, [id]);
+  const n = rows[0];
+  const noteObj = {
+    id: n.id,
+    cardId: n.card_id,
+    text: n.text,
+    msgRange: n.msg_range,
+    createdAt: n.created_at,
+  };
+  crmEvents.emit("update", { type: "CRM_NOTE_ADDED", cardId, note: noteObj });
+  return noteObj;
 }
 
 export async function deleteCard(id: string): Promise<boolean> {

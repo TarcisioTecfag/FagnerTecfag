@@ -242,7 +242,11 @@ export async function bootstrapSchema(): Promise<void> {
     await client.query(`ALTER TABLE folders ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER DEFAULT 0;`);
     await client.query(`ALTER TABLE lc_visitors ADD COLUMN IF NOT EXISTS "posVendaCnpjData" JSONB;`);
     await client.query(`ALTER TABLE lc_chats ADD COLUMN IF NOT EXISTS "closeReason" TEXT;`);
-    console.log("[DB] ✅ Migrações idempotentes aplicadas (folders, lc_visitors, lc_chats)");
+    await client.query(`ALTER TABLE fc_cards ADD COLUMN IF NOT EXISTS bairro TEXT;`);
+    await client.query(`ALTER TABLE fc_cards ADD COLUMN IF NOT EXISTS estado TEXT;`);
+    await client.query(`ALTER TABLE fc_cards ADD COLUMN IF NOT EXISTS email_empresa TEXT;`);
+    await client.query(`ALTER TABLE fc_cards ADD COLUMN IF NOT EXISTS credito TEXT DEFAULT 'Não';`);
+    console.log("[DB] ✅ Migrações idempotentes aplicadas (folders, lc_visitors, lc_chats, fc_cards)");
 
     // ─── Fagner Conversas CRM ────────────────────────────────────────
     await client.query(`
@@ -263,6 +267,10 @@ export async function bootstrapSchema(): Promise<void> {
         progress        INTEGER NOT NULL DEFAULT 0,
         rd_contact_id   TEXT,
         rd_deal_id      TEXT,
+        bairro          TEXT,
+        estado          TEXT,
+        email_empresa   TEXT,
+        credito         TEXT DEFAULT 'Não',
         created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
       );
@@ -302,10 +310,19 @@ export async function bootstrapSchema(): Promise<void> {
         created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
       );
 
+      CREATE TABLE IF NOT EXISTS fc_fagner_notes (
+        id          TEXT PRIMARY KEY,
+        card_id     TEXT NOT NULL REFERENCES fc_cards(id) ON DELETE CASCADE,
+        text        TEXT NOT NULL,
+        msg_range   TEXT NOT NULL,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
       CREATE INDEX IF NOT EXISTS idx_fc_funnel_card ON fc_funnel_data(card_id);
       CREATE INDEX IF NOT EXISTS idx_fc_history_card ON fc_history(card_id);
+      CREATE INDEX IF NOT EXISTS idx_fc_notes_card ON fc_fagner_notes(card_id);
     `);
-    console.log("[DB] ✅ Tabelas Fagner Conversas CRM criadas/verificadas (fc_cards, fc_funnel_data, fc_score, fc_history)");
+    console.log("[DB] ✅ Tabelas Fagner Conversas CRM criadas/verificadas (fc_cards, fc_funnel_data, fc_score, fc_history, fc_fagner_notes)");
   } catch (e) {
     console.error("[DB] ❌ Falha ao criar schema PostgreSQL:", e);
   } finally {

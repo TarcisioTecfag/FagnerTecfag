@@ -180,6 +180,7 @@ export function addToHistory(session: ContactSession, message: string) {
     session.messageHistory.shift();
   }
   session.lastMessageAt = new Date();
+  session.messageCount++;
 }
 
 // ─── Serialização para dashboard ─────────────────────────────────────────────

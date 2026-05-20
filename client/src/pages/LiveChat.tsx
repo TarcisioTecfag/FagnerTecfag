@@ -4023,7 +4023,16 @@ function LiveChat() {
                     const name = newOperatorName.trim();
                     if (!name) return;
                     if (cfg.operators.some(o => o.name === name)) return;
+
+                    // 🔒 FIX CRÍTICO: se rdUsers carregou mas o nome não corresponde
+                    // a nenhum usuário RD CRM, o id seria 'op-TIMESTAMP' (inválido).
+                    // Nesse caso, bloqueia silenciosamente — o usuário deve selecionar pelo dropdown.
                     const rdUser = rdUsers.find(u => u.name === name);
+                    if (rdUsers.length > 0 && !rdUser) {
+                      // Usuários RD CRM carregados mas o nome não bate — não adicionar com ID inválido
+                      return;
+                    }
+
                     const newOp: FunnelOperator = { id: rdUser?.id ?? `op-${Date.now()}`, name };
                     updateFunnel({ operators: [...cfg.operators, newOp] });
                     setNewOperatorName("");

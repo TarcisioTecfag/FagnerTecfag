@@ -411,3 +411,13 @@ export async function extractReportJson(
     return {};
   }
 }
+
+export async function callGeminiRaw(apiKey: string, prompt: string): Promise<string> {
+  const url = `${GEMINI_BASE}/models/${GEMINI_CHAT_MODEL}:generateContent?key=${apiKey}`;
+  const payload = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
+  };
+  const data = await geminiRequest(url, payload);
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+}

@@ -1,4 +1,4 @@
-﻿// server/fagner/fagnerOrchestrator.ts
+// server/fagner/fagnerOrchestrator.ts
 // Orquestrador central do Fagner
 // Conecta: webhook → debounce → CNPJ/mídia → Gemini → flowEngine → CRM → transferência
 
@@ -378,6 +378,16 @@ async function processContact(session: ContactSession, combinedMessage: string):
 
     deps.emitLog(`[${contactId}] Resposta Gemini: "${response.slice(0, 80)}..."`, "INFO");
 
+    // Incrementa o contador de mensagens por turno de IA
+    session.messageCount++;
+
+    // A cada 6 mensagens (3 turnos do cliente + 3 turnos da IA), gera uma Fagner Note em background
+    if (session.messageCount > 0 && session.messageCount % 6 === 0) {
+      generateFagnerNoteInBackground(session).catch((err) => {
+        deps?.emitLog(`[Fagner Note] Erro ao iniciar geração de notas: ${err.message}`, "WARN");
+      });
+    }
+
     // ── 8. Detecta fluxo na resposta (LLM pode ter identificado) ─────────
     if (!session.currentFlow) {
       const detected = detectFlowFromText(response);
@@ -709,4 +719,54 @@ export function startFollowUpLoop(): void {
 
 export function getAllSessionsForDashboard() {
   return getAllSessions();
+}
+
+async function generateFagnerNoteInBackground(session: ContactSession): Promise<void> {
+  try {
+    const { contactId, messageHistory } = session;
+    const recent = messageHistory.slice(-6);
+    if (recent.length === 0) return;
+
+    const { pool } = await import("../db.js");
+    let cardId: string | null = null;
+    const { rows: cards } = await pool.query(
+      `SELECT id FROM fc_cards WHERE rd_contact_id = $1 OR phone = $2 OR rd_deal_id = $3 LIMIT 1`,
+      [contactId, session.contactPhone || "___", session.rdDealId || "___"]
+    );
+    if (cards.length > 0) {
+      cardId = cards[0].id;
+    }
+    if (!cardId) {
+      deps?.emitLog(`[Fagner Note] Nenhum card do CRM encontrado para contactId ${contactId}. Pulando nota.`, "WARN");
+      return;
+    }
+
+    const snippet = recent.join("\n");
+    const prompt = `Você é o Fagner, assistente de triagem da Tecfag.
+Analise o trecho recente da conversa abaixo e extraia uma nota objetiva, resumindo o status/interesse ou necessidade principal do cliente de forma extremamente curta (máximo 15 palavras, sem introduções ou explicações, seja ultra-direto).
+
+Exemplos de respostas aceitáveis:
+- Cliente busca seladora automática para embalar feijão de 1kg.
+- Interessado em dosadora de líquidos para expandir produção de cosméticos.
+- Solicita orçamento de peças de reposição para datador hot stamping.
+
+Trecho recente da conversa:
+${snippet}
+
+Nota:`;
+
+    const apiKey = await deps.getApiKey();
+    const { callGeminiRaw } = await import("./geminiService.js");
+    const text = await callGeminiRaw(apiKey, prompt);
+    const cleanedText = text.replace(/["']/g, "").trim();
+
+    if (cleanedText) {
+      const range = `${session.messageCount - 5}-${session.messageCount}`;
+      const { createNote } = await import("./conversasCrmService.js");
+      await createNote(cardId, cleanedText, range);
+      deps?.emitLog(`[Fagner Note] Nota automática criada para card ${cardId}: "${cleanedText}"`, "SUCCESS");
+    }
+  } catch (err: any) {
+    deps?.emitLog(`[Fagner Note] Falha ao gerar nota em background: ${err.message}`, "WARN");
+  }
 }

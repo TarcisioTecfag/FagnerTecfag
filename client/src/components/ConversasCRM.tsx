@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { WS_URL } from "@/lib/api";
 
 /* ─── Brand ──────────────────────────────────────────────────────── */
 const RED       = "#E5232A";
@@ -131,6 +132,7 @@ interface Card {
   funnel: Record<string,string>;
   history: HistoryEvent[];
   scoreData?:{ respostas:Record<string,string>; temperatura:string; pontoTotal:number; engagementScore:number; intentScore:number; avaliadoEm?:string; };
+  updatedAt?:string;
 }
 interface FeedEvent { id:string; ts:string; icon:string; color:string; text:string; sub:string; }
 interface Toast { id:string; name:string; company?:string; funnel:string; accent:string; ts:string; }
@@ -344,7 +346,58 @@ function initials(n:string){return n.split(" ").slice(0,2).map(w=>w[0]).join("")
 function nowTime(){const d=new Date();return`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;}
 function relativeTime(iso:string):string{const m=Math.floor((Date.now()-new Date(iso).getTime())/60000);if(m<1)return"há instantes";if(m<60)return`há ${m} min`;const h=Math.floor(m/60);if(h<24)return`há ${h}h`;return`há ${Math.floor(h/24)} dias`;}
 function scoreRespostasFromApi(score:any):Record<string,string>{const r:Record<string,string>={};["necessidade","urgencia","decisor","engajamento","avanco"].forEach(k=>{if(score?.[k]!=null)r[k]=String(score[k]);});return r;}
-function apiCardToCard(c:any):Card{const respostas=scoreRespostasFromApi(c.score);return{id:c.id,name:c.name,company:c.company,channel:(c.channel as Channel)||"WhatsApp",aiStatus:(c.aiStatus as AIStatus)||"done",progress:c.progress??100,timeAgo:relativeTime(c.createdAt||new Date().toISOString()),note:c.note??"",columnId:c.columnId||"pos-venda",phone:c.phone,email:c.email,cnpjCpf:c.cnpjCpf,tipoEmpresa:c.tipoEmpresa,city:c.city,segment:c.segment,funnel:c.funnel??{},history:[],conversation:[],scoreData:Object.keys(respostas).length>0?{respostas,temperatura:"",pontoTotal:Object.values(respostas).reduce((s:number,v:string)=>s+parseInt(v||"0"),0),engagementScore:0,intentScore:0}:undefined};}
+function apiCardToCard(c:any):Card{
+  const respostas=scoreRespostasFromApi(c.score);
+  const companyData: CompanyData = {
+    nome: c.company || "",
+    cnpj: c.cnpjCpf || "",
+    cidade: c.city || "",
+    bairro: c.bairro || "",
+    estado: c.estado || "",
+    emailEmpresa: c.emailEmpresa || "",
+    tipo: c.tipoEmpresa || "",
+    credito: c.credito || "Não",
+  };
+  const fagnerNotes = Array.isArray(c.fagnerNotes) && c.fagnerNotes.length > 0
+    ? c.fagnerNotes.map((n: any) => ({
+        id: n.id,
+        text: n.text,
+        ts: relativeTime(n.createdAt),
+        msgRange: n.msgRange,
+      }))
+    : (SEED_NOTES[c.id] || []);
+
+  return {
+    id:c.id,
+    name:c.name,
+    company:c.company,
+    channel:(c.channel as Channel)||"WhatsApp",
+    aiStatus:(c.aiStatus as AIStatus)||"done",
+    progress:c.progress??100,
+    timeAgo:relativeTime(c.createdAt||new Date().toISOString()),
+    note:c.note??"",
+    columnId:c.columnId||"pos-venda",
+    phone:c.phone,
+    email:c.email,
+    cnpjCpf:c.cnpjCpf,
+    tipoEmpresa:c.tipoEmpresa,
+    city:c.city,
+    segment:c.segment,
+    funnel:c.funnel??{},
+    history:[],
+    conversation:[],
+    companyData,
+    fagnerNotes,
+    updatedAt: c.updatedAt || c.createdAt,
+    scoreData:Object.keys(respostas).length>0?{
+      respostas,
+      temperatura:"",
+      pontoTotal:Object.values(respostas).reduce((s:number,v:string)=>s+parseInt(v||"0"),0),
+      engagementScore:0,
+      intentScore:0
+    }:undefined
+  };
+}
 
 /* ─── AnimNum ────────────────────────────────────────────────────── */
 function AnimNum({value}:{value:number}){
@@ -453,47 +506,86 @@ function FilterPanel({filters,setFilters,onClose}:{filters:Filters;setFilters:(f
 }
 
 /* ─── Kanban card ────────────────────────────────────────────────── */
+function isSlaViolated(card: Card): boolean {
+  const columnsWithSla = ["triagem", "pos-venda", "maquinas", "personalite", "pecas"];
+  if (!columnsWithSla.includes(card.columnId)) return false;
+  
+  const lastActive = card.updatedAt ? new Date(card.updatedAt).getTime() : 0;
+  if (!lastActive) return false;
+
+  const fourHoursMs = 4 * 60 * 60 * 1000;
+  return (Date.now() - lastActive) > fourHoursMs;
+}
+
+/* ─── Kanban card ────────────────────────────────────────────────── */
 function KCard({card,accent,onClick,paused,visible}:{card:Card;accent:string;onClick:()=>void;paused:boolean;visible:boolean}){
   const active=card.aiStatus!=="done";
+  const slaViolated = isSlaViolated(card);
   return(
     <div
       onClick={visible?onClick:undefined}
       className="kcard"
       style={{
         background:"#fff",
-        border:active&&!paused?`1.5px solid ${accent}35`:"1.5px solid #e2e8f0",
+        border: slaViolated
+          ? "1.5px solid #ef4444"
+          : active&&!paused
+          ? `1.5px solid ${accent}35`
+          : "1.5px solid #e2e8f0",
         borderRadius:12,padding:"12px 13px",marginBottom:visible?8:0,
-        boxShadow:active&&!paused?`0 2px 12px ${accent}12`:"0 1px 4px rgba(0,0,0,0.05)",
+        boxShadow: slaViolated
+          ? "0 0 12px rgba(239, 68, 68, 0.2)"
+          : active&&!paused
+          ? `0 2px 12px ${accent}12`
+          : "0 1px 4px rgba(0,0,0,0.05)",
         transition:"opacity 0.3s ease,transform 0.3s cubic-bezier(0.4,0,0.2,1),max-height 0.35s ease,margin 0.3s ease,border-color 0.25s,box-shadow 0.25s",
         position:"relative",overflow:"hidden",cursor:visible?"pointer":"default",
         opacity:visible?1:0,
         transform:visible?"translateY(0) scale(1)":"translateY(-6px) scale(0.97)",
         maxHeight:visible?600:0,
         pointerEvents:visible?"auto":"none",
+        animation: slaViolated ? "slaPulse 2s infinite ease-in-out" : undefined,
       }}
     >
-      {active&&!paused&&<div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:accent,borderRadius:"12px 12px 0 0",opacity:0.7}}/>}
-      {paused&&<div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:"#e2e8f0",borderRadius:"12px 12px 0 0"}}/>}
-
+      <style>{`
+        @keyframes slaPulse {
+          0% { border-color: rgba(239, 68, 68, 0.45); box-shadow: 0 0 4px rgba(239, 68, 68, 0.1); }
+          50% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 14px rgba(239, 68, 68, 0.45); }
+          100% { border-color: rgba(239, 68, 68, 0.45); box-shadow: 0 0 4px rgba(239, 68, 68, 0.1); }
+        }
+      `}</style>
+      
+      {slaViolated && <div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:"#ef4444",borderRadius:"12px 12px 0 0"}}/>}
+      {!slaViolated && active&&!paused&&<div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:accent,borderRadius:"12px 12px 0 0",opacity:0.7}}/>}
+      {!slaViolated && paused&&active&&<div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:"#e2e8f0",borderRadius:"12px 12px 0 0"}}/>}
+      
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:6}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:`${accent}15`,border:`1px solid ${accent}30`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:paused?"#94a3b8":accent,flexShrink:0,transition:"color 0.3s"}}>{initials(card.name)}</div>
+          <div style={{width:30,height:30,borderRadius:8,background:slaViolated ? "#fee2e2" : `${accent}15`,border:slaViolated ? "1px solid #fca5a5" : `1px solid ${accent}30`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:slaViolated ? "#ef4444" : (paused?"#94a3b8":accent),flexShrink:0,transition:"color 0.3s"}}>{initials(card.name)}</div>
           <div>
-            <div style={{fontSize:12,fontWeight:700,color:"#0f172a",lineHeight:1.2}}>{card.name}</div>
+            <div style={{display:"flex",alignItems:"center",gap:5}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#0f172a",lineHeight:1.2}}>{card.name}</div>
+              {slaViolated && (
+                <span title="Lead inativo por mais de 4 horas!" style={{fontSize:9,fontWeight:700,background:"#fee2e2",color:"#ef4444",border:"1px solid #fca5a5",borderRadius:4,padding:"1px 4.5px",display:"inline-flex",alignItems:"center",gap:2,animation:"pulse 1.5s infinite"}}>
+                  ⚠️ SLA
+                </span>
+              )}
+            </div>
             {card.company&&<div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>{card.company}</div>}
           </div>
         </div>
-        {active&&!paused?<div style={{width:7,height:7,borderRadius:"50%",background:accent,marginTop:3,flexShrink:0,animation:"pulse 1.6s ease-in-out infinite",boxShadow:`0 0 6px ${accent}`}}/>
-         :paused&&active?<span style={{fontSize:9,color:"#94a3b8",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:20,padding:"1px 6px",marginTop:2}}>⏸ pausado</span>:null}
+        {slaViolated ? <div style={{width:7,height:7,borderRadius:"50%",background:"#ef4444",marginTop:3,flexShrink:0,animation:"pulse 1.6s ease-in-out infinite",boxShadow:"0 0 6px #ef4444"}}/>
+         : active&&!paused?<div style={{width:7,height:7,borderRadius:"50%",background:accent,marginTop:3,flexShrink:0,animation:"pulse 1.6s ease-in-out infinite",boxShadow:`0 0 6px ${accent}`}}/>
+         : paused&&active?<span style={{fontSize:9,color:"#94a3b8",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:20,padding:"1px 6px",marginTop:2}}>⏸ pausado</span>:null}
       </div>
 
       <p style={{margin:"0 0 8px",fontSize:10.5,color:"#64748b",lineHeight:1.45}}>{card.note}</p>
       <div style={{marginBottom:8}}><ChannelTag channel={card.channel}/></div>
-      <div style={{marginBottom:8}}><ProgressBar value={card.progress} color={accent} paused={paused}/></div>
+      <div style={{marginBottom:8}}><ProgressBar value={card.progress} color={slaViolated ? "#ef4444" : accent} paused={paused}/></div>
 
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <StatusBadge status={card.aiStatus}/>
-        <div style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:"#94a3b8"}}>
+        <div style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:slaViolated ? "#ef4444" : "#94a3b8",fontWeight:slaViolated ? 600 : 400}}>
           <svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx={12} cy={12} r={10}/><polyline points="12 6 12 12 16 14"/></svg>
           {card.timeAgo}
         </div>
@@ -897,7 +989,7 @@ function ScoreTab({card,accent,scoreRespostas,onEdit}:{card:Card;accent:string;s
 
 
 /* ─── Company Panel ──────────────────────────────────────────────── */
-function CompanyPanel({company,onClose,accent}:{company?:CompanyData;onClose:()=>void;accent:string}){
+function CompanyPanel({company,onClose,accent,onSave}:{company?:CompanyData;onClose:()=>void;accent:string;onSave:(data:CompanyData)=>void}){
   const [data,setData]=useState<CompanyData>(company??{});
   const update=(k:keyof CompanyData,v:string)=>setData(p=>({...p,[k]:v}));
   const fields:Array<{key:keyof CompanyData;label:string;type:"text"|"toggle";opts?:string[]}>= [
@@ -945,7 +1037,7 @@ function CompanyPanel({company,onClose,accent}:{company?:CompanyData;onClose:()=
         ))}
       </div>
       <div style={{padding:"10px 16px",borderTop:"1.5px solid #f1f5f9",flexShrink:0}}>
-        <button onClick={onClose} style={{width:"100%",padding:"8px",borderRadius:9,border:"none",background:accent,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Salvar dados</button>
+        <button onClick={()=>{onSave(data);onClose();}} style={{width:"100%",padding:"8px",borderRadius:9,border:"none",background:accent,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Salvar dados</button>
       </div>
     </div>
   );
@@ -954,7 +1046,7 @@ function CompanyPanel({company,onClose,accent}:{company?:CompanyData;onClose:()=
 /* ─── Client Modal (with tabs) ───────────────────────────────────── */
 type ModalTab = "conversa"|"funil"|"historico"|"score";
 
-function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onContactEdit,onScoreSave,onPauseCard}:{
+function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onContactEdit,onScoreSave,onPauseCard,onCompanySave}:{
   card:Card; accent:string; onClose:()=>void;
   funnelData:Record<string,string>;
   onFunnelEdit:(fieldId:string,val:string)=>void;
@@ -962,6 +1054,7 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
   onContactEdit:(field:string,val:string)=>void;
   onScoreSave:(respostas:Record<string,string>)=>void;
   onPauseCard:()=>void;
+  onCompanySave:(data:CompanyData)=>void;
 }){
   const [tab, setTab] = useState<ModalTab>("conversa");
   const [scoreRespostas, setScoreRespostas] = useState<Record<string,string>>({});
@@ -1004,7 +1097,7 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
 
       {companyOpen&&(
         <div style={{position:"fixed",top:"2vh",height:"96vh",width:290,right:"calc(50% + 552px)",zIndex:10000,animation:"panelSwoop 0.38s cubic-bezier(0.22,1,0.36,1)",display:"flex",flexDirection:"column",borderRadius:16,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
-          <CompanyPanel company={card.companyData} onClose={()=>setCompanyOpen(false)} accent={accent}/>
+          <CompanyPanel company={card.companyData} onClose={()=>setCompanyOpen(false)} accent={accent} onSave={onCompanySave}/>
         </div>
       )}
 
@@ -1368,6 +1461,99 @@ export function CRMKanban(){
     setEvents(prev=>[{...ev,id:String(++eventId.current),ts:nowTime()},...prev].slice(0,40));
   },[]);
 
+  // WebSocket live sync para atualizações do CRM (Card e Notas)
+  useEffect(() => {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = WS_URL
+      ? `${WS_URL}/ws/chat`
+      : `${protocol}//${window.location.host}/ws/chat`;
+
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: number | null = null;
+
+    function connect() {
+      socket = new WebSocket(wsUrl);
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === "CRM_CARD_UPDATED" && data.card) {
+            const updatedCard = apiCardToCard(data.card);
+            
+            setCards(prev => prev.map(c => c.id === updatedCard.id ? { ...c, ...updatedCard } : c));
+            setSelected(prev => prev?.id === updatedCard.id ? { ...prev, ...updatedCard } : prev);
+            
+            pushEvent({
+              icon: "🔄",
+              color: "#3b82f6",
+              text: `Empresa atualizada: ${updatedCard.name}`,
+              sub: `Os dados de ${updatedCard.name} foram sincronizados em tempo real.`
+            });
+          }
+          
+          if (data.type === "CRM_NOTE_ADDED" && data.note && data.cardId) {
+            const newNote: FagnerNote = {
+              id: data.note.id,
+              text: data.note.text,
+              ts: "Agora",
+              msgRange: data.note.msgRange || "msgs 1-6"
+            };
+
+            setCards(prev => prev.map(c => {
+              if (c.id === data.cardId) {
+                const currentNotes = c.fagnerNotes || [];
+                const alreadyExists = currentNotes.some(n => n.id === newNote.id);
+                if (alreadyExists) return c;
+                return { ...c, fagnerNotes: [newNote, ...currentNotes] };
+              }
+              return c;
+            }));
+
+            setSelected(prev => {
+              if (prev?.id === data.cardId) {
+                const currentNotes = prev.fagnerNotes || [];
+                const alreadyExists = currentNotes.some(n => n.id === newNote.id);
+                if (alreadyExists) return prev;
+                return { ...prev, fagnerNotes: [newNote, ...currentNotes] };
+              }
+              return prev;
+            });
+
+            pushEvent({
+              icon: "📝",
+              color: "#10b981",
+              text: `Nota do Fagner adicionada`,
+              sub: `Nova análise de conversa adicionada para este lead.`
+            });
+          }
+        } catch (e) {
+          /* ignore json parsing errors */
+        }
+      };
+
+      socket.onclose = () => {
+        reconnectTimeout = window.setTimeout(connect, 5000);
+      };
+
+      socket.onerror = () => {
+        socket?.close();
+      };
+    }
+
+    connect();
+
+    return () => {
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+    };
+  }, [pushEvent]);
+
   useEffect(()=>{
     if(loading)return;
     const id=setInterval(()=>{
@@ -1415,6 +1601,29 @@ export function CRMKanban(){
     setCards(prev=>prev.map(c=>c.id===cardId?{...c,[field]:val}:c));
     setSelected(prev=>prev?.id===cardId?{...prev,[field]:val}:prev);
     fetch(`/api/fc/cards/${cardId}`,{method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({[field]:val})}).catch(()=>{});
+  },[]);
+
+  const handleCompanySave=useCallback((cardId:string,companyData:CompanyData)=>{
+    const backendData = {
+      company: companyData.nome,
+      cnpjCpf: companyData.cnpj,
+      city: companyData.cidade,
+      bairro: companyData.bairro,
+      estado: companyData.estado,
+      emailEmpresa: companyData.emailEmpresa,
+      tipoEmpresa: companyData.tipo,
+      credito: companyData.credito,
+    };
+
+    setCards(prev=>prev.map(c=>c.id===cardId?{...c, company: companyData.nome, cnpjCpf: companyData.cnpj, city: companyData.cidade, tipoEmpresa: companyData.tipo, companyData }:c));
+    setSelected(prev=>prev?.id===cardId?{...prev, company: companyData.nome, cnpjCpf: companyData.cnpj, city: companyData.cidade, tipoEmpresa: companyData.tipo, companyData }:prev);
+
+    fetch(`/api/fc/cards/${cardId}`,{
+      method:"PATCH",
+      credentials:"include",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(backendData)
+    }).catch(()=>{});
   },[]);
 
   const handleScoreSave=useCallback((cardId:string,respostas:Record<string,string>)=>{
@@ -1602,6 +1811,7 @@ export function CRMKanban(){
           onContactEdit={(field,val)=>handleCardFieldEdit(selected.id,field,val)}
           onScoreSave={(respostas)=>handleScoreSave(selected.id,respostas)}
           onPauseCard={()=>handlePauseCard(selected.id)}
+          onCompanySave={(companyData)=>handleCompanySave(selected.id,companyData)}
         />
       )}
     </div>
