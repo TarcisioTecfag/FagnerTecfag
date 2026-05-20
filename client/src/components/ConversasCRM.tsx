@@ -135,7 +135,7 @@ interface Card {
   updatedAt?:string;
 }
 interface FeedEvent { id:string; ts:string; icon:string; color:string; text:string; sub:string; }
-interface Toast { id:string; name:string; company?:string; funnel:string; accent:string; ts:string; }
+interface Toast { id:string; cardId:string; name:string; company?:string; funnel:string; accent:string; ts:string; }
 interface Filters { channels:string[]; statuses:string[]; segments:string[]; }
 
 /* ─── Fagner Notes Seed ──────────────────────────────────────────── */
@@ -1330,23 +1330,40 @@ function EmptyCol({accent,label,filtered}:{accent:string;label:string;filtered:b
 }
 
 /* ─── Notification tray ──────────────────────────────────────────── */
-function NotificationTray({toasts,onDismiss}:{toasts:Toast[];onDismiss:(id:string)=>void}){
+/* ─── Notification tray ──────────────────────────────────────────── */
+function NotificationTray({toasts,onDismiss,onSelectCard}:{toasts:Toast[];onDismiss:(id:string)=>void;onSelectCard:(cardId:string)=>void}){
   if(toasts.length===0)return null;
   return(
     <div style={{position:"fixed",bottom:24,right:24,zIndex:400,display:"flex",flexDirection:"column-reverse",gap:8,pointerEvents:"none"}}>
       {toasts.map((t,i)=>(
-        <div key={t.id} style={{
-          display:"flex",alignItems:"flex-start",gap:10,
-          background:"#fff",border:`1.5px solid ${t.accent}30`,
-          borderLeft:`3.5px solid ${t.accent}`,
-          borderRadius:12,padding:"11px 13px",
-          boxShadow:"0 8px 32px rgba(0,0,0,0.13)",
-          minWidth:280,maxWidth:320,pointerEvents:"auto",
-          animation:"toastIn 0.32s cubic-bezier(0.34,1.56,0.64,1)",
-          opacity:1,
-          transform:`translateY(${i*-2}px) scale(${1-i*0.015})`,
-          transition:"transform 0.2s ease",
-        }}>
+        <div key={t.id} 
+          onClick={(e)=>{
+            if((e.target as HTMLElement).closest('button')) return;
+            onSelectCard(t.cardId);
+            onDismiss(t.id);
+          }}
+          style={{
+            display:"flex",alignItems:"flex-start",gap:10,
+            background:"#fff",border:`1.5px solid ${t.accent}30`,
+            borderLeft:`3.5px solid ${t.accent}`,
+            borderRadius:12,padding:"11px 13px",
+            boxShadow:"0 8px 32px rgba(0,0,0,0.13)",
+            minWidth:280,maxWidth:320,pointerEvents:"auto",
+            animation:"toastIn 0.32s cubic-bezier(0.34,1.56,0.64,1)",
+            opacity:1,
+            transform:`translateY(${i*-2}px) scale(${1-i*0.015})`,
+            transition:"transform 0.2s ease, border-color 0.2s, box-shadow 0.2s",
+            cursor:"pointer",
+          }}
+          onMouseEnter={e=>{
+            e.currentTarget.style.borderColor=`${t.accent}60`;
+            e.currentTarget.style.boxShadow="0 10px 36px rgba(0,0,0,0.16)";
+          }}
+          onMouseLeave={e=>{
+            e.currentTarget.style.borderColor=`${t.accent}30`;
+            e.currentTarget.style.boxShadow="0 8px 32px rgba(0,0,0,0.13)";
+          }}
+        >
           {/* icon */}
           <div style={{width:32,height:32,borderRadius:9,background:`${t.accent}12`,border:`1.5px solid ${t.accent}25`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={t.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1359,8 +1376,8 @@ function NotificationTray({toasts,onDismiss}:{toasts:Toast[];onDismiss:(id:strin
               <span style={{fontSize:9,color:"#94a3b8",marginLeft:"auto"}}>{t.ts}</span>
             </div>
             <div style={{fontSize:12,fontWeight:700,color:"#0f172a",lineHeight:1.3,marginBottom:2}}>{t.name}{t.company&&<span style={{fontWeight:400,color:"#64748b"}}> · {t.company}</span>}</div>
-            <div style={{fontSize:10.5,color:"#059669",fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
-              <span style={{width:6,height:6,borderRadius:"50%",background:"#10b981",display:"inline-block",flexShrink:0}}/>
+            <div style={{fontSize:10.5,color:t.accent,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+              <span style={{width:6,height:6,borderRadius:"50%",background:t.accent,display:"inline-block",flexShrink:0}}/>
               Triagem concluída — {t.funnel}
             </div>
           </div>
@@ -1420,7 +1437,7 @@ export function CRMKanban(){
     const accent=COLUMNS.find(c=>c.id===card.columnId)?.accent??RED;
     const funnel=COLUMNS.find(c=>c.id===card.columnId)?.label??"";
     const id=String(++toastId.current);
-    setToasts(prev=>[{id,name:card.name,company:card.company,funnel,accent,ts:nowTime()},...prev].slice(0,5));
+    setToasts(prev=>[{id,cardId:card.id,name:card.name,company:card.company,funnel,accent,ts:nowTime()},...prev].slice(0,5));
     playChime();
     setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),6000);
   },[playChime]);
@@ -1460,6 +1477,13 @@ export function CRMKanban(){
   const pushEvent=useCallback((ev:Omit<FeedEvent,"id"|"ts">)=>{
     setEvents(prev=>[{...ev,id:String(++eventId.current),ts:nowTime()},...prev].slice(0,40));
   },[]);
+
+  const handleSelectCardById = useCallback((cardId: string) => {
+    const card = cards.find(c => c.id === cardId);
+    if (card) {
+      setSelected(card);
+    }
+  }, [cards]);
 
   // WebSocket live sync para atualizações do CRM (Card e Notas)
   useEffect(() => {
@@ -1796,7 +1820,7 @@ export function CRMKanban(){
       </div>
 
       <ActivityFeed events={events} open={feedOpen} onClose={()=>setFeedOpen(false)}/>
-      <NotificationTray toasts={toasts} onDismiss={id=>setToasts(prev=>prev.filter(t=>t.id!==id))}/>
+      <NotificationTray toasts={toasts} onDismiss={id=>setToasts(prev=>prev.filter(t=>t.id!==id))} onSelectCard={handleSelectCardById}/>
 
       {selected&&(
         <ClientModal
