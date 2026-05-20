@@ -1192,13 +1192,13 @@ function ClientModal({card,accent,onClose,funnelData,onFunnelEdit,onAIFill,onCon
       
       {/* Botão aba: colado na parede esquerda do modal, sobrepondo-a */}
       <button onClick={()=>setCompanyOpen(o=>!o)} title="Dados da empresa"
-        style={{position:"fixed",top:"50%",left:"calc(50% - min(540px, 50vw - 20px))",transform:"translate(-50%,-50%)",zIndex:10001,width:32,height:80,borderRadius:"8px 0 0 8px",border:`1.5px solid ${companyOpen?accent+"60":"rgba(255,255,255,0.25)"}`,background:companyOpen?accent:"rgba(255,255,255,0.15)",backdropFilter:"blur(8px)",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5,color:companyOpen?"#fff":"rgba(255,255,255,0.8)",transition:"all 0.22s",boxShadow:companyOpen?`0 4px 20px ${accent}50`:"0 4px 16px rgba(0,0,0,0.2)"}}>
+        style={{position:"fixed",top:"50%",right:`calc(50% + min(540px, 50vw - 20px) - 6px)`,transform:"translateY(-50%)",zIndex:10001,width:34,height:88,borderRadius:"10px 0 0 10px",border:`1.5px solid ${companyOpen?accent+"80":"rgba(255,255,255,0.22)"}`,borderRight:"none",background:companyOpen?accent:"rgba(20,30,50,0.72)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,color:companyOpen?"#fff":"rgba(200,210,230,0.85)",transition:"all 0.22s cubic-bezier(0.4,0,0.2,1)",boxShadow:companyOpen?`-4px 0 24px ${accent}55`:"-2px 0 14px rgba(0,0,0,0.28)"}}>
         <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         <span style={{fontSize:8,fontWeight:700,letterSpacing:"0.04em",writingMode:"vertical-lr",transform:"rotate(180deg)",textTransform:"uppercase",opacity:0.85}}>Empresa</span>
       </button>
 
       {companyOpen&&(
-        <div style={{position:"fixed",top:"2vh",height:"96vh",width:290,right:"calc(50% + 552px)",zIndex:10000,animation:"panelRise 0.28s cubic-bezier(0.4,0,0.2,1)",display:"flex",flexDirection:"column",borderRadius:16,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
+        <div style={{position:"fixed",top:"2vh",height:"96vh",width:290,right:"calc(50% + 552px)",zIndex:10000,animation:"panelSwoop 0.38s cubic-bezier(0.22,1,0.36,1)",display:"flex",flexDirection:"column",borderRadius:16,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
           <CompanyPanel company={card.companyData} onClose={()=>setCompanyOpen(false)} accent={accent}/>
         </div>
       )}
@@ -1656,6 +1656,7 @@ export function CRMKanban(){
         @keyframes slideLeft  { from{opacity:0;transform:translateX(-100%)} to{opacity:1;transform:translateX(0)} }
         @keyframes slideUp    { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
         @keyframes panelRise  { from{opacity:0;transform:translateY(40px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+        @keyframes panelSwoop { from{opacity:0;transform:translateX(860px) translateY(50px) scale(0.88)} to{opacity:1;transform:translateX(0) translateY(0) scale(1)} }
         @keyframes panelDown  { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes skShimmer  { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
         @keyframes feedSlide  { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:translateX(0)} }
